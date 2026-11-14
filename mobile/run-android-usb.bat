@@ -1,0 +1,71 @@
+@echo off
+title Business Messaging - Android phone (USB developer mode)
+cd /d "%~dp0"
+echo.
+echo  ===============================================================
+echo    Run the mobile app on your Android phone over USB
+echo  ===============================================================
+echo.
+
+rem ---- 1. find adb (Android platform-tools) ----
+where adb >nul 2>&1
+if %errorlevel%==0 goto haveadb
+if exist "%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe" (
+  set "ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk"
+  set "PATH=%LOCALAPPDATA%\Android\Sdk\platform-tools;%PATH%"
+  goto haveadb
+)
+if exist "C:\platform-tools\adb.exe" (
+  set "PATH=C:\platform-tools;%PATH%"
+  goto haveadb
+)
+echo  [!] adb was not found.
+echo      Download "SDK Platform-Tools for Windows" from:
+echo      https://developer.android.com/tools/releases/platform-tools
+echo      and unzip it so this file exists:  C:\platform-tools\adb.exe
+echo      Then run this file again.
+echo.
+pause
+exit /b
+
+:haveadb
+rem ---- 2. check the phone is connected with USB debugging ----
+adb start-server >nul 2>&1
+set "STATE="
+for /f %%s in ('adb get-state 2^>nul') do set "STATE=%%s"
+if /i not "%STATE%"=="device" (
+  echo  [!] No phone found. Check:
+  echo      - Phone connected with a USB DATA cable
+  echo      - Settings ^> Developer options ^> USB debugging = ON
+  echo      - On the phone, tap "Allow" on the "Allow USB debugging?" popup
+  echo      - USB mode set to "File transfer" if it asks
+  echo.
+  adb devices
+  pause
+  exit /b
+)
+echo  Phone connected.
+
+rem ---- 3. let the phone reach this computer through the USB cable ----
+adb reverse tcp:3000 tcp:3000 >nul
+adb reverse tcp:8081 tcp:8081 >nul
+echo  USB tunnel ready (phone localhost:3000 and :8081 -^> this computer).
+
+rem ---- 4. start the server in its own window ----
+start "Business Messaging - server" cmd /k "cd /d "%~dp0.." && (if not exist node_modules npm install) && npm run dev"
+
+rem ---- 5. start the app on the phone (installs Expo Go if needed) ----
+if not exist node_modules (
+  echo  Installing app packages the first time, please wait...
+  call npm install
+)
+set "EXPO_PUBLIC_API_URL=http://localhost:3000"
+echo.
+echo  When the app opens on the phone:
+echo    Server address = http://localhost:3000
+echo    Tap a demo account (password demo123)
+echo.
+echo  Keep both windows open. Press r here to reload the app, Ctrl+C to stop.
+echo.
+call npx expo start --localhost --android
+pause
