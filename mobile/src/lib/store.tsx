@@ -3,9 +3,24 @@ import { AppState, Platform } from "react-native";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import type { AppState as ServerState, Attachment, ResellerState, TeamState } from "./types";
+import { io, type Socket } from "socket.io-client";
 import { storage } from "./storage";
 
-const DEFAULT_SERVER = process.env.EXPO_PUBLIC_API_URL ?? (Platform.OS === "web" ? "" : "http://192.168.1.10:3000");
+/**
+ * Server = the NestJS backend (backend/ folder: PostgreSQL on Neon + Socket.IO), e.g. http://192.168.1.10:4000.
+ * The web app's address (:3000) works too — it forwards /api/* to the backend.
+ * The web preview (/m) is served by the web app itself, so it uses relative paths ("").
+ */
+const DEFAULT_SERVER = process.env.EXPO_PUBLIC_API_URL ?? (Platform.OS === "web" ? "" : "http://192.168.1.10:4000");
+/** All backend routes live under /api/v1. */
+const API = "/api/v1";
+
+/** Accepts "192.168.1.10:4000", "http://…/", "http://…/api/v1" and returns a clean origin. */
+export function normalizeServer(input: string) {
+  let s = input.trim().replace(/\/+$/, "").replace(/\/api(\/v1)?$/, "");
+  if (s && !/^https?:\/\//i.test(s)) s = `http://${s}`;
+  return s;
+}
 
 type Toast = { id: number; text: string; kind: "ok" | "error" };
 
@@ -62,7 +77,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     if (!tokenRef.current) return;
     try {
-      const res = await call(`/api/state?v=${version.current}`);
+      const res = await call(`${API}/state?v=${version.current}`);
       if (res.status === 401 || res.status === 403) {
         const d = await res.json().catch(() => ({}));
         toast(d.error ?? "Session expired — please sign in again", "error");
@@ -89,44 +104,67 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // live updates: cheap version poll every 4 s while the app is in the foreground
+  // Live updates: Socket.IO pushes "changed" after every write on the server (any user, web or mobile).
+  // A slow version poll stays on as a safety net, and runs every 4 s whenever the socket is down.
   useEffect(() => {
     if (!token) return;
     let active = AppState.currentState === "active";
-    const sub = AppState.addEventListener("change", (s) => { active = s === "active"; if (active) refresh(); });
-    const id = setInterval(() => { if (active) { refresh(); setNow(Date.now()); } }, 4000);
-    return () => { sub.remove(); clearInterval(id); };
-  }, [token, refresh]);
+    let live = false;
+    let socket: Socket | null = null;
+    // Socket.IO lives on the backend; if the web app's address (:3000) was entered, connect to the backend port.
+    const origin = serverRef.current.replace(/:3000$/, ":4000");
+    if (origin) {
+      socket = io(origin, { auth: { token }, transports: ["websocket"], reconnectionDelayMax: 10_000 });
+      socket.on("ready", () => { live = true; refresh(); });
+      socket.on("changed", () => { if (active) refresh(); });
+      socket.on("disconnect", () => { live = false; });
+      socket.on("auth_error", (e: { message?: string }) => { toast(e?.message ?? "Session expired — please sign in again", "error"); clearSession(); });
+    }
+    const sub = AppState.addEventListener("change", (s) => {
+      active = s === "active";
+      if (active) { refresh(); if (socket && !socket.connected) socket.connect(); }
+    });
+    let tick = 0;
+    const id = setInterval(() => {
+      if (!active) return;
+      setNow(Date.now());
+      tick++;
+      if (!live || tick % 5 === 0) refresh();
+    }, 4000);
+    return () => { sub.remove(); clearInterval(id); socket?.close(); };
+  }, [token, refresh, toast, clearSession]);
 
   const login = useCallback(async (srv: string, email: string, password: string) => {
-    const base = srv.trim().replace(/\/$/, "");
+    const base = normalizeServer(srv);
     serverRef.current = base;
     let res: Response;
     try {
-      res = await fetch(`${base}/api/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: email.trim(), password }) });
+      res = await fetch(`${base}${API}/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: email.trim(), password }) });
     } catch {
       throw new Error(`Can't reach ${base || "the server"}. Is it running and on the same Wi-Fi?`);
     }
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? "Login failed");
+    if (!res.ok) throw new Error(data.error ?? (res.status >= 500 ? "The server is not answering — is the backend running?" : "Login failed"));
+    const t: string | undefined = data.accessToken ?? data.token;
+    if (!t) throw new Error("Unexpected answer from the server — check the server address (backend :4000)");
     await storage.set("bm_server", base);
-    await storage.set("bm_token", data.token);
+    await storage.set("bm_token", t);
     setServer(base);
-    tokenRef.current = data.token;
+    tokenRef.current = t;
     version.current = 0;
-    setToken(data.token);
+    setToken(t);
     await refresh();
   }, [refresh]);
 
   const logout = useCallback(async () => {
-    await call("/api/auth/logout", { method: "POST" }).catch(() => {});
+    await call(`${API}/auth/logout`, { method: "POST" }).catch(() => {});
     await clearSession();
   }, [call, clearSession]);
 
   const act = useCallback(async (type: string, payload: Record<string, unknown> = {}, okText?: string) => {
     let res: Response;
     try {
-      res = await call("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type, payload }) });
+      res = await call(`${API}/actions`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type, payload }) });
     } catch {
       toast("No connection to the server", "error");
       throw new Error("offline");
@@ -143,16 +181,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const fd = new FormData();
     if (Platform.OS === "web" && f.file) fd.append("file", f.file, f.name);
     else fd.append("file", { uri: f.uri, name: f.name, type: f.mimeType ?? "application/octet-stream" } as unknown as Blob);
-    const res = await call("/api/upload", { method: "POST", body: fd });
+    let res: Response;
+    try {
+      res = await call(`${API}/files`, { method: "POST", body: fd });
+    } catch {
+      toast("No connection to the server", "error");
+      throw new Error("offline");
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { toast(data.error ?? "Upload failed", "error"); throw new Error(data.error); }
     return data as Attachment;
   }, [call, toast]);
 
   const openFile = useCallback(async (a: Attachment) => {
-    const url = `${serverRef.current}/api/files/${a.id}`;
+    const url = `${serverRef.current}${API}/files/${a.id}`;
     try {
-      if (Platform.OS === "web") { globalThis.open?.(url, "_blank"); return; }
+      // a new browser tab can't send headers, so the web preview passes the token in the link
+      if (Platform.OS === "web") { globalThis.open?.(`${url}?access_token=${encodeURIComponent(tokenRef.current ?? "")}`, "_blank"); return; }
       const dest = new File(Paths.cache, `${a.id}-${a.name}`);
       if (dest.exists) dest.delete();
       const task = File.createDownloadTask(url, dest, { headers: { Authorization: `Bearer ${tokenRef.current}` } });

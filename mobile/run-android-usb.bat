@@ -47,25 +47,25 @@ if /i not "%STATE%"=="device" (
 echo  Phone connected.
 
 rem ---- 3. let the phone reach this computer through the USB cable ----
-adb reverse tcp:3000 tcp:3000 >nul
+adb reverse tcp:4000 tcp:4000 >nul
 adb reverse tcp:8081 tcp:8081 >nul
-echo  USB tunnel ready (phone localhost:3000 and :8081 -^> this computer).
+echo  USB tunnel ready (phone localhost:4000 and :8081 -^> this computer).
 
-rem ---- 4. start the server in its own window ----
-start "Business Messaging - server" cmd /k "cd /d "%~dp0.." && (if not exist node_modules npm install) && npm run dev"
+rem ---- 4. start the backend API (NestJS + Neon) in its own window ----
+start "Business Messaging - API" cmd /c ""%~dp0..\backend\start-backend.bat""
 
 rem ---- 5. start the app on the phone (installs Expo Go if needed) ----
-if not exist node_modules (
-  echo  Installing app packages the first time, please wait...
+if not exist node_modules\socket.io-client (
+  echo  Installing app packages, please wait...
   call npm install
 )
-set "EXPO_PUBLIC_API_URL=http://localhost:3000"
+set "EXPO_PUBLIC_API_URL=http://localhost:4000"
 echo.
 echo  When the app opens on the phone:
-echo    Server address = http://localhost:3000
+echo    Server address = http://localhost:4000
 echo    Tap a demo account (password demo123)
 echo.
 echo  Keep both windows open. Press r here to reload the app, Ctrl+C to stop.
 echo.
-call npx expo start --localhost --android
+call npx expo start --localhost --android --clear
 pause

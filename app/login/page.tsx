@@ -29,8 +29,15 @@ export default function Login() {
   const submit = async (e?: React.FormEvent, em = email, pw = password) => {
     e?.preventDefault();
     setBusy(true); setErr("");
-    const res = await fetch("/api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: em, password: pw }) });
-    const data = await res.json();
+    let res: Response;
+    let data: { error?: string; role?: string };
+    try {
+      res = await fetch("/api/auth/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: em, password: pw }) });
+      data = await res.json().catch(() => ({ error: res.status >= 500 ? "Can't reach the backend — is it running? (backend\\start-backend.bat)" : "Login failed" }));
+    } catch {
+      setBusy(false);
+      return setErr("Can't reach the server");
+    }
     setBusy(false);
     if (!res.ok) return setErr(data.error ?? "Login failed");
     window.location.href = data.role === "reseller" ? "/portal" : "/";

@@ -2,7 +2,17 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { io, type Socket } from "socket.io-client";
 import type { AppState, ResellerState, TeamState, Attachment } from "../types";
+
+/** NestJS backend address for Socket.IO (set from API_URL in next.config.mjs). Empty = built-in server, polling only. */
+const REALTIME_URL = process.env.NEXT_PUBLIC_REALTIME_URL ?? "";
+
+/** Opened from a phone on Wi-Fi? "localhost" would mean the phone — use this page's host instead. */
+function realtimeOrigin() {
+  if (typeof window === "undefined") return REALTIME_URL;
+  return REALTIME_URL.replace(/\/\/(localhost|127\.0\.0\.1)(?=[:/]|$)/, `//${window.location.hostname}`);
+}
 
 type Toast = { id: number; text: string; kind: "ok" | "error" };
 
@@ -31,7 +41,12 @@ export function StoreProvider({ children, expect }: { children: React.ReactNode;
   }, []);
 
   const refresh = useCallback(async () => {
-    const res = await fetch(`/api/state?v=${version.current}`, { cache: "no-store" });
+    let res: Response;
+    try {
+      res = await fetch(`/api/state?v=${version.current}`, { cache: "no-store" });
+    } catch {
+      return; // offline / server restarting — keep showing the last data
+    }
     if (res.status === 401 || res.status === 403) {
       router.replace("/login");
       return;
@@ -48,16 +63,39 @@ export function StoreProvider({ children, expect }: { children: React.ReactNode;
     setState(s);
   }, [expect, router]);
 
-  // Real-time-ish: poll a cheap version check every 3s so all agents see the same data.
+  // Live updates. With the NestJS backend, Socket.IO pushes "changed" after every write
+  // (signed in with the session cookie); a slow poll stays on as a safety net.
+  // With the built-in server, poll a cheap version check every 3 s.
   useEffect(() => {
     refresh();
-    const id = setInterval(() => { if (!document.hidden) refresh(); setNow(Date.now()); }, 3000);
-    return () => clearInterval(id);
-  }, [refresh]);
+    let socket: Socket | null = null;
+    let live = false;
+    if (REALTIME_URL) {
+      socket = io(realtimeOrigin(), { withCredentials: true, transports: ["websocket", "polling"] });
+      socket.on("ready", () => { live = true; refresh(); });
+      socket.on("changed", () => refresh());
+      socket.on("disconnect", () => { live = false; });
+      socket.on("auth_error", () => router.replace("/login"));
+    }
+    let tick = 0;
+    const id = setInterval(() => {
+      setNow(Date.now());
+      tick++;
+      if (document.hidden) return;
+      if (!live || tick % 5 === 0) refresh();
+    }, 3000);
+    return () => { clearInterval(id); socket?.close(); };
+  }, [refresh, router]);
 
   const act = useCallback(
     async (type: string, payload: Record<string, unknown> = {}, okText?: string) => {
-      const res = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type, payload }) });
+      let res: Response;
+      try {
+        res = await fetch("/api/actions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ type, payload }) });
+      } catch {
+        toast("Can't reach the server", "error");
+        throw new Error("offline");
+      }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast(data.error ?? "Something went wrong", "error");
@@ -76,7 +114,7 @@ export function StoreProvider({ children, expect }: { children: React.ReactNode;
     const fd = new FormData();
     fd.append("file", f);
     const res = await fetch("/api/upload", { method: "POST", body: fd });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ error: `Upload failed (${res.status})` }));
     if (!res.ok) { toast(data.error ?? "Upload failed", "error"); throw new Error(data.error); }
     return data as Attachment;
   }, [toast]);
@@ -112,6 +150,6 @@ export function useReseller() {
 }
 
 export async function logout() {
-  await fetch("/api/auth/logout", { method: "POST" });
+  await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
   window.location.href = "/login";
 }

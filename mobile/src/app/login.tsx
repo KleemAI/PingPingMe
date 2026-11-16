@@ -47,7 +47,7 @@ export default function Login() {
         <View style={{ backgroundColor: c.card, borderRadius: 20, padding: 20, gap: 14 }}>
           {Platform.OS !== "web" && (
             <Input label="Server address" value={srv} onChangeText={setSrv} autoCapitalize="none" autoCorrect={false} keyboardType="url"
-              placeholder="http://192.168.1.10:3000" hint="Your computer's Wi-Fi IP + :3000 while testing (both on the same Wi-Fi), or your live https:// address." />
+              placeholder="http://192.168.1.10:4000" hint="Backend: your computer's Wi-Fi IP + :4000 while testing (same Wi-Fi), or your live https:// API address." />
           )}
           <Input label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" placeholder="you@company.in" />
           <Input label="Password" value={password} onChangeText={setPassword} secureTextEntry placeholder="••••••" onSubmitEditing={() => submit()} />

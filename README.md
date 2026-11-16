@@ -10,10 +10,22 @@ Customer or business  →  Our team  →  Reseller
 
 ## Run it
 
+The web app runs on the **NestJS backend** in [`backend/`](backend/README.md) (PostgreSQL on Neon + Socket.IO live updates).
+
+1. **Database** — create a free project at [neon.tech](https://neon.tech), copy its connection string.
+   In `backend/`, copy `.env.example` to `.env` and paste it as `DATABASE_URL`.
+2. **Backend** — double-click `backend\start-backend.bat` (or `cd backend && npm install && npm run start:dev`).
+   Tables and demo data are created on first start. Check http://localhost:4000/api/v1/health
+3. **Web** — in this folder:
+
 ```bash
+copy .env.local.example .env.local   # API_URL=http://localhost:4000 (already created)
 npm install
 npm run dev          # http://localhost:3000
 ```
+
+Next.js forwards every `/api/*` call to the backend; the login is an httpOnly session cookie and Socket.IO pushes changes to every open screen.
+Without `.env.local` (no `API_URL`) the web app falls back to its built-in demo server (JSON file in `data/`).
 
 Demo logins (password `demo123`, or click a chip on the login page):
 
@@ -27,7 +39,9 @@ Data is saved to `data/db.json` (created on first run). **Settings → Operating
 
 ### Acceptance tests
 
-With the dev server running: `npm run test:api` (resets data first). It covers the brief's MVP checklist: separate inboxes, reclassify without losing history, full enquiry → reseller → quote → approval → order → delivery flow, **reseller isolation via API calls**, admin-only actions, decline/reassign, mediation open/resolve/reopen, failed-send retry, duplicate webhook events, upload validation and file permissions.
+With the backend and the web dev server running: `npm run test:api` (resets data first; runs through the web app against the backend).
+The backend has its own 23 end-to-end tests: `cd backend && npm run test:e2e`.
+Together they cover the brief's MVP checklist: separate inboxes, reclassify without losing history, full enquiry → reseller → quote → approval → order → delivery flow, **reseller isolation via API calls**, admin-only actions, decline/reassign, mediation open/resolve/reopen, failed-send retry, duplicate webhook events, upload validation and file permissions.
 
 ## What's in it (brief → app)
 
