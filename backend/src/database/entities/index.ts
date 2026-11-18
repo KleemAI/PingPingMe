@@ -7,6 +7,7 @@ import { OrderEntity, OrderHistoryEntity, QuoteEntity, QuoteRevisionEntity } fro
 import { CaseEntity, CaseEvidenceEntity, CaseHistoryEntity } from "./case.entity";
 import { ProductEntity } from "./product.entity";
 import { P2PAdEntity, P2PMessageEntity, P2POrderEntity, P2PProfileEntity } from "./p2p.entity";
+import { BroadcastEntity } from "./broadcast.entity";
 import { ActivityEntity, CounterEntity, FileEntity, ProcessedEventEntity, ReminderEntity, SavedReplyEntity, SettingsEntity } from "./misc.entity";
 
 export * from "./user.entity";
@@ -19,10 +20,11 @@ export * from "./case.entity";
 export * from "./misc.entity";
 export * from "./product.entity";
 export * from "./p2p.entity";
+export * from "./broadcast.entity";
 
 export const ENTITIES = [
   UserEntity, CompanyEntity, ContactEntity, ConversationEntity, MessageEntity, ResellerEntity, RequestEntity, AssignmentEntity,
   QuoteEntity, QuoteRevisionEntity, OrderEntity, OrderHistoryEntity, CaseEntity, CaseEvidenceEntity, CaseHistoryEntity,
   ActivityEntity, SavedReplyEntity, ReminderEntity, SettingsEntity, FileEntity, ProcessedEventEntity, CounterEntity, ProductEntity,
-  P2PAdEntity, P2POrderEntity, P2PMessageEntity, P2PProfileEntity,
+  P2PAdEntity, P2POrderEntity, P2PMessageEntity, P2PProfileEntity, BroadcastEntity,
 ];

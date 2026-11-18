@@ -60,6 +60,7 @@ set NEED_INSTALL=
 if not exist node_modules\socket.io-client set NEED_INSTALL=1
 if not exist node_modules\expo-audio set NEED_INSTALL=1
 if not exist node_modules\expo-asset set NEED_INSTALL=1
+if not exist node_modules\expo-notifications set NEED_INSTALL=1
 if defined NEED_INSTALL (
   echo  Installing app packages, please wait...
   call npm install

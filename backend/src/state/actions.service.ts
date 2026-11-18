@@ -18,6 +18,7 @@ import { WorkspaceService } from "../workspace/workspace.service";
 import { P2PService } from "../p2p/p2p.service";
 import { CatalogService } from "../catalog/catalog.service";
 import { CustomerService } from "../customer/customer.service";
+import { BroadcastsService } from "../broadcasts/broadcasts.service";
 
 type Handler = (tx: Tx, p: Payload) => Promise<unknown>;
 
@@ -48,6 +49,7 @@ export class ActionsService {
     p2p: P2PService,
     catalog: CatalogService,
     customer: CustomerService,
+    broadcasts: BroadcastsService,
   ) {
     // P2P market — the same commands for everyone who trades (team, resellers, customers)
     const market: Record<string, Handler> = {
@@ -109,6 +111,9 @@ export class ActionsService {
       // catalogue
       "product.save": (t, p) => catalog.save(t, p),
       "product.review": (t, p) => catalog.review(t, p),
+      // reminders for everyone
+      "broadcast.create": (t, p) => broadcasts.create(t, p),
+      "broadcast.cancel": (t, p) => broadcasts.cancel(t, p),
     };
     this.reseller = {
       "portal.respond": (t, p) => portal.respond(t, p),

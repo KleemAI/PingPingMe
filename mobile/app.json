@@ -41,6 +41,12 @@
         }
       ],
       [
+        "expo-notifications",
+        {
+          "color": "#00a884"
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

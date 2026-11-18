@@ -15,6 +15,7 @@ import {
 } from "../database/mappers";
 import { UnitOfWork } from "../database/unit-of-work.service";
 import { CustomerService } from "../customer/customer.service";
+import { BroadcastsService } from "../broadcasts/broadcasts.service";
 
 const ACTIVITY_WINDOW = 5000;
 
@@ -25,16 +26,19 @@ const ACTIVITY_WINDOW = 5000;
  */
 @Injectable()
 export class StateService {
-  constructor(private readonly uow: UnitOfWork, private readonly customer: CustomerService) {}
+  constructor(private readonly uow: UnitOfWork, private readonly customer: CustomerService, private readonly broadcasts: BroadcastsService) {}
 
   version() { return this.uow.version(); }
 
   async forUser(user: User): Promise<TeamState | ResellerState | CustomerState> {
-    if (user.role === "customer") return this.customer.state(user);
-    return isTeam(user) ? this.team(user) : this.reseller(user);
+    const [state, broadcasts] = await Promise.all([
+      user.role === "customer" ? this.customer.state(user) : isTeam(user) ? this.team(user) : this.reseller(user),
+      this.broadcasts.list(), // reminders for everyone
+    ]);
+    return { ...state, broadcasts };
   }
 
-  async team(user: User): Promise<TeamState> {
+  async team(user: User): Promise<Omit<TeamState, "broadcasts">> {
     const em = this.uow.manager;
     const [
       users, companies, contacts, conversations, messages, resellers, requests, assignments, quotes, revisions,
@@ -92,7 +96,7 @@ export class StateService {
     };
   }
 
-  async reseller(user: User): Promise<ResellerState> {
+  async reseller(user: User): Promise<Omit<ResellerState, "broadcasts">> {
     const em = this.uow.manager;
     const rid = user.resellerId!;
     const reqIds = await visibleRequestIds(em, rid);

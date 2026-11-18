@@ -2,12 +2,16 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { StoreProvider } from "@/lib/store";
+import { StoreProvider, useStore } from "@/lib/store";
+import { useReminderNotifications } from "@/lib/reminders";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { Toasts } from "@/components/ui";
 
 function Root() {
   const { c, dark } = useTheme();
+  const { state, token } = useStore();
+  // reminders for everyone → notifications on this phone at their time
+  useReminderNotifications(state?.broadcasts, !!token);
   return (
     <View style={{ flex: 1, backgroundColor: c.screen }}>
       <StatusBar style={dark ? "light" : "dark"} />
@@ -25,6 +29,7 @@ function Root() {
         <Stack.Screen name="portal" options={{ headerShown: false }} />
         <Stack.Screen name="p2p" options={{ headerShown: false }} />
         <Stack.Screen name="shop" options={{ headerShown: false }} />
+        <Stack.Screen name="reminders" options={{ title: "Reminders" }} />
       </Stack>
       <Toasts />
     </View>

@@ -276,10 +276,14 @@ export type DB = {
 // What a reseller is allowed to see about the end customer — "only as needed for the task"
 export type MaskedContact = { id: string; name: string; city?: string };
 
+/** A reminder for everyone — phones show it as a notification at `dueAt`. */
+export type Broadcast = { id: string; title: string; message?: string; dueAt: number; createdBy: string; createdByName: string; createdAt: number };
+
 export type TeamState = {
   scope: "team";
   me: User;
   db: Omit<DB, "processedEvents" | "counters" | "files">;
+  broadcasts?: Broadcast[]; // reminders for everyone (NestJS backend)
 };
 
 export type ResellerState = {
@@ -293,6 +297,7 @@ export type ResellerState = {
   contacts: MaskedContact[];
   categories: string[];
   products: ResellerProduct[]; // their own catalogue proposals
+  broadcasts?: Broadcast[]; // reminders for everyone
   version: number;
 };
 
@@ -335,6 +340,7 @@ export type CustomerState = {
   areas: string[];
   requests: CustomerRequest[];
   business: { name: string; phone: string; email: string; hours: string };
+  broadcasts?: Broadcast[]; // reminders for everyone
   version: number;
 };
 

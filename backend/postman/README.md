@@ -12,5 +12,6 @@ Tips
 - **15. Customers**: sign-up with a fresh email each run, customer access limits, and manual verification by the team. Run it in order after folder 0.
 - **16. P2P market**: a full trade between the reseller and the customer from folder 15 — run it after folder 15.
 - **17. Catalog, customer chat & ask for price**: run after folder 15.
+- **18. Reminders for everyone**: create, see as reseller, cancel.
 - **14. Dev → Reset demo data** wipes the database back to the demo data; run folder 0 again afterwards.
 - Testing from another PC/phone: change `baseUrl` in the environment to `http://<your-PC-IP>:4000/api/v1`.
