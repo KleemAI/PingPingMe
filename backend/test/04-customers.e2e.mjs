@@ -56,7 +56,9 @@ test("customers see only their own account and cannot reach team or reseller dat
   assert.equal((await post("/actions", { type: "conv.send", payload: { conversationId: "cv1", audience: "customer", text: "x" } }, custToken)).status, 403);
   assert.equal((await post("/actions", { type: "portal.quote", payload: {} }, custToken)).status, 403);
   const acts = await (await get("/actions", custToken)).json();
-  assert.deepEqual(acts.actions, ["me.password"]);
+  assert.ok(acts.actions.includes("me.password") && acts.actions.includes("p2p.order"), "own password + P2P market");
+  assert.ok(acts.actions.every((a) => a === "me.password" || a.startsWith("p2p.")), "nothing else");
+  assert.ok(!acts.actions.includes("p2p.resolveAppeal"), "appeal decisions are for the team");
 });
 
 test("team sees customers separately and verifies them by hand", async () => {

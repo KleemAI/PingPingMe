@@ -20,7 +20,7 @@ export default function MyAds() {
   const held = (adId: string) => s.orders.filter((o) => o.adId === adId && ["pending_payment", "paid", "appeal"].includes(o.status)).reduce((n, o) => n + o.qty, 0);
 
   const products = Array.from(new Set([...SUGGESTED, ...s.ads.map((a) => a.product)])).sort();
-  const [f, setF] = useState({ side: (canSell ? "sell" : "buy") as "sell" | "buy", product: "", price: "", qty: "", min: "", max: "", window: "30", terms: "", featured: false, payments: ["UPI"] as PaymentMethod[] });
+  const [f, setF] = useState({ side: (canSell ? "sell" : "buy") as "sell" | "buy", product: "", price: "", qty: "", min: "", max: "", window: "30", terms: "", payments: ["UPI"] as PaymentMethod[] });
   const [err, setErr] = useState("");
   const [toggleErr, setToggleErr] = useState("");
   const [ok, setOk] = useState("");
@@ -28,12 +28,15 @@ export default function MyAds() {
   // switched to an unverified customer while "Sell" was picked → fall back to "Buy"
   useEffect(() => { if (!canSell) setF((x) => (x.side === "sell" ? { ...x, side: "buy" } : x)); }, [canSell]);
 
-  const submit = (e: React.FormEvent) => {
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const r = createAd({ side: f.side, product: f.product, price: num(f.price), totalQty: num(f.qty), minAmount: num(f.min), maxAmount: num(f.max), payments: f.payments, payWindowMin: Number(f.window), terms: f.terms.trim() || undefined, featured: f.featured });
+    setBusy(true);
+    const r = await createAd({ side: f.side, product: f.product, price: num(f.price), totalQty: num(f.qty), minAmount: num(f.min), maxAmount: num(f.max), payments: f.payments, payWindowMin: Number(f.window), terms: f.terms.trim() || undefined });
+    setBusy(false);
     if (!r.ok) return setErr(r.error);
-    setOk(`Your ad is live${f.featured ? " (featured placement requested — our team will review it)" : ""}.`);
-    setF((x) => ({ ...x, product: "", price: "", qty: "", min: "", max: "", terms: "", featured: false }));
+    setOk("Your ad is live on the market.");
+    setF((x) => ({ ...x, product: "", price: "", qty: "", min: "", max: "", terms: "" }));
   };
 
   return (
@@ -79,7 +82,7 @@ export default function MyAds() {
                 <div className="text-[18px] font-bold">{inr(a.price)} <span className="text-[12.5px] font-normal text-[var(--muted)]">/ unit</span></div>
                 <div className="text-[12.5px] text-[var(--muted)]">{a.availableQty} available · {held(a.id)} held</div>
               </div>
-              <button onClick={() => { const r = toggleAd(a.id); setToggleErr(r.ok ? "" : r.error); }} aria-pressed={a.online}
+              <button onClick={async () => { const r = await toggleAd(a.id); setToggleErr(r.ok ? "" : r.error); }} aria-pressed={a.online}
                 className={`ml-auto min-h-10 min-w-24 rounded-full px-4 text-[13.5px] font-semibold ${a.online ? "bg-[var(--accent)] text-white" : "border border-[var(--border-strong)] text-[var(--muted)]"}`}>
                 {a.online ? "Online" : "Offline"}
               </button>
@@ -128,13 +131,12 @@ export default function MyAds() {
             <label className="block text-[13px] font-semibold">Terms for buyers (optional)
               <textarea value={f.terms} onChange={(e) => set({ terms: e.target.value })} rows={3} placeholder="e.g. Ships within 2 days after release. 1-year warranty." className={`${inputCls} mt-1.5`} />
             </label>
-            <label className="flex min-h-10 items-center gap-2 text-[14px]">
-              <input type="checkbox" checked={f.featured} onChange={(e) => set({ featured: e.target.checked })} className="h-4 w-4 accent-[var(--accent-strong)]" />
-              Request featured placement (reviewed by our team)
-            </label>
+            {f.side === "sell" && !me.payTo?.upi && !me.payTo?.bank && (
+              <p role="note" className="rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Add where buyers pay you on your <Link href="/p2p/profile" className="font-semibold underline">Profile</Link> before posting a Sell ad.</p>
+            )}
             {err && <p role="alert" className="text-[13.5px] font-medium text-rose-600">{err}</p>}
             {ok && <p role="status" className="rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-[13.5px]">{ok}</p>}
-            <button type="submit" className="min-h-12 w-full rounded-lg bg-[var(--accent)] text-[16px] font-semibold text-white hover:brightness-95">Publish ad</button>
+            <button type="submit" disabled={busy} className="min-h-12 w-full disabled:opacity-50 rounded-lg bg-[var(--accent)] text-[16px] font-semibold text-white hover:brightness-95">Publish ad</button>
           </form>
         </Card>
       </div>

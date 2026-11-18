@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, Package, LogOut, Moon, Sun, Loader2, Store } from "lucide-react";
+import { ClipboardList, Package, LogOut, Moon, Sun, Loader2, Store, ArrowLeftRight } from "lucide-react";
 import { logout, useReseller } from "@/lib/client/store";
 import { useDark } from "./TeamShell";
 
@@ -17,6 +17,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   const nav = [
     { href: "/portal", label: "My requests", icon: ClipboardList, badge: needs, on: path === "/portal" || (path.startsWith("/portal/") && !path.startsWith("/portal/orders")) },
     { href: "/portal/orders", label: "Orders", icon: Package, badge: activeOrders, on: path.startsWith("/portal/orders") },
+    { href: "/p2p", label: "P2P market", icon: ArrowLeftRight, badge: 0, on: false },
   ];
 
   return (

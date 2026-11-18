@@ -1,4 +1,4 @@
-// P2P marketplace — data model (demo; the backend API will use the same shapes later).
+// P2P marketplace — the shapes returned by GET /api/p2p (keep in sync with backend/src/common/contract.ts).
 
 export type PaymentMethod = "UPI" | "IMPS" | "Bank transfer";
 
@@ -7,20 +7,22 @@ export type UserKind = "team" | "reseller" | "customer";
 /** Customers can sell only after our team has verified them by hand (Team → Customers). Team and resellers are always "verified". */
 export type Verification = "none" | "verified";
 
-/** A user who trades on P2P. Every user can be a buyer and a seller. */
+export type PayTo = { upi?: string; bank?: string; accountName: string };
+
+/** A user who trades on P2P. Every user can be a buyer; sellers are team, resellers and verified customers. */
 export type Merchant = {
   id: string;
   name: string;
   kind: UserKind;
   verification: Verification;
-  verified: boolean; // badge on the market = verification === "verified"
-  trades: number; // completed trades
+  verified: boolean;
+  trades: number; // completed trades (as buyer or seller)
   cancelled: number; // orders they cancelled or let expire as the buyer → completion rate
   ratingsPos: number; // positive ratings received as a seller
   ratingsTotal: number; // all ratings received as a seller
   avgReleaseMin: number;
   joinedAt: number;
-  payTo: { upi?: string; bank?: string; accountName: string };
+  payTo?: PayTo; // only your own, and the seller's on your open purchases
 };
 
 /**
@@ -50,6 +52,8 @@ export type P2POrderStatus = "pending_payment" | "paid" | "completed" | "cancell
 
 export type P2PMessage = { id: string; from: "buyer" | "seller" | "system"; text: string; at: number };
 
+export type P2PAttachment = { id: string; name: string; size: number; mime: string };
+
 export type P2POrder = {
   id: string;
   ref: string;
@@ -65,11 +69,13 @@ export type P2POrder = {
   createdAt: number;
   expiresAt: number; // buyer must pay before this
   paidAt?: number;
+  proof?: P2PAttachment;
   proofName?: string;
   releasedAt?: number;
   cancelledAt?: number;
   cancelReason?: string;
   appealReason?: string;
+  appealResolution?: string;
   rating?: "positive" | "negative";
   messages: P2PMessage[];
 };
@@ -79,6 +85,6 @@ export type P2PState = {
   meId: string;
   merchants: Merchant[];
   ads: P2PAd[];
-  orders: P2POrder[];
-  nextRef: number;
+  orders: P2POrder[]; // your own (as buyer or seller)
+  appeals: P2POrder[]; // team only: orders waiting for a decision
 };

@@ -6,7 +6,7 @@ import { logout, StoreProvider, useStore } from "@/lib/client/store";
 import TeamShell, { useDark } from "@/components/TeamShell";
 import { Avatar } from "@/components/ui";
 
-/** Slim top bar for customers on the P2P market (no side menu). */
+/** Slim top bar for customers and resellers on the P2P market (no side menu). */
 function MarketShell({ children }: { children: React.ReactNode }) {
   const { state } = useStore();
   const { dark, toggle } = useDark();
@@ -21,8 +21,8 @@ function MarketShell({ children }: { children: React.ReactNode }) {
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5">
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent)] text-white"><MessagesSquare size={19} /></span>
           <span className="text-[15px] font-bold">Business Messaging</span>
-          {!customer && (
-            <Link href="/" className="ml-2 hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] text-[var(--muted)] hover:bg-[var(--hover)] sm:flex"><LayoutDashboard size={15} /> Team dashboard</Link>
+          {state.scope === "reseller" && (
+            <Link href="/portal" className="ml-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] text-[var(--muted)] hover:bg-[var(--hover)]"><LayoutDashboard size={15} /> Reseller portal</Link>
           )}
           <div className="ml-auto flex items-center gap-2">
             {customer && (me.verified
@@ -40,14 +40,14 @@ function MarketShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Team members keep their usual side menu on P2P pages; customers get the slim top bar only. */
+/** Team members keep their usual side menu on P2P pages; customers and resellers get the slim top bar. */
 function ShellFor({ children }: { children: React.ReactNode }) {
   const { state } = useStore();
   if (state?.scope === "team") return <TeamShell>{children}</TeamShell>;
   return <MarketShell>{children}</MarketShell>;
 }
 
-const SCOPES = ["team", "customer"] as const;
+const SCOPES = ["team", "reseller", "customer"] as const;
 
 export default function MarketLayout({ children }: { children: React.ReactNode }) {
   return (

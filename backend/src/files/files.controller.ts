@@ -2,11 +2,11 @@ import { Controller, Get, HttpCode, Param, Post, Res, UploadedFile, UseIntercept
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
 import type { User } from "../common/contract";
-import { CurrentUser } from "../auth/decorators";
+import { AllowCustomer, CurrentUser } from "../auth/decorators";
 import { env } from "../config/env";
 import { FilesService } from "./files.service";
 
-@Controller("files")
+@Controller("files") @AllowCustomer()
 export class FilesController {
   constructor(private readonly files: FilesService) {}
 

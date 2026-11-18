@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { ChevronLeft, Copy, Paperclip, Send, ThumbsDown, ThumbsUp, AlertTriangle, CheckCircle2, XCircle, Scale, Timer } from "lucide-react";
-import { inr, mmss, STATUS, useP2P } from "@/lib/p2p/store";
+import { inr, mmss, STATUS, useP2P, type Result } from "@/lib/p2p/store";
 import type { P2POrder } from "@/lib/p2p/types";
-import { Button, Card, Pill, inputCls } from "@/components/ui";
+import { AttachmentChip, Button, Card, Pill, inputCls } from "@/components/ui";
 import { MerchantLine } from "../../_components/bits";
 
 const time = (t: number) => new Date(t).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
@@ -42,7 +42,7 @@ export default function OrderPage() {
   const p2p = useP2P();
   const { order, merchant, myRole, now } = p2p;
   const o = order(id);
-  const [proof, setProof] = useState("");
+  const [proof, setProof] = useState<File | null>(null);
   const [checked, setChecked] = useState(false);
   const [appealOpen, setAppealOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -56,8 +56,8 @@ export default function OrderPage() {
   const other = merchant(role === "buyer" ? o.sellerId : o.buyerId)!;
   const seller = merchant(o.sellerId)!;
   const left = o.expiresAt - now;
-  const payTo = o.paymentMethod === "UPI" ? seller.payTo.upi ?? seller.payTo.bank : seller.payTo.bank ?? seller.payTo.upi;
-  const run = (r: { ok: boolean; error?: string }) => { setErr(r.ok ? "" : r.error ?? "Something went wrong"); return r.ok; };
+  const payTo = o.paymentMethod === "UPI" ? seller.payTo?.upi ?? seller.payTo?.bank : seller.payTo?.bank ?? seller.payTo?.upi;
+  const run = async (p: Promise<Result>) => { const r = await p; setErr(r.ok ? "" : r.error); return r.ok; };
 
   const headline = {
     pending_payment: role === "buyer" ? `Pay ${inr(o.amount)} to the seller` : `Waiting for ${other.name} to pay`,
@@ -66,10 +66,6 @@ export default function OrderPage() {
     completed: "Trade completed",
     cancelled: "Order cancelled",
   }[o.status];
-
-  const simulateLabel =
-    role === "seller" && o.status === "pending_payment" ? "Demo: buyer pays" :
-    role === "buyer" && (o.status === "paid" || o.status === "appeal") ? "Demo: seller releases" : "";
 
   return (
     <div className="space-y-5">
@@ -86,6 +82,7 @@ export default function OrderPage() {
               </div>
               <h1 className="text-[22px] font-bold">{headline}</h1>
               {o.status === "cancelled" && <p className="text-[14px] text-[var(--muted)]">{o.cancelReason}. The stock went back to the seller.</p>}
+              {o.appealResolution && o.status !== "appeal" && <p className="text-[14px]"><strong>Appeal outcome:</strong> {o.appealResolution}</p>}
               {o.status === "appeal" && <p className="text-[14px] text-[var(--muted)]">Reason: {o.appealReason}. Both sides can still add proof in the chat.</p>}
             </div>
             {o.status === "pending_payment" && (
@@ -123,16 +120,16 @@ export default function OrderPage() {
                   <div className="min-w-0"><div className="text-[12px] text-[var(--muted)]">{o.paymentMethod === "UPI" ? "UPI ID" : "Account"}</div><div className="truncate font-semibold">{payTo}</div></div>
                   <button type="button" aria-label="Copy" onClick={() => { navigator.clipboard?.writeText(payTo ?? ""); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="flex h-9 items-center gap-1 rounded-md border border-[var(--border-strong)] px-2 text-[12.5px] hover:bg-[var(--hover)]"><Copy size={13} /> {copied ? "Copied" : "Copy"}</button>
                 </div>
-                <div className="rounded-lg border border-[var(--border)] px-3 py-2.5"><div className="text-[12px] text-[var(--muted)]">Account name</div><div className="font-semibold">{seller.payTo.accountName}</div></div>
+                <div className="rounded-lg border border-[var(--border)] px-3 py-2.5"><div className="text-[12px] text-[var(--muted)]">Account name</div><div className="font-semibold">{seller.payTo?.accountName ?? "—"}</div></div>
               </div>
               <label className="block text-[13px] font-semibold">
                 Payment screenshot (proof)
-                <input type="file" accept="image/*,application/pdf" onChange={(e) => setProof(e.target.files?.[0]?.name ?? "")}
+                <input type="file" accept="image/*,application/pdf" onChange={(e) => setProof(e.target.files?.[0] ?? null)}
                   className="mt-1.5 block w-full rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--panel-2)] p-3 text-[13.5px] font-normal" />
               </label>
               {err && <p role="alert" className="text-[13.5px] font-medium text-rose-600">{err}</p>}
               <div className="flex flex-wrap gap-3">
-                <button onClick={() => run(p2p.markPaid(o.id, proof || undefined))} className="min-h-11 rounded-lg bg-[var(--accent)] px-5 text-[15px] font-semibold text-white hover:brightness-95">I have paid — notify seller</button>
+                <button onClick={() => run(p2p.markPaid(o.id, proof ?? undefined))} className="min-h-11 rounded-lg bg-[var(--accent)] px-5 text-[15px] font-semibold text-white hover:brightness-95">I have paid — notify seller</button>
                 <Button variant="outline" className="!h-11" onClick={() => { if (confirm("Cancel this order? Don't cancel if you already paid.")) run(p2p.cancel(o.id)); }}>Cancel order</Button>
               </div>
               <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><AlertTriangle size={15} className="mt-0.5 shrink-0" /> Only tap “I have paid” after the money has left your account. False payment claims can get your account suspended.</p>
@@ -143,7 +140,7 @@ export default function OrderPage() {
           {role === "buyer" && o.status === "paid" && (
             <Card className="space-y-3 p-5">
               <h2 className="text-[16px] font-semibold">Waiting for the seller to confirm</h2>
-              <p className="text-[14px] text-[var(--muted)]">{seller.name} has been notified{o.proofName ? ` and can see your proof (${o.proofName})` : ""}. They usually release in about {seller.avgReleaseMin} minutes.</p>
+              <p className="text-[14px] text-[var(--muted)]">{seller.name} has been notified{o.proofName ? ` and can see your proof (${o.proofName})` : ""}.{seller.avgReleaseMin ? ` They usually release in about ${seller.avgReleaseMin} minutes.` : ""}</p>
               {!appealOpen && <Button variant="outline" className="!h-11" onClick={() => setAppealOpen(true)}><Scale size={15} /> Open an appeal</Button>}
             </Card>
           )}
@@ -163,7 +160,7 @@ export default function OrderPage() {
                 <div className="min-w-[200px] flex-1 space-y-2">
                   <h2 className="text-[16px] font-semibold">Buyer&apos;s payment proof</h2>
                   <div className="flex h-40 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--panel-2)] text-[13px] text-[var(--muted)]">
-                    <Paperclip size={20} /> {o.proofName ?? "No proof uploaded"}
+                    {o.proof ? <AttachmentChip a={o.proof} /> : <><Paperclip size={20} /> No proof uploaded</>}
                   </div>
                   <p className="text-[12.5px] text-[var(--muted)]">Marked paid at {o.paidAt ? time(o.paidAt) : "—"}</p>
                 </div>
@@ -197,7 +194,7 @@ export default function OrderPage() {
               <textarea value={reason} onChange={(e) => { setReason(e.target.value); setErr(""); }} rows={3} placeholder={role === "buyer" ? "e.g. I paid 25 minutes ago but the seller is not responding" : "e.g. The money has not arrived in my account"} className={inputCls} aria-label="Reason for appeal" />
               {err && <p role="alert" className="text-[13.5px] font-medium text-rose-600">{err}</p>}
               <div className="flex gap-3">
-                <Button variant="danger" className="!h-11" onClick={() => { if (run(p2p.appeal(o.id, reason))) setAppealOpen(false); }}>Submit appeal</Button>
+                <Button variant="danger" className="!h-11" onClick={async () => { if (await run(p2p.appeal(o.id, reason))) setAppealOpen(false); }}>Submit appeal</Button>
                 <Button variant="ghost" className="!h-11" onClick={() => setAppealOpen(false)}>Back</Button>
               </div>
             </Card>
@@ -223,12 +220,6 @@ export default function OrderPage() {
             <Card className="flex items-center gap-2 p-5 text-[14px] text-[var(--muted)]"><XCircle size={18} /> Nothing more to do on this order.</Card>
           )}
 
-          {simulateLabel && (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-[var(--border-strong)] px-4 py-3 text-[13px] text-[var(--muted)]">
-              No backend yet — use this to play the other person&apos;s part:
-              <Button size="sm" variant="outline" onClick={() => run(p2p.simulateOther(o.id))}>{simulateLabel}</Button>
-            </div>
-          )}
         </div>
 
         {/* ---------- chat ---------- */}
@@ -246,7 +237,7 @@ export default function OrderPage() {
               );
             })}
           </div>
-          <form onSubmit={(e) => { e.preventDefault(); p2p.send(o.id, msg); setMsg(""); }} className="flex gap-2 border-t border-[var(--border)] p-3">
+          <form onSubmit={async (e) => { e.preventDefault(); if (!msg.trim()) return; if (await run(p2p.send(o.id, msg))) setMsg(""); }} className="flex gap-2 border-t border-[var(--border)] p-3">
             <input value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Type a message" aria-label="Message" className={`${inputCls} h-11`} disabled={o.status === "cancelled"} />
             <button type="submit" aria-label="Send" disabled={!msg.trim()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] text-white disabled:opacity-50"><Send size={17} /></button>
           </form>

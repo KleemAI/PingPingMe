@@ -18,6 +18,7 @@ export default function TradePage() {
   const [qty, setQty] = useState(() => String(a ? Math.max(1, Math.ceil(a.minAmount / a.price)) : 1));
   const [method, setMethod] = useState<PaymentMethod | "">(a?.payments[0] ?? "");
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
 
   if (!a) {
     return <p className="text-[14px]">This ad no longer exists. <Link href="/p2p" className="text-[var(--accent-strong)] underline">Back to the market</Link></p>;
@@ -31,10 +32,12 @@ export default function TradePage() {
   const own = a.merchantId === s.meId;
   const blocked = !iBuy && !canSell;
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!method) return setErr("Pick a payment method");
-    const r = placeOrder(a.id, n, method);
+    setBusy(true);
+    const r = await placeOrder(a.id, n, method);
+    setBusy(false);
     if (!r.ok) return setErr(r.error);
     router.push(`/p2p/order/${r.id}`);
   };
@@ -74,7 +77,7 @@ export default function TradePage() {
                 {SELL_BLOCKED} <Link href="/p2p/profile" className="font-semibold underline">See your status</Link>
               </p>
             )}
-            <button type="submit" disabled={own || blocked}
+            <button type="submit" disabled={own || blocked || busy}
               className={`flex min-h-12 w-full items-center justify-center rounded-lg text-[16px] font-semibold text-white hover:brightness-95 disabled:opacity-50 ${iBuy ? "bg-[var(--accent)]" : "bg-[#c0392b]"}`}>
               {iBuy ? `Buy ${n > 0 ? n : ""} for ${inr(total)}` : `Sell ${n > 0 ? n : ""} for ${inr(total)}`}
             </button>

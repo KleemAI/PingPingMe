@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { BadgeCheck, Clock, ShieldCheck, Wallet } from "lucide-react";
 import { completionText, positiveText, useP2P } from "@/lib/p2p/store";
-import { Avatar, Card } from "@/components/ui";
+import { Avatar, Button, Card, Field, inputCls } from "@/components/ui";
 import { Stat } from "../_components/bits";
 
 const KIND_LABEL = { team: "Team member", reseller: "Reseller", customer: "Customer" } as const;
@@ -41,6 +42,34 @@ function VerificationCard() {
   );
 }
 
+/** Where buyers send money. Shown only to the buyer of an open order — never on the public market. */
+function PayToCard() {
+  const { me, setPayTo } = useP2P();
+  const [f, setF] = useState({ upi: me.payTo?.upi ?? "", bank: me.payTo?.bank ?? "", accountName: me.payTo?.accountName ?? me.name });
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => { setF((x) => ({ ...x, [k]: e.target.value })); setMsg(null); };
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    const r = await setPayTo({ upi: f.upi.trim() || undefined, bank: f.bank.trim() || undefined, accountName: f.accountName.trim() });
+    setBusy(false);
+    setMsg(r.ok ? { ok: true, text: "Saved" } : { ok: false, text: r.error });
+  };
+  return (
+    <Card title={<span className="flex items-center gap-2"><Wallet size={16} /> Where buyers pay you</span>} className="text-[14px]">
+      <form onSubmit={save} className="space-y-3 p-4" noValidate>
+        <p className="text-[13px] text-[var(--muted)]">Needed before you sell. Only the buyer of an open order sees these details.</p>
+        <Field label="UPI ID"><input value={f.upi} onChange={set("upi")} placeholder="name@bank" maxLength={100} className={`${inputCls} h-10`} /></Field>
+        <Field label="Bank account (optional)" hint="e.g. HDFC ••4421 — bank name and last digits are enough"><input value={f.bank} onChange={set("bank")} maxLength={100} className={`${inputCls} h-10`} /></Field>
+        <Field label="Account holder name"><input value={f.accountName} onChange={set("accountName")} maxLength={100} className={`${inputCls} h-10`} /></Field>
+        {msg && <p role={msg.ok ? "status" : "alert"} className={`text-[13.5px] font-medium ${msg.ok ? "text-[var(--accent-strong)]" : "text-rose-600"}`}>{msg.text}</p>}
+        <Button type="submit" disabled={busy} className="!h-10">Save payment details</Button>
+      </form>
+    </Card>
+  );
+}
+
 export default function P2PProfile() {
   const { s, me, canSell } = useP2P();
   const mine = s.orders.filter((o) => o.buyerId === s.meId || o.sellerId === s.meId);
@@ -62,17 +91,11 @@ export default function P2PProfile() {
         <Stat label="Completed trades" value={me.trades.toLocaleString("en-IN")} />
         <Stat label="Completion rate" value={completionText(me)} />
         <Stat label="Positive feedback" value={positiveText(me)} />
-        <Stat label="Orders in this demo" value={`${done} / ${mine.length}`} />
+        <Stat label="Completed / all orders" value={`${done} / ${mine.length}`} />
       </div>
       <div className="grid gap-5 md:grid-cols-2">
         <VerificationCard />
-        <Card title={<span className="flex items-center gap-2"><Wallet size={16} /> Where buyers pay you</span>} className="text-[14px]">
-          <ul className="space-y-2 p-4">
-            <li className="flex justify-between"><span>UPI</span><span className="font-medium">{me.payTo.upi ?? "—"}</span></li>
-            <li className="flex justify-between"><span>Bank account</span><span className="font-medium">{me.payTo.bank ?? "Not added"}</span></li>
-            <li className="flex justify-between"><span>Account name</span><span className="font-medium">{me.payTo.accountName}</span></li>
-          </ul>
-        </Card>
+        <PayToCard />
       </div>
     </div>
   );

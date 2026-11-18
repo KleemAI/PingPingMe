@@ -46,12 +46,21 @@ export class FilesService {
     return { id, name, size: file.size, mime: file.mimetype };
   }
 
-  /** Team: any file. Reseller: their own uploads, or files attached to the reseller thread of a request they can see. */
+  /**
+   * Team: any file. Everyone: their own uploads, and the payment proof on a P2P order they are part of.
+   * Reseller: also files attached to the reseller thread of a request they can see.
+   */
   async canSee(user: User, fileId: string) {
     if (isTeam(user)) return true;
     const em = this.uow.manager;
     const own = await em.count(FileEntity, { where: { id: fileId, uploadedBy: user.id } });
     if (own) return true;
+    const proof = await em.query(
+      `SELECT 1 FROM p2p_orders WHERE proof @> $1::jsonb AND (buyer_id = $2 OR seller_id = $2) LIMIT 1`,
+      [JSON.stringify({ id: fileId }), user.id],
+    );
+    if (proof.length) return true;
+    if (user.role !== "reseller") return false;
     const reqIds = await visibleRequestIds(em, user.resellerId!);
     if (!reqIds.length) return false;
     const rows = await em.query(

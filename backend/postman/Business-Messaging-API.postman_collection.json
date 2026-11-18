@@ -4601,7 +4601,7 @@
           ]
         },
         {
-          "name": "Customer: allowed actions",
+          "name": "Customer: allowed actions (own password + P2P)",
           "request": {
             "method": "GET",
             "header": [],
@@ -4632,7 +4632,9 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"Only own password\", () => pm.expect(pm.response.json().actions).to.eql([\"me.password\"]));"
+                  "const a = pm.response.json().actions;",
+                  "pm.test(\"Only own password and P2P market\", () => pm.expect(a.every((x) => x === \"me.password\" || x.startsWith(\"p2p.\"))).to.eql(true));",
+                  "pm.test(\"No appeal decisions\", () => pm.expect(a).to.not.include(\"p2p.resolveAppeal\"));"
                 ]
               }
             }
@@ -4987,6 +4989,709 @@
           ]
         }
       ]
+    },
+    {
+      "name": "16. P2P market",
+      "description": "Ads, orders (stock is held while unpaid), payment, release, rating, cancel and appeals. Run folders 0 and 15 first (reseller and customer tokens), then this folder in order.",
+      "item": [
+        {
+          "name": "Reseller: payment details (UPI)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"p2p.payTo\",\n  \"payload\": {\n    \"upi\": \"kiran@okaxis\",\n    \"accountName\": \"TechHub Traders\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{resellerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Needed before selling. Shown only to the buyer of an open order."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reseller: post a Sell ad",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"p2p.ad.create\",\n  \"payload\": {\n    \"side\": \"sell\",\n    \"product\": \"Power Bank 20000mAh\",\n    \"price\": 1500,\n    \"totalQty\": 10,\n    \"minAmount\": 1500,\n    \"maxAmount\": 15000,\n    \"payments\": [\n      \"UPI\"\n    ],\n    \"payWindowMin\": 15\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{resellerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"p2pAdId\", pm.response.json().result);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer: market",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/p2p",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "p2p"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Online ads, your own ads, your orders with their chats (team: also open appeals)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test(\"Ad listed\", () => pm.expect(s.ads.some((a) => a.id === pm.collectionVariables.get(\"p2pAdId\"))).to.eql(true));",
+                  "pm.test(\"Payment details not public\", () => pm.expect(s.merchants.every((m) => m.id === s.meId || !m.payTo)).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer (unverified): Sell ad blocked (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"p2p.ad.create\",\n  \"payload\": {\n    \"side\": \"sell\",\n    \"product\": \"Power Bank 20000mAh\",\n    \"price\": 1500,\n    \"totalQty\": 10,\n    \"minAmount\": 1500,\n    \"maxAmount\": 15000,\n    \"payments\": [\n      \"UPI\"\n    ],\n    \"payWindowMin\": 15\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer: buy 2 units (stock held)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"p2p.order\",\n  \"payload\": {\n    \"adId\": \"{{p2pAdId}}\",\n    \"qty\": 2,\n    \"paymentMethod\": \"UPI\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"p2pOrderId\", pm.response.json().result);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer: chat on the order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"p2p.message\",\n  \"payload\": {\n    \"id\": \"{{p2pOrderId}}\",\n    \"text\": \"Paying now on UPI\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Seller can't mark paid (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"p2p.paid\",\n  \"payload\": {\n    \"id\": \"{{p2pOrderId}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{resellerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer: I have paid",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"p2p.paid\",\n  \"payload\": {\n    \"id\": \"{{p2pOrderId}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Optional `proof`: id of a file uploaded with POST /files (12. Files)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reseller: release",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"p2p.release\",\n  \"payload\": {\n    \"id\": \"{{p2pOrderId}}\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{resellerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer: rate 👍 (once)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"p2p.rate\",\n  \"payload\": {\n    \"id\": \"{{p2pOrderId}}\",\n    \"positive\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer: rate again (409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"p2p.rate\",\n  \"payload\": {\n    \"id\": \"{{p2pOrderId}}\",\n    \"positive\": false\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer: order + cancel (stock returns)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"p2p.order\",\n  \"payload\": {\n    \"adId\": \"{{p2pAdId}}\",\n    \"qty\": 1,\n    \"paymentMethod\": \"UPI\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"p2pOrder2\", pm.response.json().result);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer: cancel before paying",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"p2p.cancel\",\n  \"payload\": {\n    \"id\": \"{{p2pOrder2}}\",\n    \"reason\": \"Changed my mind\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Team: open appeals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/p2p",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "p2p"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Decide one with action `p2p.resolveAppeal { id, outcome: \"release\" | \"cancel\", note }` (team only)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"appeals list\", () => pm.expect(pm.response.json().appeals).to.be.an(\"array\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -5060,6 +5765,18 @@
     },
     {
       "key": "customerId",
+      "value": ""
+    },
+    {
+      "key": "p2pAdId",
+      "value": ""
+    },
+    {
+      "key": "p2pOrderId",
+      "value": ""
+    },
+    {
+      "key": "p2pOrder2",
       "value": ""
     }
   ]

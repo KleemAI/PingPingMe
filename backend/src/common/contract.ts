@@ -348,4 +348,85 @@ export type CustomerState = {
   version: number;
 };
 
+// ---------------------------------------------------------------------------------------------
+// P2P market — any signed-in user can buy; team and resellers can sell, customers once our team has verified them.
+// Money moves directly between the two people (UPI / bank); the platform holds the stock and keeps the record.
+
+export type P2PKind = "team" | "reseller" | "customer";
+export type P2PPaymentMethod = "UPI" | "IMPS" | "Bank transfer";
+export type P2PPayTo = { upi?: string; bank?: string; accountName: string };
+
+/** A user as seen on the market. Stats are computed from their orders. */
+export type P2PMerchant = {
+  id: string;
+  name: string;
+  kind: P2PKind;
+  verification: "none" | "verified";
+  verified: boolean;
+  trades: number; // completed orders (as buyer or seller)
+  cancelled: number; // orders they cancelled or let expire as the buyer
+  ratingsPos: number; // positive ratings received as seller
+  ratingsTotal: number;
+  avgReleaseMin: number;
+  joinedAt: number;
+  payTo?: P2PPayTo; // only your own, and the seller's on your open purchases
+};
+
+export type P2PAd = {
+  id: string;
+  merchantId: string;
+  side: "sell" | "buy"; // sell = merchant sells (Buy tab) · buy = merchant wants to buy (Sell tab)
+  product: string;
+  price: number;
+  totalQty: number;
+  availableQty: number;
+  minAmount: number;
+  maxAmount: number;
+  payments: P2PPaymentMethod[];
+  payWindowMin: number;
+  terms?: string;
+  featured: boolean;
+  online: boolean;
+  createdAt: number;
+};
+
+export type P2POrderStatus = "pending_payment" | "paid" | "completed" | "cancelled" | "appeal";
+export type P2PMessage = { id: string; from: "buyer" | "seller" | "system"; text: string; at: number };
+
+export type P2POrder = {
+  id: string;
+  ref: string;
+  adId: string;
+  buyerId: string;
+  sellerId: string;
+  product: string;
+  qty: number;
+  price: number;
+  amount: number;
+  paymentMethod: P2PPaymentMethod;
+  status: P2POrderStatus;
+  createdAt: number;
+  expiresAt: number;
+  paidAt?: number;
+  proof?: Attachment;
+  proofName?: string;
+  releasedAt?: number;
+  cancelledAt?: number;
+  cancelReason?: string;
+  appealReason?: string;
+  appealResolution?: string;
+  rating?: "positive" | "negative";
+  messages: P2PMessage[];
+};
+
+/** GET /p2p — the market for the signed-in user. `appeals` is filled for the team only. */
+export type P2PState = {
+  version: number;
+  meId: string;
+  merchants: P2PMerchant[];
+  ads: P2PAd[];
+  orders: P2POrder[]; // your own (as buyer or seller)
+  appeals: P2POrder[];
+};
+
 export type AppState = TeamState | ResellerState | CustomerState;

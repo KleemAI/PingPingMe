@@ -15,6 +15,7 @@ import { ResellersService } from "../resellers/resellers.service";
 import { SettingsService } from "../settings/settings.service";
 import { UsersService } from "../users/users.service";
 import { WorkspaceService } from "../workspace/workspace.service";
+import { P2PService } from "../p2p/p2p.service";
 
 type Handler = (tx: Tx, p: Payload) => Promise<unknown>;
 
@@ -42,7 +43,21 @@ export class ActionsService {
     settings: SettingsService,
     users: UsersService,
     portal: PortalService,
+    p2p: P2PService,
   ) {
+    // P2P market — the same commands for everyone who trades (team, resellers, customers)
+    const market: Record<string, Handler> = {
+      "p2p.order": (t, p) => p2p.placeOrder(t, p),
+      "p2p.paid": (t, p) => p2p.markPaid(t, p),
+      "p2p.release": (t, p) => p2p.release(t, p),
+      "p2p.cancel": (t, p) => p2p.cancel(t, p),
+      "p2p.appeal": (t, p) => p2p.appeal(t, p),
+      "p2p.rate": (t, p) => p2p.rate(t, p),
+      "p2p.message": (t, p) => p2p.message(t, p),
+      "p2p.ad.create": (t, p) => p2p.createAd(t, p),
+      "p2p.ad.toggle": (t, p) => p2p.toggleAd(t, p),
+      "p2p.payTo": (t, p) => p2p.setPayTo(t, p),
+    };
     this.team = {
       // inbox
       "conv.send": (t, p) => conversations.send(t, p),
@@ -85,6 +100,8 @@ export class ActionsService {
       "user.update": (t, p) => users.update(t, p),
       "me.password": (t, p) => users.changeOwnPassword(t, p),
       "customer.verify": (t, p) => users.verifyCustomer(t, p),
+      ...market,
+      "p2p.resolveAppeal": (t, p) => p2p.resolveAppeal(t, p),
     };
     this.reseller = {
       "portal.respond": (t, p) => portal.respond(t, p),
@@ -93,9 +110,11 @@ export class ActionsService {
       "portal.fulfil": (t, p) => orders.fulfilByReseller(t, p),
       "portal.availability": (t, p) => resellers.setOwnAvailability(t, p),
       "me.password": (t, p) => users.changeOwnPassword(t, p),
+      ...market,
     };
     this.customer = {
       "me.password": (t, p) => users.changeOwnPassword(t, p),
+      ...market,
     };
   }
 
