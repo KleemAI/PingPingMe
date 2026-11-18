@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Megaphone } from "lucide-react";
-import { inr, pct, SELL_BLOCKED, useP2P } from "@/lib/p2p/store";
+import { completionText, inr, positiveText, SELL_BLOCKED, useP2P } from "@/lib/p2p/store";
 import type { PaymentMethod } from "@/lib/p2p/types";
 import { Card, Empty, inputCls } from "@/components/ui";
 import { Stat } from "../_components/bits";
 
-const PRODUCTS = ["Smart Watch S2", "Bluetooth Speaker Mini", "Laptop Stand", "Power Bank 20000mAh"];
+/** Suggestions only — sellers can type any product. */
+const SUGGESTED = ["Smart Watch S2", "Bluetooth Speaker Mini", "Laptop Stand", "Power Bank 20000mAh"];
 const METHODS: PaymentMethod[] = ["UPI", "IMPS", "Bank transfer"];
 const num = (v: string) => Number(v.replace(/[^\d.]/g, ""));
 
@@ -18,8 +19,10 @@ export default function MyAds() {
   const toRelease = s.orders.filter((o) => o.sellerId === s.meId && o.status === "paid");
   const held = (adId: string) => s.orders.filter((o) => o.adId === adId && ["pending_payment", "paid", "appeal"].includes(o.status)).reduce((n, o) => n + o.qty, 0);
 
-  const [f, setF] = useState({ side: (canSell ? "sell" : "buy") as "sell" | "buy", product: PRODUCTS[0], price: "", qty: "", min: "", max: "", window: "30", terms: "", featured: false, payments: ["UPI"] as PaymentMethod[] });
+  const products = Array.from(new Set([...SUGGESTED, ...s.ads.map((a) => a.product)])).sort();
+  const [f, setF] = useState({ side: (canSell ? "sell" : "buy") as "sell" | "buy", product: "", price: "", qty: "", min: "", max: "", window: "30", terms: "", featured: false, payments: ["UPI"] as PaymentMethod[] });
   const [err, setErr] = useState("");
+  const [toggleErr, setToggleErr] = useState("");
   const [ok, setOk] = useState("");
   const set = (p: Partial<typeof f>) => { setF((x) => ({ ...x, ...p })); setErr(""); setOk(""); };
   // switched to an unverified customer while "Sell" was picked → fall back to "Buy"
@@ -30,7 +33,7 @@ export default function MyAds() {
     const r = createAd({ side: f.side, product: f.product, price: num(f.price), totalQty: num(f.qty), minAmount: num(f.min), maxAmount: num(f.max), payments: f.payments, payWindowMin: Number(f.window), terms: f.terms.trim() || undefined, featured: f.featured });
     if (!r.ok) return setErr(r.error);
     setOk(`Your ad is live${f.featured ? " (featured placement requested — our team will review it)" : ""}.`);
-    setF((x) => ({ ...x, price: "", qty: "", min: "", max: "", terms: "", featured: false }));
+    setF((x) => ({ ...x, product: "", price: "", qty: "", min: "", max: "", terms: "", featured: false }));
   };
 
   return (
@@ -38,10 +41,10 @@ export default function MyAds() {
       {!canSell && (
         <div role="note" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[14px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
           <span>
-            <strong>{me.verification === "pending" ? "Your verification is under review." : "Verify your account to sell."}</strong>{" "}
-            {me.verification === "pending" ? "You can post Buy ads now; Sell ads open as soon as our team approves you." : "Customers can post Buy ads, but Sell ads need a verified account. Your Sell ads stay hidden from the market until then."}
+            <strong>Selling is locked for now.</strong>{" "}
+            You can post Buy ads. Sell ads open as soon as our team has verified your account — there is nothing for you to fill in.
           </span>
-          {me.verification !== "pending" && <Link href="/p2p/profile#verify" className="font-semibold underline">Verify now →</Link>}
+          <Link href="/p2p/profile" className="font-semibold underline">See your status →</Link>
         </div>
       )}
       {toRelease.map((o) => (
@@ -53,14 +56,15 @@ export default function MyAds() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Completed trades" value={me.trades.toLocaleString("en-IN")} />
-        <Stat label="Completion rate" value={pct(me.completionPct)} />
-        <Stat label="Positive feedback" value={pct(me.positivePct)} />
+        <Stat label="Completion rate" value={completionText(me)} />
+        <Stat label="Positive feedback" value={positiveText(me)} />
         <Stat label="Avg. release time" value={`${me.avgReleaseMin} min`} />
       </div>
 
       <div className="flex flex-wrap items-start gap-5">
         <section className="min-w-0 flex-[999_1_520px] space-y-3">
           <h1 className="text-[22px] font-bold">My ads</h1>
+          {toggleErr && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-[13.5px] font-medium text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">{toggleErr}</p>}
           {mine.length === 0 && <Card><Empty icon={Megaphone} title="No ads yet" text="Post your first ad with the form." /></Card>}
           {mine.map((a) => (
             <Card key={a.id} className="flex flex-wrap items-center gap-4 p-4">
@@ -75,7 +79,7 @@ export default function MyAds() {
                 <div className="text-[18px] font-bold">{inr(a.price)} <span className="text-[12.5px] font-normal text-[var(--muted)]">/ unit</span></div>
                 <div className="text-[12.5px] text-[var(--muted)]">{a.availableQty} available · {held(a.id)} held</div>
               </div>
-              <button onClick={() => toggleAd(a.id)} aria-pressed={a.online}
+              <button onClick={() => { const r = toggleAd(a.id); setToggleErr(r.ok ? "" : r.error); }} aria-pressed={a.online}
                 className={`ml-auto min-h-10 min-w-24 rounded-full px-4 text-[13.5px] font-semibold ${a.online ? "bg-[var(--accent)] text-white" : "border border-[var(--border-strong)] text-[var(--muted)]"}`}>
                 {a.online ? "Online" : "Offline"}
               </button>
@@ -98,7 +102,9 @@ export default function MyAds() {
               })}
             </fieldset>
             <label className="block text-[13px] font-semibold">Product
-              <select value={f.product} onChange={(e) => set({ product: e.target.value })} className={`${inputCls} mt-1.5 h-11`}>{PRODUCTS.map((p) => <option key={p}>{p}</option>)}</select>
+              <input value={f.product} onChange={(e) => set({ product: e.target.value })} list="p2p-products" maxLength={80} placeholder="Type or pick a product" className={`${inputCls} mt-1.5 h-11`} />
+              <datalist id="p2p-products">{products.map((p) => <option key={p} value={p} />)}</datalist>
+              <span className="mt-1 block text-[12px] font-normal text-[var(--muted)]">Pick a suggestion or type your own product name.</span>
             </label>
             <div className="grid grid-cols-2 gap-3">
               <label className="text-[13px] font-semibold">Price per unit (₹)<input value={f.price} onChange={(e) => set({ price: e.target.value })} inputMode="decimal" className={`${inputCls} mt-1.5 h-11`} /></label>

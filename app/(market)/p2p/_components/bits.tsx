@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { BadgeCheck } from "lucide-react";
 import type { Merchant } from "@/lib/p2p/types";
-import { pct } from "@/lib/p2p/store";
+import { completionText, positiveText } from "@/lib/p2p/store";
 import { Avatar } from "@/components/ui";
 
 /** Seller name + trust stats, as in the market cards. */
@@ -20,9 +20,11 @@ export function MerchantLine({ m, size = 40, link = true }: { m: Merchant; size?
       <div className="min-w-0">
         {link && m.id !== "me" ? <Link href={`/p2p/merchant/${m.id}`} className="hover:underline">{name}</Link> : name}
         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[12.5px] text-[var(--muted)]">
-          <span>{m.trades.toLocaleString("en-IN")} trades</span>
-          <span>{pct(m.completionPct)} completion</span>
-          <span>👍 {pct(m.positivePct)}</span>
+          {m.trades + m.cancelled === 0 ? <span>New member</span> : <>
+            <span>{m.trades.toLocaleString("en-IN")} trades</span>
+            <span>{completionText(m)} completion</span>
+            <span>👍 {positiveText(m)}</span>
+          </>}
         </div>
       </div>
     </div>

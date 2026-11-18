@@ -5,7 +5,7 @@
  * without a backend. Every action here maps 1:1 to a future API call (see the comment on each).
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import type { IdType, Merchant, P2PAd, P2POrder, P2PState, PaymentMethod, UserKind } from "./types";
+import type { Merchant, P2PAd, P2POrder, P2PState, PaymentMethod, UserKind } from "./types";
 import { demoState, DEMO_VERSION } from "./demo";
 
 const KEY_PREFIX = "bm-p2p-demo:"; // one demo per signed-in account
@@ -26,14 +26,11 @@ export type Result = { ok: true; id?: string } | { ok: false; error: string };
  * (Backend: the same check runs on POST /p2p/ads and on POST /p2p/orders when the user is the seller.)
  */
 export const canSellAs = (m: Merchant) => m.kind !== "customer" || m.verification === "verified";
-export const SELL_BLOCKED = "Customers must complete verification before they can sell.";
+export const SELL_BLOCKED = "Selling opens once our team has verified your account. You can buy right away.";
 
-/** ID formats checked when a customer submits verification. */
-const ID_RULES: Record<IdType, { re: RegExp; hint: string }> = {
-  PAN: { re: /^[A-Z]{5}[0-9]{4}[A-Z]$/, hint: "PAN looks like ABCDE1234F" },
-  Aadhaar: { re: /^[0-9]{12}$/, hint: "Aadhaar has 12 digits" },
-  GSTIN: { re: /^[0-9]{2}[A-Z0-9]{13}$/, hint: "GSTIN has 15 characters, e.g. 27AAACS1234F1Z5" },
-};
+/** "97.60%", or "—" while there is nothing to measure yet (new members). */
+export const completionText = (m: Merchant) => (m.trades + m.cancelled ? pct((m.trades / (m.trades + m.cancelled)) * 100) : "—");
+export const positiveText = (m: Merchant) => (m.ratingsTotal ? pct((m.ratingsPos / m.ratingsTotal) * 100) : "—");
 
 type Ctx = {
   s: P2PState;
@@ -44,6 +41,7 @@ type Ctx = {
   order: (id: string) => P2POrder | undefined;
   myRole: (o: P2POrder) => "buyer" | "seller" | null;
   canSell: boolean; // can the signed-in user sell right now?
+  isCustomer: boolean;
   // actions
   placeOrder: (adId: string, qty: number, method: PaymentMethod) => Result; // POST /p2p/orders
   markPaid: (orderId: string, proofName?: string) => Result; // POST /p2p/orders/:id/paid
@@ -54,11 +52,8 @@ type Ctx = {
   send: (orderId: string, text: string) => void; // POST /p2p/orders/:id/messages
   simulateOther: (orderId: string) => Result; // demo only: the other side acts
   createAd: (a: Omit<P2PAd, "id" | "merchantId" | "availableQty" | "createdAt" | "online" | "featured"> & { featured?: boolean }) => Result; // POST /p2p/ads
-  toggleAd: (adId: string) => void; // PATCH /p2p/ads/:id
-  submitVerification: (v: { legalName: string; idType: IdType; idNumber: string; documentName: string }) => Result; // POST /p2p/verification
-  reviewVerification: (approve: boolean, note?: string) => Result; // admin: POST /admin/p2p/verifications/:userId (demo: on yourself)
-  setMyKind: (kind: UserKind) => void; // demo only: switch who you are
-  reset: () => void;
+  toggleAd: (adId: string) => Result; // PATCH /p2p/ads/:id
+  reset: () => void; // demo only (team)
 };
 
 const P2PCtx = createContext<Ctx | null>(null);
@@ -83,7 +78,7 @@ function syncMe(st: P2PState, acc: P2PAccount): P2PState {
     ...st,
     merchants: st.merchants.map((m) => {
       if (m.id !== st.meId) return m;
-      const verification = acc.kind !== "customer" ? "verified" : acc.verified ? "verified" : m.verification === "verified" ? "none" : m.verification;
+      const verification = acc.kind !== "customer" || acc.verified ? "verified" : "none";
       return { ...m, name: acc.name, kind: acc.kind, verification, verified: verification === "verified", payTo: { ...m.payTo, accountName: acc.name } };
     }),
   };
@@ -96,7 +91,7 @@ export function P2PProvider({ account, children }: { account: P2PAccount; childr
   const meName = account.name;
 
   useEffect(() => {
-    setS(syncMe(load(KEY) ?? demoState(account.name), account));
+    setS(syncMe(load(KEY) ?? demoState(account.name, account.kind), account));
   }, [KEY, account.name, account.kind, account.verified]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -114,6 +109,11 @@ export function P2PProvider({ account, children }: { account: P2PAccount; childr
     if (!expired.length) return;
     setS((cur) => cur && {
       ...cur,
+      // letting the payment time run out counts against the buyer's completion rate
+      merchants: cur.merchants.map((m) => {
+        const n = expired.filter((o) => o.buyerId === m.id).length;
+        return n ? { ...m, cancelled: m.cancelled + n } : m;
+      }),
       ads: cur.ads.map((a) => {
         const back = expired.filter((o) => o.adId === a.id).reduce((n, o) => n + o.qty, 0);
         return back ? { ...a, availableQty: a.availableQty + back } : a;
@@ -137,7 +137,6 @@ export function P2PProvider({ account, children }: { account: P2PAccount; childr
     const fail = (error: string): Result => ({ ok: false, error });
     const meM = merchant(s.meId)!;
     const canSell = canSellAs(meM);
-    const patchMe = (fn: (m: Merchant) => Merchant) => update((d) => ({ ...d, merchants: d.merchants.map((m) => (m.id === d.meId ? fn(m) : m)) }));
 
     const complete = (o: P2POrder) => {
       const t = Date.now();
@@ -149,7 +148,7 @@ export function P2PProvider({ account, children }: { account: P2PAccount; childr
     };
 
     return {
-      s, now, me: meM, merchant, ad, order, myRole, canSell,
+      s, now, me: meM, merchant, ad, order, myRole, canSell, isCustomer: account.kind === "customer",
 
       placeOrder: (adId, qty, method) => {
         const a = ad(adId);
@@ -195,6 +194,7 @@ export function P2PProvider({ account, children }: { account: P2PAccount; childr
         if (myRole(o) !== "buyer") return fail("Only the buyer can cancel before paying");
         update((d) => ({
           ...d,
+          merchants: d.merchants.map((m) => (m.id === o.buyerId ? { ...m, cancelled: m.cancelled + 1 } : m)),
           ads: d.ads.map((a) => (a.id === o.adId ? { ...a, availableQty: a.availableQty + o.qty } : a)),
           orders: d.orders.map((x) => (x.id === id ? { ...x, status: "cancelled", cancelledAt: Date.now(), cancelReason: reason || "Cancelled by buyer", messages: [...x.messages, sys("Buyer cancelled the order. Stock returned to the seller.")] } : x)),
         }));
@@ -212,7 +212,12 @@ export function P2PProvider({ account, children }: { account: P2PAccount; childr
       rate: (id, positive) => {
         const o = order(id);
         if (!o || o.status !== "completed" || myRole(o) !== "buyer") return fail("You can rate after a completed purchase");
-        patchOrder(id, (x) => ({ ...x, rating: positive ? "positive" : "negative" }));
+        if (o.rating) return fail("You have already rated this trade");
+        update((d) => ({
+          ...d,
+          merchants: d.merchants.map((m) => (m.id === o.sellerId ? { ...m, ratingsTotal: m.ratingsTotal + 1, ratingsPos: m.ratingsPos + (positive ? 1 : 0) } : m)),
+          orders: d.orders.map((x) => (x.id === id ? { ...x, rating: positive ? "positive" : "negative" } : x)),
+        }));
         return { ok: true };
       },
 
@@ -237,42 +242,29 @@ export function P2PProvider({ account, children }: { account: P2PAccount; childr
 
       createAd: (a) => {
         if (a.side === "sell" && !canSell) return fail(SELL_BLOCKED);
-        if (!a.product.trim()) return fail("Choose a product");
+        const product = a.product.trim().replace(/\s+/g, " ");
+        if (!product) return fail("Enter the product name");
+        if (product.length > 80) return fail("Keep the product name under 80 characters");
         if (!(a.price > 0)) return fail("Enter a price per unit");
         if (!Number.isInteger(a.totalQty) || a.totalQty < 1) return fail("Enter the quantity as a whole number");
         if (!(a.minAmount > 0) || !(a.maxAmount >= a.minAmount)) return fail("Max order must be at least the min order");
         if (a.minAmount < a.price) return fail("Min order must be at least the price of one unit");
         if (!a.payments.length) return fail("Pick at least one payment method");
         const id = uid("ad");
-        update((d) => ({ ...d, ads: [{ ...a, id, merchantId: d.meId, availableQty: a.totalQty, createdAt: Date.now(), online: true, featured: false }, ...d.ads] }));
+        update((d) => ({ ...d, ads: [{ ...a, product, id, merchantId: d.meId, availableQty: a.totalQty, createdAt: Date.now(), online: true, featured: false }, ...d.ads] }));
         return { ok: true, id };
       },
 
-      toggleAd: (adId) => update((d) => ({ ...d, ads: d.ads.map((a) => (a.id === adId && a.merchantId === d.meId ? { ...a, online: !a.online } : a)) })),
-
-      submitVerification: (v) => {
-        if (meM.kind !== "customer") return fail("Only customers need verification");
-        if (meM.verification === "pending") return fail("Your verification is already under review");
-        if (meM.verification === "verified") return fail("You are already verified");
-        const legalName = v.legalName.trim();
-        const idNumber = v.idNumber.replace(/\s+/g, "").toUpperCase();
-        if (legalName.length < 3) return fail("Enter your full legal name as on the document");
-        if (!ID_RULES[v.idType].re.test(idNumber)) return fail(`Check the ${v.idType} number — ${ID_RULES[v.idType].hint}`);
-        if (!v.documentName) return fail("Upload a photo or PDF of the document");
-        patchMe((m) => ({ ...m, verification: "pending", verified: false, kyc: { legalName, idType: v.idType, idLast4: idNumber.slice(-4), documentName: v.documentName, submittedAt: Date.now() } }));
+      toggleAd: (adId) => {
+        const a = ad(adId);
+        if (!a || a.merchantId !== s.meId) return fail("Ad not found");
+        // an unverified customer can't put a Sell ad back on the market (e.g. after the team removed their verification)
+        if (!a.online && a.side === "sell" && !canSell) return fail(SELL_BLOCKED);
+        update((d) => ({ ...d, ads: d.ads.map((x) => (x.id === adId ? { ...x, online: !x.online } : x)) }));
         return { ok: true };
       },
 
-      reviewVerification: (approve, note) => {
-        if (meM.verification !== "pending") return fail("Nothing to review");
-        if (!approve && !note?.trim()) return fail("Give a reason so the customer knows what to fix");
-        patchMe((m) => ({ ...m, verification: approve ? "verified" : "rejected", verified: approve, kyc: m.kyc && { ...m.kyc, reviewedAt: Date.now(), note: approve ? undefined : note?.trim() } }));
-        return { ok: true };
-      },
-
-      setMyKind: (kind) => patchMe((m) => ({ ...m, kind, ...(kind === "customer" ? {} : { verified: m.verification === "verified" }) })),
-
-      reset: () => { try { localStorage.removeItem(KEY); } catch {} setS(syncMe(demoState(meName), account)); },
+      reset: () => { try { localStorage.removeItem(KEY); } catch {} setS(syncMe(demoState(meName, account.kind), account)); },
     };
   }, [s, now, update, meName, KEY, account]);
 

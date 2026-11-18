@@ -88,8 +88,8 @@ export default function P2PMarket() {
 
       {side === "sell" && !canSell && (
         <div role="note" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[14px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
-          <span><strong>Verify your account to sell.</strong> As a customer you can buy right away, but selling opens only after our team verifies your identity.</span>
-          <Link href="/p2p/profile#verify" className="font-semibold underline">Verify now →</Link>
+          <span><strong>Selling is locked for now.</strong> As a customer you can buy right away; selling opens as soon as our team has verified your account — nothing to fill in.</span>
+          <Link href="/p2p/profile" className="font-semibold underline">See your status →</Link>
         </div>
       )}
 

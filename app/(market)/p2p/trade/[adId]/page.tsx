@@ -14,7 +14,8 @@ export default function TradePage() {
   const router = useRouter();
   const { ad, merchant, placeOrder, s, canSell } = useP2P();
   const a = ad(adId);
-  const [qty, setQty] = useState("1");
+  // start at the smallest quantity this ad allows (e.g. 10 units for bulk-only ads)
+  const [qty, setQty] = useState(() => String(a ? Math.max(1, Math.ceil(a.minAmount / a.price)) : 1));
   const [method, setMethod] = useState<PaymentMethod | "">(a?.payments[0] ?? "");
   const [err, setErr] = useState("");
 
@@ -70,7 +71,7 @@ export default function TradePage() {
             {own && <p className="text-[13.5px] text-[var(--muted)]">This is your own ad.</p>}
             {blocked && (
               <p role="note" className="rounded-lg bg-amber-50 px-3 py-2 text-[13.5px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
-                {SELL_BLOCKED} <Link href="/p2p/profile#verify" className="font-semibold underline">Verify now</Link>
+                {SELL_BLOCKED} <Link href="/p2p/profile" className="font-semibold underline">See your status</Link>
               </p>
             )}
             <button type="submit" disabled={own || blocked}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { inr, pct, useP2P } from "@/lib/p2p/store";
+import { completionText, inr, positiveText, useP2P } from "@/lib/p2p/store";
 import { Card } from "@/components/ui";
 import { MerchantLine, Stat } from "../../_components/bits";
 
@@ -19,8 +19,8 @@ export default function MerchantPage() {
       <Card className="p-5"><MerchantLine m={m} size={56} link={false} /></Card>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Completed trades" value={m.trades.toLocaleString("en-IN")} />
-        <Stat label="Completion rate" value={pct(m.completionPct)} />
-        <Stat label="Positive feedback" value={pct(m.positivePct)} />
+        <Stat label="Completion rate" value={completionText(m)} />
+        <Stat label="Positive feedback" value={positiveText(m)} />
         <Stat label="Avg. release time" value={`${m.avgReleaseMin} min`} />
       </div>
       <h2 className="text-[17px] font-semibold">Ads by {m.name}</h2>

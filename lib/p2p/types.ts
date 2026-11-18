@@ -4,19 +4,8 @@ export type PaymentMethod = "UPI" | "IMPS" | "Bank transfer";
 
 /** Who the user is on the platform. */
 export type UserKind = "team" | "reseller" | "customer";
-/** Identity verification (KYC). Customers must be "verified" before they can sell. */
-export type Verification = "none" | "pending" | "verified" | "rejected";
-export type IdType = "PAN" | "Aadhaar" | "GSTIN";
-
-export type KycSubmission = {
-  legalName: string;
-  idType: IdType;
-  idLast4: string; // only the last 4 characters are kept
-  documentName: string;
-  submittedAt: number;
-  reviewedAt?: number;
-  note?: string; // reason when rejected
-};
+/** Customers can sell only after our team has verified them by hand (Team → Customers). Team and resellers are always "verified". */
+export type Verification = "none" | "verified";
 
 /** A user who trades on P2P. Every user can be a buyer and a seller. */
 export type Merchant = {
@@ -24,11 +13,11 @@ export type Merchant = {
   name: string;
   kind: UserKind;
   verification: Verification;
-  kyc?: KycSubmission;
   verified: boolean; // badge on the market = verification === "verified"
   trades: number; // completed trades
-  completionPct: number; // completed ÷ (completed + cancelled by them) × 100
-  positivePct: number; // positive ratings ÷ all ratings × 100
+  cancelled: number; // orders they cancelled or let expire as the buyer → completion rate
+  ratingsPos: number; // positive ratings received as a seller
+  ratingsTotal: number; // all ratings received as a seller
   avgReleaseMin: number;
   joinedAt: number;
   payTo: { upi?: string; bank?: string; accountName: string };

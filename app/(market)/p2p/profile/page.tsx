@@ -1,7 +1,7 @@
 "use client";
 
 import { BadgeCheck, Clock, ShieldCheck, Wallet } from "lucide-react";
-import { pct, useP2P } from "@/lib/p2p/store";
+import { completionText, positiveText, useP2P } from "@/lib/p2p/store";
 import { Avatar, Card } from "@/components/ui";
 import { Stat } from "../_components/bits";
 
@@ -23,7 +23,7 @@ function VerificationCard() {
   // Verification is manual: our team checks the customer and marks them verified in the team app (Customers page).
   return (
     <Card title={title} className="text-[14px]">
-      <div id="verify" className="space-y-4 p-4">
+      <div className="space-y-4 p-4">
         {me.verification !== "verified" && (
           <div className="space-y-2">
             <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><Clock size={18} className="mt-0.5 shrink-0" />
@@ -60,8 +60,8 @@ export default function P2PProfile() {
       </Card>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Completed trades" value={me.trades.toLocaleString("en-IN")} />
-        <Stat label="Completion rate" value={pct(me.completionPct)} />
-        <Stat label="Positive feedback" value={pct(me.positivePct)} />
+        <Stat label="Completion rate" value={completionText(me)} />
+        <Stat label="Positive feedback" value={positiveText(me)} />
         <Stat label="Orders in this demo" value={`${done} / ${mine.length}`} />
       </div>
       <div className="grid gap-5 md:grid-cols-2">

@@ -9,7 +9,7 @@ import { P2PProvider, useP2P, type P2PAccount } from "@/lib/p2p/store";
 
 function P2PNav() {
   const path = usePathname();
-  const { s, reset } = useP2P();
+  const { s, reset, isCustomer } = useP2P();
   const actionNeeded = s.orders.filter((o) =>
     (o.sellerId === s.meId && o.status === "paid") || (o.buyerId === s.meId && o.status === "pending_payment")).length;
   const tabs = [
@@ -34,9 +34,9 @@ function P2PNav() {
         <div className="ml-auto flex items-center gap-2 text-[12px] text-[var(--muted)]">
           <Info size={14} />
           <span className="hidden sm:inline">Demo data</span>
-          <button onClick={() => { if (confirm("Reset P2P demo data?")) reset(); }} className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[var(--accent-strong)] hover:bg-[var(--hover)]">
+          {!isCustomer && <button onClick={() => { if (confirm("Reset P2P demo data?")) reset(); }} className="flex items-center gap-1 rounded-md px-2 py-1 font-medium text-[var(--accent-strong)] hover:bg-[var(--hover)]">
             <RotateCcw size={13} /> Reset
-          </button>
+          </button>}
         </div>
       </div>
     </div>
