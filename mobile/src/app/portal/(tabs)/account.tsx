@@ -1,4 +1,5 @@
 import { Alert, Platform, View } from "react-native";
+import { router } from "expo-router";
 import { useReseller } from "@/lib/store";
 import type { Availability } from "@/lib/types";
 import { AppearanceCard, Avatar, Button, Card, Pill, Row, Select, T } from "@/components/ui";
@@ -23,6 +24,9 @@ export default function Account() {
             options={[{ value: "available", label: "🟢 Available for new requests" }, { value: "busy", label: "🟡 Busy" }, { value: "unavailable", label: "⚪ Unavailable" }]} />
           <T muted size={12}>Our team sees this when choosing who to assign.</T>
         </View>
+      </Card>
+      <Card title="P2P market" icon="swap-horizontal-outline">
+        <Row title="Open the P2P market" subtitle="Sell your stock to customers and other businesses, or buy" onPress={() => router.push("/p2p")} />
       </Card>
       <AppearanceCard />
       <Card title="Your coverage" icon="map-outline">

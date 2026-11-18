@@ -1,6 +1,6 @@
 import { Redirect, Stack } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
-import { useStore } from "@/lib/store";
+import { HOME, useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 
 export default function TeamLayout() {
@@ -8,7 +8,7 @@ export default function TeamLayout() {
   const { c } = useTheme();
   if (!ready || (token && !state)) return <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: c.screen }}><ActivityIndicator size="large" color={c.accent} /></View>;
   if (!token || !state) return <Redirect href="/login" />;
-  if (state.scope !== "team") return <Redirect href="/portal" />;
+  if (state.scope !== "team") return <Redirect href={HOME[state.scope]} />;
   return (
     <Stack screenOptions={{ headerStyle: { backgroundColor: c.header }, headerTintColor: c.text, contentStyle: { backgroundColor: c.screen }, headerBackButtonDisplayMode: "minimal" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -20,6 +20,7 @@ export default function TeamLayout() {
       <Stack.Screen name="reseller/[id]" options={{ title: "Reseller" }} />
       <Stack.Screen name="case/index" options={{ title: "Mediation" }} />
       <Stack.Screen name="case/[id]" options={{ title: "Case" }} />
+      <Stack.Screen name="customers" options={{ title: "Customers" }} />
     </Stack>
   );
 }

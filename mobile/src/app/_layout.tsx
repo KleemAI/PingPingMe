@@ -23,6 +23,7 @@ function Root() {
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="(team)" options={{ headerShown: false }} />
         <Stack.Screen name="portal" options={{ headerShown: false }} />
+        <Stack.Screen name="p2p" options={{ headerShown: false }} />
       </Stack>
       <Toasts />
     </View>

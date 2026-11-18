@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { AppState, Platform } from "react-native";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import type { AppState as ServerState, Attachment, ResellerState, TeamState } from "./types";
+import type { AppState as ServerState, Attachment, CustomerState, ResellerState, TeamState } from "./types";
 import { io, type Socket } from "socket.io-client";
 import { storage } from "./storage";
 
@@ -31,7 +31,13 @@ type Ctx = {
   state: ServerState | null;
   now: number;
   toasts: Toast[];
+  /** Step 1 of sign-in: does this email have an account? (true → ask password, false → sign-up form) */
+  checkEmail: (server: string, email: string) => Promise<boolean>;
   login: (server: string, email: string, password: string) => Promise<void>;
+  /** Customer self-registration — signs them in straight away. */
+  signup: (server: string, name: string, email: string, password: string) => Promise<void>;
+  /** Signed-in GET/POST to the backend, e.g. api("/p2p"). */
+  api: (path: string, init?: RequestInit) => Promise<Response>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   act: (type: string, payload?: Record<string, unknown>, okText?: string) => Promise<unknown>;
@@ -134,19 +140,20 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return () => { sub.remove(); clearInterval(id); socket?.close(); };
   }, [token, refresh, toast, clearSession]);
 
-  const login = useCallback(async (srv: string, email: string, password: string) => {
-    const base = normalizeServer(srv);
-    serverRef.current = base;
+  /** POST to a public auth route on the given server; turns network / server problems into readable errors. */
+  const authPost = useCallback(async (base: string, path: string, body: object) => {
     let res: Response;
     try {
-      res = await fetch(`${base}${API}/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: email.trim(), password }) });
+      res = await fetch(`${base}${API}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     } catch {
       throw new Error(`Can't reach ${base || "the server"}. Is it running and on the same Wi-Fi?`);
     }
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? (res.status >= 500 ? "The server is not answering — is the backend running?" : "Login failed"));
-    const t: string | undefined = data.accessToken ?? data.token;
-    if (data.role === "customer") throw new Error("Customer accounts use the P2P market on the website for now. This app is for the team and resellers.");
+    return { res, data };
+  }, []);
+
+  const startSession = useCallback(async (base: string, data: { accessToken?: string; token?: string }) => {
+    const t = data.accessToken ?? data.token;
     if (!t) throw new Error("Unexpected answer from the server — check the server address (backend :4000)");
     await storage.set("bm_server", base);
     await storage.set("bm_token", t);
@@ -156,6 +163,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setToken(t);
     await refresh();
   }, [refresh]);
+
+  const checkEmail = useCallback(async (srv: string, email: string) => {
+    const base = normalizeServer(srv);
+    serverRef.current = base;
+    const { res, data } = await authPost(base, "/auth/check-email", { email: email.trim() });
+    if (!res.ok) throw new Error(data.error ?? (res.status >= 500 ? "The server is not answering — is the backend running?" : "Enter a valid email address"));
+    return !!data.exists;
+  }, [authPost]);
+
+  const login = useCallback(async (srv: string, email: string, password: string) => {
+    const base = normalizeServer(srv);
+    serverRef.current = base;
+    const { res, data } = await authPost(base, "/auth/login", { email: email.trim(), password });
+    if (!res.ok) throw new Error(data.error ?? (res.status >= 500 ? "The server is not answering — is the backend running?" : "Login failed"));
+    await startSession(base, data);
+  }, [authPost, startSession]);
+
+  const signup = useCallback(async (srv: string, name: string, email: string, password: string) => {
+    const base = normalizeServer(srv);
+    serverRef.current = base;
+    const { res, data } = await authPost(base, "/auth/signup", { name, email: email.trim(), password });
+    if (!res.ok) {
+      const e = new Error(data.error ?? "Sign-up failed") as Error & { status?: number };
+      e.status = res.status; // 409 = this email already has an account → ask for the password
+      throw e;
+    }
+    await startSession(base, data);
+  }, [authPost, startSession]);
 
   const logout = useCallback(async () => {
     await call(`${API}/auth/logout`, { method: "POST" }).catch(() => {});
@@ -211,7 +246,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [toast]);
 
   return (
-    <StoreCtx.Provider value={{ ready, server, token, state, now, toasts, login, logout, refresh, act, toast, upload, openFile }}>
+    <StoreCtx.Provider value={{ ready, server, token, state, now, toasts, checkEmail, login, signup, api: call, logout, refresh, act, toast, upload, openFile }}>
       {children}
     </StoreCtx.Provider>
   );
@@ -234,3 +269,11 @@ export function useReseller() {
   const s = useStore();
   return { ...s, rs: s.state as ResellerState };
 }
+
+export function useCustomer() {
+  const s = useStore();
+  return { ...s, cs: s.state as CustomerState };
+}
+
+/** Where each kind of account starts. */
+export const HOME = { team: "/(team)", reseller: "/portal", customer: "/p2p" } as const;
