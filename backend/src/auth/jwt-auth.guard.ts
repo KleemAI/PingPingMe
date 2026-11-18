@@ -4,7 +4,7 @@ import type { Request } from "express";
 import { forbidden } from "../common/errors";
 import type { Role } from "../common/contract";
 import { AuthService } from "./auth.service";
-import { IS_PUBLIC, ROLES } from "./decorators";
+import { ALLOW_CUSTOMER, IS_PUBLIC, ROLES } from "./decorators";
 import { tokenFrom } from "./session-cookie";
 
 /** Global guard: session cookie (web), `Authorization: Bearer <token>` (mobile/API) or `?access_token=` (links) + role check. */
@@ -19,6 +19,8 @@ export class JwtAuthGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest<Request & { user?: unknown }>();
     const user = await this.auth.verify(tokenFrom(req));
     req.user = user;
+    // Customers can only reach routes that are explicitly opened to them.
+    if (user.role === "customer" && !this.reflector.getAllAndOverride<boolean>(ALLOW_CUSTOMER, targets)) throw forbidden("Not available for customer accounts");
     const roles = this.reflector.getAllAndOverride<Role[] | undefined>(ROLES, targets);
     if (roles && !roles.includes(user.role)) throw forbidden(user.role === "reseller" ? "Team members only" : "Not allowed for your role");
     return true;

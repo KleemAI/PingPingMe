@@ -5,6 +5,7 @@ import { ResellerEntity } from "./reseller.entity";
 import { AssignmentEntity, RequestEntity } from "./request.entity";
 import { OrderEntity, OrderHistoryEntity, QuoteEntity, QuoteRevisionEntity } from "./quote.entity";
 import { CaseEntity, CaseEvidenceEntity, CaseHistoryEntity } from "./case.entity";
+import { ProductEntity } from "./product.entity";
 import { ActivityEntity, CounterEntity, FileEntity, ProcessedEventEntity, ReminderEntity, SavedReplyEntity, SettingsEntity } from "./misc.entity";
 
 export * from "./user.entity";
@@ -15,9 +16,10 @@ export * from "./request.entity";
 export * from "./quote.entity";
 export * from "./case.entity";
 export * from "./misc.entity";
+export * from "./product.entity";
 
 export const ENTITIES = [
   UserEntity, CompanyEntity, ContactEntity, ConversationEntity, MessageEntity, ResellerEntity, RequestEntity, AssignmentEntity,
   QuoteEntity, QuoteRevisionEntity, OrderEntity, OrderHistoryEntity, CaseEntity, CaseEvidenceEntity, CaseHistoryEntity,
-  ActivityEntity, SavedReplyEntity, ReminderEntity, SettingsEntity, FileEntity, ProcessedEventEntity, CounterEntity,
+  ActivityEntity, SavedReplyEntity, ReminderEntity, SettingsEntity, FileEntity, ProcessedEventEntity, CounterEntity, ProductEntity,
 ];

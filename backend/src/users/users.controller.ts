@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post } from "@nestjs/common";
 import type { User } from "../common/contract";
 import type { Payload } from "../common/util";
-import { AdminOnly, CurrentUser, TeamOnly } from "../auth/decorators";
+import { AdminOnly, AllowCustomer, CurrentUser, TeamOnly } from "../auth/decorators";
 import { UnitOfWork } from "../database/unit-of-work.service";
 import { QueryService } from "../state/query.service";
 import { UsersService } from "./users.service";
@@ -27,9 +27,25 @@ export class UsersController {
   }
 
   /** Any signed-in user: `{ currentPassword, newPassword }` */
-  @Post("me/password")
+  @Post("me/password") @AllowCustomer()
   async password(@CurrentUser() u: User, @Body() b: Payload) {
     await this.uow.write(u, (tx) => this.svc.changeOwnPassword(tx, b));
+    return { ok: true };
+  }
+}
+
+/** Self-registered customers. Verification is manual: our team checks them, then marks them verified. */
+@Controller("customers") @TeamOnly()
+export class CustomersController {
+  constructor(private readonly uow: UnitOfWork, private readonly svc: UsersService, private readonly query: QueryService) {}
+
+  @Get()
+  list() { return this.query.customers(); }
+
+  /** `{ verified: true | false }` */
+  @Patch(":id/verification")
+  async verify(@CurrentUser() u: User, @Param("id") id: string, @Body() b: Payload) {
+    await this.uow.write(u, (tx) => this.svc.verifyCustomer(tx, { ...b, id }));
     return { ok: true };
   }
 }

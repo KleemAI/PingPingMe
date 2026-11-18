@@ -27,7 +27,12 @@ type Ctx = {
 
 const StoreCtx = createContext<Ctx | null>(null);
 
-export function StoreProvider({ children, expect }: { children: React.ReactNode; expect: "team" | "reseller" }) {
+/** Where each kind of account belongs. */
+const HOME: Record<AppState["scope"], string> = { team: "/", reseller: "/portal", customer: "/p2p" };
+
+export function StoreProvider({ children, expect }: { children: React.ReactNode; expect: AppState["scope"] | AppState["scope"][] }) {
+  // a string key keeps the callbacks below stable even when an array literal is passed
+  const allowedKey = Array.isArray(expect) ? expect.join(",") : expect;
   const [state, setState] = useState<AppState | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [now, setNow] = useState(() => Date.now());
@@ -56,12 +61,12 @@ export function StoreProvider({ children, expect }: { children: React.ReactNode;
     if (data.unchanged) return;
     version.current = data.version;
     const s = data.state as AppState;
-    if (s.scope !== expect) {
-      router.replace(s.scope === "team" ? "/" : "/portal");
+    if (!allowedKey.split(",").includes(s.scope)) {
+      router.replace(HOME[s.scope]);
       return;
     }
     setState(s);
-  }, [expect, router]);
+  }, [allowedKey, router]);
 
   // Live updates. With the NestJS backend, Socket.IO pushes "changed" after every write
   // (signed in with the session cookie); a slow poll stays on as a safety net.

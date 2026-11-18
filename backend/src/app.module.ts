@@ -26,7 +26,7 @@ import { WorkspaceController } from "./workspace/workspace.controller";
 import { SettingsService } from "./settings/settings.service";
 import { SettingsController } from "./settings/settings.controller";
 import { UsersService } from "./users/users.service";
-import { UsersController } from "./users/users.controller";
+import { CustomersController, UsersController } from "./users/users.controller";
 import { PortalService } from "./portal/portal.service";
 import { PortalController } from "./portal/portal.controller";
 import { StateService } from "./state/state.service";
@@ -50,7 +50,7 @@ import { OpsController } from "./ops/ops.controller";
   controllers: [
     StateController, ConversationsController, MessagesController, ContactsController, RequestsController, ResellersController,
     QuotesController, OrdersController, ExportController, CasesController, WorkspaceController, SettingsController,
-    UsersController, PortalController, OpsController,
+    UsersController, CustomersController, PortalController, OpsController,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

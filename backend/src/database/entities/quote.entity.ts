@@ -1,6 +1,6 @@
 import { Column, Generated, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn, Unique } from "typeorm";
 import { TS, TS_NULL, decimal } from "../transformers";
-import type { QuoteItem } from "../../common/contract";
+import type { Attachment, QuoteItem } from "../../common/contract";
 
 @Entity("quotes")
 export class QuoteEntity {
@@ -53,6 +53,19 @@ export class OrderEntity {
   @Index() @Column({ type: "varchar", length: 20 }) status: string;
   @Column({ name: "created_at", ...TS }) createdAt: number;
   @Column({ name: "delivered_at", ...TS_NULL }) deliveredAt: number | null;
+  /** quote = from a reseller quotation · catalog = placed by the customer from the product catalogue */
+  @Column({ type: "varchar", length: 10, default: "quote" }) source: string;
+  /** customer's note when ordering from the catalogue */
+  @Column({ type: "text", nullable: true }) note: string | null;
+  /** manual payments: unpaid → submitted (customer sent proof) → paid (team confirmed) | rejected */
+  @Index() @Column({ name: "payment_status", type: "varchar", length: 12, default: "unpaid" }) paymentStatus: string;
+  @Column({ name: "payment_method", type: "varchar", length: 20, nullable: true }) paymentMethod: string | null;
+  @Column({ name: "payment_ref", type: "varchar", length: 100, nullable: true }) paymentRef: string | null;
+  @Column({ name: "payment_proof", type: "jsonb", nullable: true }) paymentProof: Attachment | null;
+  @Column({ name: "payment_submitted_at", ...TS_NULL }) paymentSubmittedAt: number | null;
+  @Column({ name: "payment_confirmed_at", ...TS_NULL }) paymentConfirmedAt: number | null;
+  @Column({ name: "payment_confirmed_by", type: "varchar", length: 40, nullable: true }) paymentConfirmedBy: string | null;
+  @Column({ name: "payment_note", type: "text", nullable: true }) paymentNote: string | null;
 }
 
 @Entity("order_status_history")

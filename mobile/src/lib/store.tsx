@@ -146,6 +146,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? (res.status >= 500 ? "The server is not answering — is the backend running?" : "Login failed"));
     const t: string | undefined = data.accessToken ?? data.token;
+    if (data.role === "customer") throw new Error("Customer accounts use the P2P market on the website for now. This app is for the team and resellers.");
     if (!t) throw new Error("Unexpected answer from the server — check the server address (backend :4000)");
     await storage.set("bm_server", base);
     await storage.set("bm_token", t);

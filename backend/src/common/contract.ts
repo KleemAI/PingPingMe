@@ -3,7 +3,7 @@
 
 // Core records — linked by stable IDs (brief §04 "Core records")
 
-export type Role = "admin" | "agent" | "reseller";
+export type Role = "admin" | "agent" | "reseller" | "customer";
 
 export type User = {
   id: string;
@@ -11,6 +11,8 @@ export type User = {
   email: string;
   role: Role;
   resellerId?: string; // for reseller users
+  verified?: boolean; // customers only: may sell on P2P once our team has verified them
+  createdAt?: number; // customers only
   active: boolean;
   passwordHash?: string; // never sent to the browser
 };
@@ -171,13 +173,31 @@ export type Quote = {
 
 export type OrderStatus = "awaiting_approval" | "confirmed" | "in_progress" | "dispatched" | "delivered" | "cancelled";
 
+export type PaymentStatus = "unpaid" | "submitted" | "paid" | "rejected";
+export type PaymentMethod = "UPI" | "Bank transfer" | "Cash";
+
+/** Manual payment: the customer pays by UPI / bank and uploads proof; our team confirms it. No gateway, no stored card data. */
+export type OrderPayment = {
+  status: PaymentStatus;
+  method?: PaymentMethod;
+  reference?: string; // UPI / bank transaction reference
+  proof?: Attachment;
+  submittedAt?: number;
+  confirmedAt?: number;
+  confirmedBy?: string;
+  note?: string; // team note, e.g. reason for rejecting
+};
+
 export type Order = {
   id: string;
   ref: string;
-  requestId: string;
-  quoteId: string;
+  requestId: string; // "" for catalogue orders
+  quoteId: string; // "" for catalogue orders
   contactId: string;
-  resellerId: string;
+  resellerId: string; // "" for catalogue orders (fulfilled by our team)
+  source?: "quote" | "catalog";
+  note?: string;
+  payment?: OrderPayment;
   items: QuoteItem[]; // customer-facing prices
   costTotal: number; // reseller cost
   total: number; // customer total
@@ -186,6 +206,21 @@ export type Order = {
   history: { status: OrderStatus; at: number; by: string; note?: string }[];
   createdAt: number;
   deliveredAt?: number;
+};
+
+/** Catalogue entry customers can browse. `price` absent = "ask for price" (quotation flow). */
+export type Product = {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  kind: "product" | "service";
+  price?: number;
+  unit: string;
+  image?: Attachment;
+  active: boolean;
+  createdAt: number;
+  updatedAt: number;
 };
 
 export type CaseStatus = "open" | "investigating" | "resolution_proposed" | "resolved" | "reopened";
@@ -249,10 +284,12 @@ export type Settings = {
   categories: string[];
   areas: string[];
   labels: { id: string; name: string; color: string }[];
+  payment?: { upiId: string; payeeName: string; bank: string }; // shown to customers when they pay
 };
 
 export type DB = {
   users: User[];
+  customers?: User[]; // self-registered customers (team view)
   companies: Company[];
   contacts: Contact[];
   conversations: Conversation[];
@@ -261,6 +298,7 @@ export type DB = {
   requests: Request[];
   quotes: Quote[];
   orders: Order[];
+  products?: Product[];
   cases: MediationCase[];
   activity: Activity[];
   savedReplies: SavedReply[];
@@ -294,4 +332,20 @@ export type ResellerState = {
   version: number;
 };
 
-export type AppState = TeamState | ResellerState;
+/** What a customer may see about an order: their own prices and payment — never reseller cost or reseller identity. */
+export type CustomerOrder = Omit<Order, "costTotal" | "resellerId" | "quoteId" | "requestId"> & { quoteValidUntil?: number };
+
+/** A price request the customer sent (shown as "Asked for price"). */
+export type CustomerRequest = { id: string; ref: string; title: string; status: RequestStatus; createdAt: number; updatedAt: number };
+
+/**
+ * A self-registered customer. For now they only use the P2P market, so the API sends just their account.
+ * (The fuller customer portal — chat, orders, cases — was started but is not built yet.)
+ */
+export type CustomerState = {
+  scope: "customer";
+  me: User;
+  version: number;
+};
+
+export type AppState = TeamState | ResellerState | CustomerState;

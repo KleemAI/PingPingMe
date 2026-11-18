@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { Brackets, In } from "typeorm";
+import { Brackets, In, Not } from "typeorm";
 import type { User } from "../common/contract";
 import { notFound } from "../common/errors";
 import { need } from "../common/util";
@@ -154,7 +154,9 @@ export class QueryService {
     return (await this.em.find(ReminderEntity, { where, order: { dueAt: "ASC" } })).map(toReminder);
   }
 
-  async users() { return (await this.em.find(UserEntity, { order: { createdAt: "ASC" } })).map(toUser); }
+  async users() { return (await this.em.find(UserEntity, { where: { role: Not("customer") }, order: { createdAt: "ASC" } })).map(toUser); }
+
+  async customers() { return (await this.em.find(UserEntity, { where: { role: "customer" }, order: { createdAt: "DESC" } })).map(toUser); }
 
   async settings() {
     const s = toSettings(need(await this.em.findOne(SettingsEntity, { where: { id: 1 } }), "Settings"));

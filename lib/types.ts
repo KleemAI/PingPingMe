@@ -1,6 +1,6 @@
 // Core records — linked by stable IDs (brief §04 "Core records")
 
-export type Role = "admin" | "agent" | "reseller";
+export type Role = "admin" | "agent" | "reseller" | "customer";
 
 export type User = {
   id: string;
@@ -8,6 +8,8 @@ export type User = {
   email: string;
   role: Role;
   resellerId?: string; // for reseller users
+  verified?: boolean; // customers only: may sell on P2P once our team has verified them
+  createdAt?: number; // customers only
   active: boolean;
   passwordHash?: string; // never sent to the browser
 };
@@ -250,6 +252,7 @@ export type Settings = {
 
 export type DB = {
   users: User[];
+  customers?: User[]; // self-registered customers (team view)
   companies: Company[];
   contacts: Contact[];
   conversations: Conversation[];
@@ -291,4 +294,11 @@ export type ResellerState = {
   version: number;
 };
 
-export type AppState = TeamState | ResellerState;
+/** A self-registered customer (P2P marketplace). */
+export type CustomerState = {
+  scope: "customer";
+  me: User;
+  version: number;
+};
+
+export type AppState = TeamState | ResellerState | CustomerState;

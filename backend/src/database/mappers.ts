@@ -1,18 +1,21 @@
 import type {
   Activity, Assignment, Company, Contact, Conversation, MediationCase, Message, Order, Quote, QuoteRevision, Reminder,
-  Request, Reseller, SavedReply, Settings, User,
+  Product, Request, Reseller, SavedReply, Settings, User,
 } from "../common/contract";
 import { clean } from "../common/util";
 import type {
   ActivityEntity, AssignmentEntity, CaseEntity, CaseEvidenceEntity, CaseHistoryEntity, CompanyEntity, ContactEntity,
   ConversationEntity, MessageEntity, OrderEntity, OrderHistoryEntity, QuoteEntity, QuoteRevisionEntity, ReminderEntity,
-  RequestEntity, ResellerEntity, SavedReplyEntity, SettingsEntity, UserEntity,
+  ProductEntity, RequestEntity, ResellerEntity, SavedReplyEntity, SettingsEntity, UserEntity,
 } from "./entities";
 
 /* Entity (database row) → API object. Password hashes and internal columns never leave here. */
 
 export const toUser = (u: UserEntity): User =>
-  clean({ id: u.id, name: u.name, email: u.email, role: u.role as User["role"], resellerId: u.resellerId, active: u.active }) as User;
+  clean({
+    id: u.id, name: u.name, email: u.email, role: u.role as User["role"], resellerId: u.resellerId, active: u.active,
+    ...(u.role === "customer" ? { verified: !!u.verified, createdAt: u.createdAt ? new Date(u.createdAt).getTime() : undefined } : {}),
+  }) as User;
 
 export const toCompany = (c: CompanyEntity): Company => clean({ ...c }) as Company;
 
@@ -51,8 +54,21 @@ export const toRevision = (v: QuoteRevisionEntity): QuoteRevision =>
 export const toQuote = (q: QuoteEntity, revisions: QuoteRevisionEntity[]): Quote =>
   clean({ ...q, revisions: revisions.map(toRevision) }) as Quote;
 
-export const toOrder = (o: OrderEntity, history: OrderHistoryEntity[]): Order =>
-  clean({ ...o, history: history.map((h) => clean({ status: h.status, at: h.at, by: h.by, note: h.note })) }) as Order;
+export const toOrder = (o: OrderEntity, history: OrderHistoryEntity[]): Order => {
+  const {
+    paymentStatus, paymentMethod, paymentRef, paymentProof, paymentSubmittedAt, paymentConfirmedAt, paymentConfirmedBy, paymentNote, ...rest
+  } = o;
+  return clean({
+    ...rest,
+    payment: clean({
+      status: paymentStatus ?? "unpaid", method: paymentMethod, reference: paymentRef, proof: paymentProof,
+      submittedAt: paymentSubmittedAt, confirmedAt: paymentConfirmedAt, confirmedBy: paymentConfirmedBy, note: paymentNote,
+    }),
+    history: history.map((h) => clean({ status: h.status, at: h.at, by: h.by, note: h.note })),
+  }) as Order;
+};
+
+export const toProduct = (p: ProductEntity): Product => clean({ ...p }) as Product;
 
 export const toCase = (c: CaseEntity, evidence: CaseEvidenceEntity[], history: CaseHistoryEntity[]): MediationCase =>
   clean({
@@ -68,6 +84,7 @@ export const toReminder = (r: ReminderEntity): Reminder => ({ ...r }) as Reminde
 export const toSettings = (s: SettingsEntity): Settings => ({
   business: s.business, channels: s.channels, notifications: s.notifications, rules: s.rules,
   categories: s.categories, areas: s.areas, labels: s.labels,
+  payment: s.payment ?? { upiId: "", payeeName: "", bank: "" },
 });
 
 /** Group child rows by a parent key, preserving order. */

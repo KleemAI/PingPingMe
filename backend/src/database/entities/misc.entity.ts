@@ -46,6 +46,8 @@ export class SettingsEntity {
   @Column({ type: "text", array: true }) categories: string[];
   @Column({ type: "text", array: true }) areas: string[];
   @Column({ type: "jsonb" }) labels: Settings["labels"];
+  /** where customers send money (shown on their order page) */
+  @Column({ type: "jsonb", default: () => `'{"upiId":"","payeeName":"","bank":""}'` }) payment: NonNullable<Settings["payment"]>;
 }
 
 /** Private attachment storage. Bytes live in PostgreSQL (bytea) and are served only after a permission check. */

@@ -25,6 +25,7 @@ export function seed(): DB {
       { id: "u-r1", name: "Kiran (TechHub Traders)", email: "kiran@techhub.in", role: "reseller", resellerId: "r1", active: true },
       { id: "u-r2", name: "Farhan (Metro Electronics)", email: "farhan@metroelec.in", role: "reseller", resellerId: "r2", active: true },
       { id: "u-r3", name: "Lata (GreenLeaf Supplies)", email: "lata@greenleaf.in", role: "reseller", resellerId: "r3", active: true },
+      { id: "u-cust1", name: "Rahul Verma", email: "rahul@example.in", role: "customer", active: true },
     ],
     companies: [
       { id: "co1", name: "Sunrise Hotels Pvt Ltd", industry: "Hospitality", gstin: "27AAACS1234F1Z5", address: "Andheri East, Mumbai", website: "sunrisehotels.in" },

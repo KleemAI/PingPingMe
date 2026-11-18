@@ -27,6 +27,7 @@ type Handler = (tx: Tx, p: Payload) => Promise<unknown>;
 export class ActionsService {
   readonly team: Record<string, Handler>;
   readonly reseller: Record<string, Handler>;
+  readonly customer: Record<string, Handler>;
 
   constructor(
     private readonly uow: UnitOfWork,
@@ -83,6 +84,7 @@ export class ActionsService {
       "user.create": (t, p) => users.create(t, p),
       "user.update": (t, p) => users.update(t, p),
       "me.password": (t, p) => users.changeOwnPassword(t, p),
+      "customer.verify": (t, p) => users.verifyCustomer(t, p),
     };
     this.reseller = {
       "portal.respond": (t, p) => portal.respond(t, p),
@@ -92,16 +94,23 @@ export class ActionsService {
       "portal.availability": (t, p) => resellers.setOwnAvailability(t, p),
       "me.password": (t, p) => users.changeOwnPassword(t, p),
     };
+    this.customer = {
+      "me.password": (t, p) => users.changeOwnPassword(t, p),
+    };
+  }
+
+  private mapFor(user: User) {
+    return isTeam(user) ? this.team : user.role === "reseller" ? this.reseller : this.customer;
   }
 
   catalog(user: User) {
-    return Object.keys(isTeam(user) ? this.team : this.reseller);
+    return Object.keys(this.mapFor(user));
   }
 
   async run(user: User, type: string, payload: Payload = {}) {
-    const handler = isTeam(user) ? this.team[type] : this.reseller[type];
+    const handler = this.mapFor(user)[type];
     if (!handler) {
-      const exists = type in this.team || type in this.reseller;
+      const exists = type in this.team || type in this.reseller || type in this.customer;
       throw new AppError(exists ? 403 : 400, exists ? "Not allowed for your role" : `Unknown action: ${type}`);
     }
     const result = await this.uow.write(user, (tx) => handler(tx, payload && typeof payload === "object" ? payload : {}));

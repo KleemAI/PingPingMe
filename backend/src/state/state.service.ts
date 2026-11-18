@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { In } from "typeorm";
-import type { MaskedContact, ResellerState, TeamState, User } from "../common/contract";
+import type { CustomerState, MaskedContact, ResellerState, TeamState, User } from "../common/contract";
 import { clean, need } from "../common/util";
 import { visibleRequestIds } from "../common/reseller-scope";
 import { isTeam } from "../auth/decorators";
@@ -28,7 +28,8 @@ export class StateService {
 
   version() { return this.uow.version(); }
 
-  async forUser(user: User): Promise<TeamState | ResellerState> {
+  async forUser(user: User): Promise<TeamState | ResellerState | CustomerState> {
+    if (user.role === "customer") return { scope: "customer", me: user, version: await this.uow.version() };
     return isTeam(user) ? this.team(user) : this.reseller(user);
   }
 
@@ -69,7 +70,8 @@ export class StateService {
       me: user,
       db: {
         version,
-        users: users.map(toUser),
+        users: users.filter((u) => u.role !== "customer").map(toUser),
+        customers: users.filter((u) => u.role === "customer").map(toUser),
         companies: companies.map(toCompany),
         contacts: contacts.map(toContact),
         conversations: conversations.map(toConversation),

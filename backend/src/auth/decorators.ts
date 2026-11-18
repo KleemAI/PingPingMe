@@ -3,6 +3,7 @@ import type { Role, User } from "../common/contract";
 
 export const IS_PUBLIC = "isPublic";
 export const ROLES = "roles";
+export const ALLOW_CUSTOMER = "allowCustomer";
 
 /** Route needs no login. */
 export const Public = () => SetMetadata(IS_PUBLIC, true);
@@ -11,6 +12,9 @@ export const Roles = (...roles: Role[]) => SetMetadata(ROLES, roles);
 export const TeamOnly = () => Roles("admin", "agent");
 export const AdminOnly = () => Roles("admin");
 export const ResellerOnly = () => Roles("reseller");
+
+/** Customers (self-registered) may call this route. Every other route refuses them. */
+export const AllowCustomer = () => SetMetadata(ALLOW_CUSTOMER, true);
 
 /** The signed-in user (re-loaded from the database on every request). */
 export const CurrentUser = createParamDecorator((_: unknown, ctx: ExecutionContext): User => ctx.switchToHttp().getRequest().user);

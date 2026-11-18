@@ -1,10 +1,10 @@
 import { Body, Controller, Get, HttpCode, Post, Query } from "@nestjs/common";
 import type { User } from "../common/contract";
-import { CurrentUser } from "../auth/decorators";
+import { AllowCustomer, CurrentUser } from "../auth/decorators";
 import { ActionsService } from "./actions.service";
 import { StateService } from "./state.service";
 
-@Controller()
+@Controller() @AllowCustomer()
 export class StateController {
   constructor(private readonly state: StateService, private readonly actions: ActionsService) {}
 

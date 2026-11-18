@@ -30,6 +30,7 @@ export class UsersService {
     if (tx.user.role !== "admin") throw forbidden("Admins only");
     const u = need(await tx.em.findOne(UserEntity, { where: { id: String(p.id ?? "") } }), "User");
     if (u.role === "reseller") throw badRequest("Manage reseller logins from the reseller page");
+    if (u.role === "customer") throw badRequest("Manage customers from the Customers page");
     if (u.id === tx.user.id && (p.active === false || (p.role && p.role !== "admin"))) throw conflict("You can't demote or disable yourself");
     if (p.role) u.role = oneOf(p.role, ["admin", "agent"] as const, "role");
     if (typeof p.active === "boolean") u.active = p.active;
@@ -41,6 +42,17 @@ export class UsersService {
     }
     await tx.em.save(u);
     await this.audit.log(tx, "user", u.id, `Team member ${u.name} updated (${u.role}${u.active ? "" : ", disabled"}${p.password !== undefined ? ", password reset" : ""})`, true);
+  }
+
+  /** customer.verify (team) — manual verification. Only verified customers may sell on P2P. */
+  async verifyCustomer(tx: Tx, p: Payload) {
+    const u = need(await tx.em.findOne(UserEntity, { where: { id: String(p.id ?? ""), role: "customer" } }), "Customer");
+    const verified = p.verified !== false;
+    if (u.verified === verified) return;
+    u.verified = verified;
+    u.verifiedAt = verified ? Date.now() : null;
+    await tx.em.save(u);
+    await this.audit.log(tx, "user", u.id, `Customer ${u.name} ${verified ? "verified — can sell on P2P" : "verification removed"}`, true);
   }
 
   /** Any signed-in user can change their own password. */
