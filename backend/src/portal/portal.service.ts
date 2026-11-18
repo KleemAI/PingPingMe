@@ -49,9 +49,15 @@ export class PortalService {
     const r = await this.ownRequest(tx, p.requestId);
     await tx.em.insert(MessageEntity, {
       id: newId("m"), audience: "reseller", requestId: r.id, direction: "in", authorId: tx.user.id, authorName: tx.user.name,
-      text: str(p.text, "Message"), attachments: await this.files.attachments(tx, p.attachments), createdAt: Date.now(),
+      ...(await this.textAndFiles(tx, p)), createdAt: Date.now(),
     });
     r.updatedAt = Date.now();
     await tx.em.save(r);
+  }
+
+  /** Message body: text, files, or both (a picture or voice note may go without text). */
+  private async textAndFiles(tx: Tx, p: Payload) {
+    const attachments = await this.files.attachments(tx, p.attachments);
+    return { text: attachments.length ? optStr(p.text) ?? "" : str(p.text, "Message"), attachments };
   }
 }

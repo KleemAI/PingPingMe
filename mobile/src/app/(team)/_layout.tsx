@@ -21,6 +21,7 @@ export default function TeamLayout() {
       <Stack.Screen name="case/index" options={{ title: "Mediation" }} />
       <Stack.Screen name="case/[id]" options={{ title: "Case" }} />
       <Stack.Screen name="customers" options={{ title: "Customers" }} />
+      <Stack.Screen name="catalog" options={{ title: "Catalog" }} />
     </Stack>
   );
 }

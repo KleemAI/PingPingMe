@@ -57,7 +57,7 @@ test("customers see only their own account and cannot reach team or reseller dat
   assert.equal((await post("/actions", { type: "portal.quote", payload: {} }, custToken)).status, 403);
   const acts = await (await get("/actions", custToken)).json();
   assert.ok(acts.actions.includes("me.password") && acts.actions.includes("p2p.order"), "own password + P2P market");
-  assert.ok(acts.actions.every((a) => a === "me.password" || a.startsWith("p2p.")), "nothing else");
+  assert.ok(acts.actions.every((a) => ["me.password", "chat.send", "price.request"].includes(a) || a.startsWith("p2p.")), "nothing else");
   assert.ok(!acts.actions.includes("p2p.resolveAppeal"), "appeal decisions are for the team");
 });
 

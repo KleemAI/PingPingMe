@@ -7,6 +7,7 @@ import { dayDivider, time } from "@/lib/format";
 import { useTheme } from "@/lib/theme";
 import { useStore } from "@/lib/store";
 import { T } from "./ui";
+import { MediaAttachment, VoiceRecordButton, type PickedFile } from "./Media";
 
 export function Ticks({ m, size = 15 }: { m: Message; size?: number }) {
   const { c } = useTheme();
@@ -18,16 +19,7 @@ export function Ticks({ m, size = 15 }: { m: Message; size?: number }) {
   return null;
 }
 
-function AttachmentChip({ a }: { a: Attachment }) {
-  const { openFile } = useStore();
-  return (
-    <Pressable onPress={() => openFile(a)} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, marginTop: 4 }}>
-      <Ionicons name="attach" size={15} color="#667781" />
-      <T size={12.5} numberOfLines={1} style={{ flexShrink: 1 }}>{a.name}</T>
-      <T size={11.5} muted>{(a.size / 1024 / 1024).toFixed(1)} MB</T>
-    </Pressable>
-  );
-}
+const AttachmentChip = MediaAttachment;
 
 /** Customer, reseller and internal messages each get a distinct look. */
 export function MessageList({ messages, side, onRetry, viewer = "team", wallpaper = true }: {
@@ -124,16 +116,21 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
 
   if (disabled || !mode) return <View style={{ padding: 14, backgroundColor: c.header, borderTopWidth: StyleSheet.hairlineWidth, borderColor: c.border }}><T muted size={13} style={{ textAlign: "center" }}>{disabled}</T></View>;
 
+  const canSend = !!text.trim() || files.length > 0;
+  const addFile = async (f: PickedFile) => {
+    setBusy(true);
+    try { const up = await upload(f); setFiles((x) => [...x, up]); } catch {} finally { setBusy(false); }
+  };
   const send = async () => {
-    if (!text.trim() || busy) return;
+    if (!canSend || busy) return;
     setBusy(true);
     try { await onSend(mode.id, text.trim(), files); setText(""); setFiles([]); setShowSaved(false); } catch {} finally { setBusy(false); }
   };
   const attach = async () => {
-    const r = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
+    // photos, videos, PDFs and other documents
+    const r = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: true });
     if (r.canceled) return;
-    const a = r.assets[0];
-    try { const up = await upload({ uri: a.uri, name: a.name, mimeType: a.mimeType, file: (a as { file?: Blob }).file }); setFiles((f) => [...f, up]); } catch {}
+    for (const a of r.assets) await addFile({ uri: a.uri, name: a.name, mimeType: a.mimeType, file: (a as { file?: Blob }).file });
   };
 
   return (
@@ -178,8 +175,9 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
           <TextInput value={text} onChangeText={setText} multiline placeholder={mode.kind === "internal" ? "Internal note…" : savedReplies.length ? "Message — / for saved replies" : "Message"}
             placeholderTextColor={c.muted} style={{ flex: 1, color: c.text, fontSize: 15.5, maxHeight: 120, paddingTop: 10, paddingBottom: 10 }} />
           {savedReplies.length > 0 && <Pressable onPress={() => setShowSaved((s) => !s)} hitSlop={6} style={{ padding: 9 }}><Ionicons name="flash-outline" size={19} color={c.muted} /></Pressable>}
+          {mode.kind !== "internal" && <VoiceRecordButton onRecorded={addFile} disabled={busy} />}
         </View>
-        <Pressable onPress={send} disabled={!text.trim() || busy} style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: color, alignItems: "center", justifyContent: "center", opacity: !text.trim() ? 0.5 : 1 }}>
+        <Pressable onPress={send} disabled={!canSend || busy} style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: color, alignItems: "center", justifyContent: "center", opacity: !canSend ? 0.5 : 1 }}>
           {busy ? <ActivityIndicator color="#fff" /> : <Ionicons name={mode.kind === "internal" ? "document-text" : "send"} size={19} color="#fff" />}
         </Pressable>
       </View>

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   LayoutDashboard, MessageCircle, Building2, Store, ClipboardList, Package, Scale, Settings, Moon, Sun, LogOut, Bell, Menu, X, MessagesSquare,
-  AlertTriangle, Clock, Send, Loader2, ArrowLeftRight, UserCheck,
+  AlertTriangle, Clock, Send, Loader2, ArrowLeftRight, UserCheck, ShoppingBag,
 } from "lucide-react";
 import { logout, useTeam } from "@/lib/client/store";
 import { overview, relative } from "@/lib/format";
@@ -66,6 +66,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
     { href: "/orders", label: "Orders", icon: Package },
     { href: "/mediation", label: "Mediation", icon: Scale, badge: o.openCases.length },
     { href: "/customers", label: "Customers", icon: UserCheck, badge: (db.customers ?? []).filter((c) => !c.verified).length },
+    { href: "/catalog", label: "Catalog", icon: ShoppingBag, badge: (db.products ?? []).filter((p) => p.status === "pending").length },
     { href: "/p2p", label: "P2P market", icon: ArrowLeftRight },
     { href: "/settings", label: "Settings", icon: Settings },
   ];

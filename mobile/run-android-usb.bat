@@ -55,7 +55,12 @@ rem ---- 4. start the backend API (NestJS + Neon) in its own window ----
 start "Business Messaging - API" cmd /c ""%~dp0..\backend\start-backend.bat""
 
 rem ---- 5. start the app on the phone (installs Expo Go if needed) ----
-if not exist node_modules\socket.io-client (
+rem new packages (e.g. expo-audio for voice notes) are installed automatically
+set NEED_INSTALL=
+if not exist node_modules\socket.io-client set NEED_INSTALL=1
+if not exist node_modules\expo-audio set NEED_INSTALL=1
+if not exist node_modules\expo-asset set NEED_INSTALL=1
+if defined NEED_INSTALL (
   echo  Installing app packages, please wait...
   call npm install
 )

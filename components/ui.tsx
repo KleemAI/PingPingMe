@@ -103,9 +103,26 @@ export function Empty({ icon: Icon, title, text }: { icon: React.ComponentType<{
   );
 }
 
+/** A file in a chat: pictures and videos show inline, voice notes get a player, anything else is a download chip. */
 export function AttachmentChip({ a }: { a: Attachment }) {
+  const url = `/api/files/${a.id}`;
+  if (a.mime.startsWith("image/")) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <a href={url} target="_blank" rel="noreferrer" className="mt-1 block"><img src={url} alt={a.name} loading="lazy" className="max-h-64 max-w-full rounded-md object-cover" /></a>;
+  }
+  if (a.mime.startsWith("audio/")) {
+    return <audio controls preload="metadata" src={url} aria-label={`Voice message ${a.name}`} className="mt-1 h-10 w-64 max-w-full" />;
+  }
+  if (a.mime.startsWith("video/")) {
+    return (
+      <span className="mt-1 block">
+        <video controls preload="metadata" src={url} className="max-h-64 max-w-full rounded-md bg-black/80" />
+        <a href={url} target="_blank" rel="noreferrer" className="block truncate text-[11.5px] text-[var(--muted)] underline">{a.name}</a>
+      </span>
+    );
+  }
   return (
-    <a href={`/api/files/${a.id}`} target="_blank" rel="noreferrer" className="mt-1 flex max-w-full items-center gap-2 rounded-md bg-black/5 px-2 py-1.5 text-[12.5px] hover:bg-black/10 dark:bg-white/5">
+    <a href={url} target="_blank" rel="noreferrer" className="mt-1 flex max-w-full items-center gap-2 rounded-md bg-black/5 px-2 py-1.5 text-[12.5px] hover:bg-black/10 dark:bg-white/5">
       <Paperclip size={13} className="shrink-0" />
       <span className="truncate">{a.name}</span>
       <span className="shrink-0 text-[var(--muted)]">{(a.size / 1024 / 1024).toFixed(1)} MB</span>

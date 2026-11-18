@@ -6,6 +6,7 @@ import type { Attachment, Message, SavedReply } from "@/lib/types";
 import { dayDivider, time } from "@/lib/format";
 import { AttachmentChip } from "./ui";
 import { useStore } from "@/lib/client/store";
+import { VoiceRecorder } from "./VoiceRecorder";
 
 export function Ticks({ m }: { m: Message }) {
   if (m.status === "queued") return <Clock3 size={12} className="text-[var(--muted)]" />;
@@ -124,8 +125,14 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
   const replies = useMemo(() => savedReplies.filter((r) => (mode.kind === "internal" || r.audience === mode.kind) && (slash === null || r.shortcut.includes(slash) || r.text.toLowerCase().includes(slash))), [savedReplies, slash, mode.kind]);
   const open = (showSaved || slash !== null) && replies.length > 0;
 
+  const [uploading, setUploading] = useState(false);
+  const addFile = async (f: File) => {
+    setUploading(true);
+    try { const a = await upload(f); setFiles((x) => [...x, a]); } catch {} finally { setUploading(false); }
+  };
+  const canSend = !!text.trim() || files.length > 0;
   const send = async () => {
-    if (!text.trim() || busy) return;
+    if (!canSend || busy || uploading) return;
     setBusy(true);
     try {
       await onSend(mode.id, text.trim(), files);
@@ -181,11 +188,11 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
 
       <div className="flex items-end gap-2">
         <div className={`flex min-w-0 flex-1 items-end gap-1 rounded-xl bg-[var(--input)] px-1.5 ring-2 ${st.ring}`}>
-          <button onClick={() => fileRef.current?.click()} title="Attach file" className="p-2 text-[var(--muted)] hover:text-[var(--text)]"><Paperclip size={19} /></button>
-          <input ref={fileRef} type="file" hidden onChange={async (e) => {
-            const f = e.target.files?.[0];
+          <button onClick={() => fileRef.current?.click()} title="Attach a photo, video or document" aria-label="Attach file" className="p-2 text-[var(--muted)] hover:text-[var(--text)]">{uploading ? <Loader2 size={19} className="animate-spin" /> : <Paperclip size={19} />}</button>
+          <input ref={fileRef} type="file" hidden multiple accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xlsx,.csv,.txt" onChange={async (e) => {
+            const list = Array.from(e.target.files ?? []);
             e.target.value = "";
-            if (f) { try { const a = await upload(f); setFiles((x) => [...x, a]); } catch {} }
+            for (const f of list) await addFile(f);
           }} />
           <textarea
             value={text}
@@ -202,8 +209,9 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
             className="max-h-36 min-h-[42px] min-w-0 flex-1 resize-none bg-transparent py-[10px] text-[14.5px] outline-none placeholder:text-[var(--muted)]"
           />
           {savedReplies.length > 0 && <button onClick={() => setShowSaved((s) => !s)} title="Saved replies" className="p-2 text-[var(--muted)] hover:text-[var(--text)]"><Zap size={18} /></button>}
+          {mode.kind !== "internal" && <VoiceRecorder onRecorded={addFile} disabled={uploading} />}
         </div>
-        <button onClick={send} disabled={!text.trim() || busy} title="Send"
+        <button onClick={send} disabled={!canSend || busy || uploading} title="Send"
           className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full text-white transition disabled:opacity-40 ${st.btn}`}>
           {busy ? <Loader2 size={18} className="animate-spin" /> : mode.kind === "internal" ? <StickyNote size={18} /> : <SendHorizontal size={19} />}
         </button>

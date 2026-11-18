@@ -208,20 +208,32 @@ export type Order = {
   deliveredAt?: number;
 };
 
-/** Catalogue entry customers can browse. `price` absent = "ask for price" (quotation flow). */
+/**
+ * Catalogue entry customers can browse. `price` absent = "ask for price" (quotation flow).
+ * Added by our team (live at once) or proposed by a reseller (pending until the team approves and sets the customer price).
+ */
 export type Product = {
   id: string;
   name: string;
   description: string;
   category: string;
   kind: "product" | "service";
-  price?: number;
+  price?: number; // customer price — never shown to resellers
   unit: string;
   image?: Attachment;
   active: boolean;
+  status: "pending" | "approved" | "rejected";
+  resellerId?: string; // proposed by this reseller — never shown to customers
+  resellerPrice?: number; // the reseller's own price — never shown to customers
+  reviewNote?: string; // why the team rejected it
   createdAt: number;
   updatedAt: number;
 };
+
+/** What a customer sees in the catalogue. */
+export type CustomerProduct = Omit<Product, "status" | "resellerId" | "resellerPrice" | "reviewNote">;
+/** What a reseller sees about their own proposals (no customer pricing). */
+export type ResellerProduct = Omit<Product, "price">;
 
 export type CaseStatus = "open" | "investigating" | "resolution_proposed" | "resolved" | "reopened";
 
@@ -329,22 +341,28 @@ export type ResellerState = {
   orders: Omit<Order, "items" | "total">[]; // no customer pricing
   contacts: MaskedContact[];
   categories: string[];
+  products: ResellerProduct[]; // their own catalogue proposals
   version: number;
 };
 
 /** What a customer may see about an order: their own prices and payment — never reseller cost or reseller identity. */
 export type CustomerOrder = Omit<Order, "costTotal" | "resellerId" | "quoteId" | "requestId"> & { quoteValidUntil?: number };
 
-/** A price request the customer sent (shown as "Asked for price"). */
-export type CustomerRequest = { id: string; ref: string; title: string; status: RequestStatus; createdAt: number; updatedAt: number };
+/** A price request the customer sent (shown in "My requests"). */
+export type CustomerRequest = { id: string; ref: string; title: string; status: RequestStatus; quantity?: string; createdAt: number; updatedAt: number };
 
-/**
- * A self-registered customer. For now they only use the P2P market, so the API sends just their account.
- * (The fuller customer portal — chat, orders, cases — was started but is not built yet.)
- */
+/** A self-registered customer: the catalogue, their chat with our team, their price requests. (P2P has its own GET /p2p.) */
 export type CustomerState = {
   scope: "customer";
   me: User;
+  profile: Contact;
+  conversationId?: string; // their web chat with our team (created on the first message)
+  messages: Message[]; // customer-facing messages of all their conversations — never internal notes
+  products: CustomerProduct[];
+  categories: string[];
+  areas: string[];
+  requests: CustomerRequest[];
+  business: { name: string; phone: string; email: string; hours: string };
   version: number;
 };
 
@@ -391,7 +409,7 @@ export type P2PAd = {
 };
 
 export type P2POrderStatus = "pending_payment" | "paid" | "completed" | "cancelled" | "appeal";
-export type P2PMessage = { id: string; from: "buyer" | "seller" | "system"; text: string; at: number };
+export type P2PMessage = { id: string; from: "buyer" | "seller" | "system"; text: string; attachments: Attachment[]; at: number };
 
 export type P2POrder = {
   id: string;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, TextInput, View } from "react-native";
+import { Alert, Platform, ScrollView, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
@@ -9,6 +9,8 @@ import { time } from "@/lib/format";
 import { inr, mmss, STATUS, useP2P } from "@/lib/p2p";
 import { Button, Card, Empty, Input, KV, Pill, Sheet, T } from "@/components/ui";
 import { MerchantLine } from "@/components/P2P";
+import { MediaAttachment } from "@/components/Media";
+import { Composer } from "@/components/Thread";
 
 const confirm = (title: string, msg: string, ok: string, fn: () => unknown, destructive = false) => {
   if (Platform.OS === "web") { if (globalThis.confirm?.(`${title}\n\n${msg}`)) fn(); return; }
@@ -24,7 +26,6 @@ export default function OrderScreen() {
   const [proof, setProof] = useState<{ uri: string; name: string; mimeType?: string; file?: Blob } | null>(null);
   const [appealOpen, setAppealOpen] = useState(false);
   const [reason, setReason] = useState("");
-  const [msg, setMsg] = useState("");
   const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const o = order(id);
   const count = o?.messages.length ?? 0;
@@ -55,12 +56,6 @@ export default function OrderScreen() {
     const att = proof ? await upload(proof) : undefined;
     await run("p2p.paid", { id: o.id, proof: att?.id }, "Seller notified");
     setProof(null);
-  };
-  const send = async () => {
-    const t = msg.trim();
-    if (!t) return;
-    await run("p2p.message", { id: o.id, text: t });
-    setMsg("");
   };
 
   return (
@@ -165,7 +160,8 @@ export default function OrderScreen() {
               ? <T key={m.id} muted size={12} style={{ alignSelf: "center", textAlign: "center", backgroundColor: c.card, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>{m.text}</T>
               : (
                 <View key={m.id} style={{ alignSelf: m.from === role ? "flex-end" : "flex-start", maxWidth: "82%", backgroundColor: m.from === role ? c.bubbleOut : c.bubbleIn, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-                  <T size={14.5}>{m.text}</T>
+                  {!!m.text && <T size={14.5}>{m.text}</T>}
+                  {m.attachments?.map((x) => <MediaAttachment key={x.id} a={x} />)}
                   <T muted size={10.5} style={{ alignSelf: "flex-end" }}>{time(m.at)}</T>
                 </View>
               ))}
@@ -174,14 +170,8 @@ export default function OrderScreen() {
       </ScrollView>
 
       {o.status !== "cancelled" && (
-        <View style={{ flexDirection: "row", gap: 8, padding: 10, borderTopWidth: 1, borderColor: c.border, backgroundColor: c.header }}>
-          <TextInput value={msg} onChangeText={setMsg} placeholder="Type a message" placeholderTextColor={c.muted} maxLength={1000}
-            style={{ flex: 1, backgroundColor: c.input, color: c.text, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 9, fontSize: 15, borderWidth: 1, borderColor: c.border }} />
-          <Pressable onPress={() => { send().catch(() => {}); }} disabled={!msg.trim()} accessibilityLabel="Send"
-            style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: c.accent, alignItems: "center", justifyContent: "center", opacity: msg.trim() ? 1 : 0.5 }}>
-            <Ionicons name="send" size={18} color="#fff" />
-          </Pressable>
-        </View>
+        <Composer modes={[{ id: "p2p", kind: "customer", label: "Message", hint: "Text, photos, videos, documents or a voice note" }]}
+          onSend={(_m, text, att) => run("p2p.message", { id: o.id, text, attachments: att.map((x) => x.id) })} />
       )}
 
       <Sheet open={appealOpen} onClose={() => setAppealOpen(false)} title="Open an appeal">

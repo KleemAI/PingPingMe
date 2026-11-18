@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Loader2, LogOut, MessagesSquare, Moon, Sun, LayoutDashboard, BadgeCheck, ShieldAlert } from "lucide-react";
 import { logout, StoreProvider, useStore } from "@/lib/client/store";
 import TeamShell, { useDark } from "@/components/TeamShell";
+import CustomerShell from "@/components/CustomerShell";
 import { Avatar } from "@/components/ui";
 
 /** Slim top bar for customers and resellers on the P2P market (no side menu). */
@@ -40,10 +41,11 @@ function MarketShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Team members keep their usual side menu on P2P pages; customers and resellers get the slim top bar. */
+/** Team members keep their usual side menu; customers get their own side menu; resellers get a slim top bar on P2P pages. */
 function ShellFor({ children }: { children: React.ReactNode }) {
   const { state } = useStore();
   if (state?.scope === "team") return <TeamShell>{children}</TeamShell>;
+  if (state?.scope === "customer") return <CustomerShell>{children}</CustomerShell>;
   return <MarketShell>{children}</MarketShell>;
 }
 

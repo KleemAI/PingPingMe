@@ -46,7 +46,7 @@ type Ctx = {
   cancel: (orderId: string, reason?: string) => Promise<Result>;
   appeal: (orderId: string, reason: string) => Promise<Result>;
   rate: (orderId: string, positive: boolean) => Promise<Result>;
-  send: (orderId: string, text: string) => Promise<Result>;
+  send: (orderId: string, text: string, attachments?: string[]) => Promise<Result>;
   createAd: (a: NewAd) => Promise<Result>;
   toggleAd: (adId: string) => Promise<Result>;
   setPayTo: (p: PayTo) => Promise<Result>;
@@ -131,7 +131,7 @@ export function P2PProvider({ children }: { children: React.ReactNode }) {
       cancel: (id, reason) => run("p2p.cancel", { id, reason }),
       appeal: (id, reason) => run("p2p.appeal", { id, reason }),
       rate: (id, positive) => run("p2p.rate", { id, positive }),
-      send: (id, text) => run("p2p.message", { id, text }),
+      send: (id, text, attachments) => run("p2p.message", { id, text, attachments }),
       createAd: (a) => run("p2p.ad.create", a),
       toggleAd: (id) => run("p2p.ad.toggle", { id }),
       setPayTo: (p) => run("p2p.payTo", p),

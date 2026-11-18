@@ -15,6 +15,7 @@ export default function More() {
   const overdue = db.cases.filter((x) => caseOverdue(x, now)).length;
   const pendingResellers = db.resellers.filter((r) => r.status === "pending").length;
   const unverified = (db.customers ?? []).filter((u) => !u.verified).length;
+  const proposals = (db.products ?? []).filter((p) => p.status === "pending").length;
   const icon = (name: keyof typeof Ionicons.glyphMap, bg: string) => (
     <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}><Ionicons name={name} size={18} color="#fff" /></View>
   );
@@ -39,6 +40,7 @@ export default function More() {
         <Row left={icon("storefront", "#0284c7")} title="Resellers" subtitle={`${db.resellers.filter((r) => r.status === "active").length} active${pendingResellers ? ` · ${pendingResellers} awaiting approval` : ""}`} right={chev} onPress={() => router.push("/reseller")} />
         <Row left={icon("scale", "#e11d48")} title="Mediation & support" subtitle={`${openCases} open${overdue ? ` · ${overdue} overdue` : ""}`} right={<View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><Badge n={openCases} />{chev}</View>} onPress={() => router.push("/case")} />
         <Row left={icon("person-add", "#7c3aed")} title="Customers" subtitle={unverified ? `${unverified} waiting for verification` : `${(db.customers ?? []).length} signed up`} right={<View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><Badge n={unverified} />{chev}</View>} onPress={() => router.push("/customers")} />
+        <Row left={icon("bag-handle", "#ea580c")} title="Catalog" subtitle={proposals ? `${proposals} reseller proposal${proposals > 1 ? "s" : ""} to review` : `${(db.products ?? []).filter((p) => p.status === "approved" && p.active).length} live products`} right={<View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><Badge n={proposals} />{chev}</View>} onPress={() => router.push("/catalog")} />
         <Row left={icon("swap-horizontal", "#00a884")} title="P2P market" subtitle="Buy & sell between users · appeals" right={chev} onPress={() => router.push("/p2p")} />
       </Card>
       <AppearanceCard />

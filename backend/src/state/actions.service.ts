@@ -16,6 +16,8 @@ import { SettingsService } from "../settings/settings.service";
 import { UsersService } from "../users/users.service";
 import { WorkspaceService } from "../workspace/workspace.service";
 import { P2PService } from "../p2p/p2p.service";
+import { CatalogService } from "../catalog/catalog.service";
+import { CustomerService } from "../customer/customer.service";
 
 type Handler = (tx: Tx, p: Payload) => Promise<unknown>;
 
@@ -44,6 +46,8 @@ export class ActionsService {
     users: UsersService,
     portal: PortalService,
     p2p: P2PService,
+    catalog: CatalogService,
+    customer: CustomerService,
   ) {
     // P2P market — the same commands for everyone who trades (team, resellers, customers)
     const market: Record<string, Handler> = {
@@ -102,6 +106,9 @@ export class ActionsService {
       "customer.verify": (t, p) => users.verifyCustomer(t, p),
       ...market,
       "p2p.resolveAppeal": (t, p) => p2p.resolveAppeal(t, p),
+      // catalogue
+      "product.save": (t, p) => catalog.save(t, p),
+      "product.review": (t, p) => catalog.review(t, p),
     };
     this.reseller = {
       "portal.respond": (t, p) => portal.respond(t, p),
@@ -110,9 +117,12 @@ export class ActionsService {
       "portal.fulfil": (t, p) => orders.fulfilByReseller(t, p),
       "portal.availability": (t, p) => resellers.setOwnAvailability(t, p),
       "me.password": (t, p) => users.changeOwnPassword(t, p),
+      "portal.product": (t, p) => catalog.propose(t, p),
       ...market,
     };
     this.customer = {
+      "chat.send": (t, p) => customer.sendMessage(t, p),
+      "price.request": (t, p) => customer.requestPrice(t, p),
       "me.password": (t, p) => users.changeOwnPassword(t, p),
       ...market,
     };

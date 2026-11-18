@@ -35,6 +35,12 @@
       "expo-secure-store",
       "expo-sharing",
       [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to record voice notes for your chats."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

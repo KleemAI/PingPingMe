@@ -4601,7 +4601,7 @@
           ]
         },
         {
-          "name": "Customer: allowed actions (own password + P2P)",
+          "name": "Customer: allowed actions",
           "request": {
             "method": "GET",
             "header": [],
@@ -4633,7 +4633,7 @@
                 "exec": [
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
                   "const a = pm.response.json().actions;",
-                  "pm.test(\"Only own password and P2P market\", () => pm.expect(a.every((x) => x === \"me.password\" || x.startsWith(\"p2p.\"))).to.eql(true));",
+                  "pm.test(\"Own password, chat, ask for price and P2P only\", () => pm.expect(a.every((x) => [\"me.password\", \"chat.send\", \"price.request\"].includes(x) || x.startsWith(\"p2p.\"))).to.eql(true));",
                   "pm.test(\"No appeal decisions\", () => pm.expect(a).to.not.include(\"p2p.resolveAppeal\"));"
                 ]
               }
@@ -5692,6 +5692,495 @@
           ]
         }
       ]
+    },
+    {
+      "name": "17. Catalog, customer chat & ask for price",
+      "description": "Team catalogue, reseller proposals with approval, customer chat with our team, and \"ask for price\". Run folders 0 and 15 first.",
+      "item": [
+        {
+          "name": "Team: settings (categories & areas)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "settings"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.collectionVariables.set(\"category\", s.categories[0]);",
+                  "pm.collectionVariables.set(\"area\", s.areas[0]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Team: add a priced product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"product.save\",\n  \"payload\": {\n    \"name\": \"Smart Watch S2\",\n    \"description\": \"AMOLED, 7-day battery\",\n    \"category\": \"{{category}}\",\n    \"kind\": \"product\",\n    \"price\": 3999,\n    \"unit\": \"piece\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Optional `image`: id of an uploaded picture (12. Files). Empty `price` = customers \"ask for price\"."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"productId\", pm.response.json().result);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Team: add an 'ask for price' service",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"product.save\",\n  \"payload\": {\n    \"name\": \"AC installation\",\n    \"category\": \"{{category}}\",\n    \"kind\": \"service\",\n    \"unit\": \"visit\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reseller: propose a product (pending)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"portal.product\",\n  \"payload\": {\n    \"name\": \"Laptop Stand Pro\",\n    \"category\": \"{{category}}\",\n    \"resellerPrice\": 1100\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{resellerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"proposalId\", pm.response.json().result);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Team: approve proposal with customer price",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"product.review\",\n  \"payload\": {\n    \"id\": \"{{proposalId}}\",\n    \"approve\": true,\n    \"price\": 1499\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Reject instead: `{ id, approve: false, note }` — the reseller sees the note."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer: catalogue (no reseller details)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/state",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "state"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json().state;",
+                  "pm.test(\"Products listed\", () => pm.expect(s.products.length).to.be.above(0));",
+                  "pm.test(\"No reseller price\", () => pm.expect(s.products.every((p) => !(\"resellerPrice\" in p) && !(\"resellerId\" in p))).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer: chat — text",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"chat.send\",\n  \"payload\": {\n    \"text\": \"Hello! Do you deliver to Pune?\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Files: upload with POST /files (photo, video, PDF, voice note) and pass `attachments: [fileId]` — text is then optional."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer: chat — empty (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"chat.send\",\n  \"payload\": {\n    \"text\": \" \"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Customer: ask for price",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "actions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"price.request\",\n  \"payload\": {\n    \"productId\": \"{{productId}}\",\n    \"quantity\": \"5 pieces\",\n    \"area\": \"{{area}}\",\n    \"note\": \"Need by Friday\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Creates a request in the team's Requests, linked to the customer's chat (the quote reaches them there). Without a product: `{ title, category, quantity, area }`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"priceRequestId\", pm.response.json().result);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Team: the request is in Requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "requests"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{adminToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json().find((x) => x.id === pm.collectionVariables.get(\"priceRequestId\"));",
+                  "pm.test(\"Linked to the chat\", () => pm.expect(r && r.conversationId).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -5777,6 +6266,26 @@
     },
     {
       "key": "p2pOrder2",
+      "value": ""
+    },
+    {
+      "key": "category",
+      "value": ""
+    },
+    {
+      "key": "area",
+      "value": ""
+    },
+    {
+      "key": "productId",
+      "value": ""
+    },
+    {
+      "key": "proposalId",
+      "value": ""
+    },
+    {
+      "key": "priceRequestId",
       "value": ""
     }
   ]

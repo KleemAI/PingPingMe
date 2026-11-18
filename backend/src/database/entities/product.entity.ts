@@ -16,6 +16,12 @@ export class ProductEntity {
   @Column({ type: "varchar", length: 30, default: "piece" }) unit: string;
   @Column({ type: "jsonb", nullable: true }) image: Attachment | null;
   @Index() @Column({ default: true }) active: boolean;
+  /** pending (proposed by a reseller) → approved | rejected. Products added by our team are approved at once. */
+  @Index() @Column({ type: "varchar", length: 10, default: "approved" }) status: string;
+  @Index() @Column({ name: "reseller_id", type: "varchar", length: 40, nullable: true }) resellerId: string | null;
+  /** the reseller's own price (never shown to customers) */
+  @Column({ name: "reseller_price", type: "numeric", precision: 14, scale: 2, nullable: true, transformer: decimal }) resellerPrice: number | null;
+  @Column({ name: "review_note", type: "text", nullable: true }) reviewNote: string | null;
   @Column({ name: "created_at", ...TS }) createdAt: number;
   @Column({ name: "updated_at", ...TS }) updatedAt: number;
 }

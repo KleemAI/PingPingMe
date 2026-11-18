@@ -28,7 +28,7 @@ type Ctx = {
 const StoreCtx = createContext<Ctx | null>(null);
 
 /** Where each kind of account belongs. */
-const HOME: Record<AppState["scope"], string> = { team: "/", reseller: "/portal", customer: "/p2p" };
+const HOME: Record<AppState["scope"], string> = { team: "/", reseller: "/portal", customer: "/c/products" };
 
 export function StoreProvider({ children, expect }: { children: React.ReactNode; expect: AppState["scope"] | AppState["scope"][] }) {
   // a string key keeps the callbacks below stable even when an array literal is passed

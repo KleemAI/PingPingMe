@@ -261,6 +261,7 @@ export type DB = {
   requests: Request[];
   quotes: Quote[];
   orders: Order[];
+  products?: Product[];
   cases: MediationCase[];
   activity: Activity[];
   savedReplies: SavedReply[];
@@ -291,13 +292,50 @@ export type ResellerState = {
   orders: Omit<Order, "items" | "total">[]; // no customer pricing
   contacts: MaskedContact[];
   categories: string[];
+  products: ResellerProduct[]; // their own catalogue proposals
   version: number;
 };
 
 /** A self-registered customer (P2P marketplace). */
+/**
+ * Catalogue entry customers can browse. `price` absent = "ask for price".
+ * Added by our team (live at once) or proposed by a reseller (pending until the team approves it and sets the customer price).
+ */
+export type Product = {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  kind: "product" | "service";
+  price?: number; // customer price — never shown to resellers
+  unit: string;
+  image?: Attachment;
+  active: boolean;
+  status: "pending" | "approved" | "rejected";
+  resellerId?: string; // proposed by this reseller — never shown to customers
+  resellerPrice?: number; // the reseller's own price — never shown to customers
+  reviewNote?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+export type CustomerProduct = Omit<Product, "status" | "resellerId" | "resellerPrice" | "reviewNote">;
+export type ResellerProduct = Omit<Product, "price">;
+
+/** A price request the customer sent (shown in "My requests"). */
+export type CustomerRequest = { id: string; ref: string; title: string; status: RequestStatus; quantity?: string; createdAt: number; updatedAt: number };
+
+/** A self-registered customer: the catalogue, their chat with our team, their price requests. (P2P has its own GET /p2p.) */
 export type CustomerState = {
   scope: "customer";
   me: User;
+  profile: Contact;
+  conversationId?: string;
+  messages: Message[];
+  products: CustomerProduct[];
+  categories: string[];
+  areas: string[];
+  requests: CustomerRequest[];
+  business: { name: string; phone: string; email: string; hours: string };
   version: number;
 };
 

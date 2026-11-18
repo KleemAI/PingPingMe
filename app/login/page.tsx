@@ -17,7 +17,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 /** Name = letters only (any language) with single spaces between words. */
 const NAME_RE = /^[\p{L}\p{M}]+(?: [\p{L}\p{M}]+)*$/u;
 const PASSWORD_MIN = 8;
-const HOME: Record<string, string> = { reseller: "/portal", customer: "/p2p" };
+const HOME: Record<string, string> = { reseller: "/portal", customer: "/c/products" };
 
 type Step = "email" | "password" | "signup";
 

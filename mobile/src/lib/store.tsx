@@ -276,4 +276,4 @@ export function useCustomer() {
 }
 
 /** Where each kind of account starts. */
-export const HOME = { team: "/(team)", reseller: "/portal", customer: "/p2p" } as const;
+export const HOME = { team: "/(team)", reseller: "/portal", customer: "/shop" } as const;

@@ -13,6 +13,7 @@ export default function PortalLayout() {
     <Stack screenOptions={{ headerStyle: { backgroundColor: c.header }, headerTintColor: c.text, contentStyle: { backgroundColor: c.screen }, headerBackButtonDisplayMode: "minimal" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="request/[id]" options={{ title: "Request" }} />
+      <Stack.Screen name="products" options={{ title: "My products" }} />
     </Stack>
   );
 }

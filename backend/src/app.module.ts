@@ -31,6 +31,8 @@ import { PortalService } from "./portal/portal.service";
 import { PortalController } from "./portal/portal.controller";
 import { StateService } from "./state/state.service";
 import { P2PService } from "./p2p/p2p.service";
+import { CatalogService } from "./catalog/catalog.service";
+import { CustomerService } from "./customer/customer.service";
 import { P2PController } from "./p2p/p2p.controller";
 import { QueryService } from "./state/query.service";
 import { ActionsService } from "./state/actions.service";
@@ -58,7 +60,7 @@ import { OpsController } from "./ops/ops.controller";
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     RealtimeGateway,
     ConversationsService, ContactsService, RequestsService, ResellersService, QuotesService, OrdersService, ExportService,
-    CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService,
+    CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService, CatalogService, CustomerService,
   ],
 })
 export class AppModule {}

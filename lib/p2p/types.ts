@@ -50,7 +50,7 @@ export type P2PAd = {
 
 export type P2POrderStatus = "pending_payment" | "paid" | "completed" | "cancelled" | "appeal";
 
-export type P2PMessage = { id: string; from: "buyer" | "seller" | "system"; text: string; at: number };
+export type P2PMessage = { id: string; from: "buyer" | "seller" | "system"; text: string; attachments: P2PAttachment[]; at: number };
 
 export type P2PAttachment = { id: string; name: string; size: number; mime: string };
 

@@ -108,7 +108,7 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
     const msgs = new Map<string, P2POrder["messages"]>();
     for (const m of messages) {
       const list = msgs.get(m.orderId) ?? [];
-      list.push({ id: m.id, from: m.from as "buyer" | "seller" | "system", text: m.text, at: m.at });
+      list.push({ id: m.id, from: m.from as "buyer" | "seller" | "system", text: m.text, attachments: m.attachments ?? [], at: m.at });
       msgs.set(m.orderId, list);
     }
     const toOrder = (o: P2POrderEntity): P2POrder => clean({
@@ -152,7 +152,7 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
   // ------------------------------------------------------------------ helpers
 
   private sys(tx: Tx, orderId: string, text: string) {
-    return tx.em.insert(P2PMessageEntity, { id: newId("pm"), orderId, from: "system", authorId: null, text, at: Date.now() });
+    return tx.em.insert(P2PMessageEntity, { id: newId("pm"), orderId, from: "system", authorId: null, text, attachments: [], at: Date.now() });
   }
 
   private async order(tx: Tx, id: unknown) {
@@ -287,12 +287,15 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
     await tx.em.save(o);
   }
 
-  /** p2p.message { id, text } — chat between buyer and seller on one order. */
+  /** p2p.message { id, text?, attachments?: fileId[] } — chat between buyer and seller (text, pictures, videos, documents, voice). */
   async message(tx: Tx, p: Payload) {
     const o = await this.order(tx, p.id);
     const role = this.role(o, tx.user);
     if (o.status === "cancelled") throw conflict("This order was cancelled");
-    await tx.em.insert(P2PMessageEntity, { id: newId("pm"), orderId: o.id, from: role, authorId: tx.user.id, text: str(p.text, "Message", 1000), at: Date.now() });
+    const attachments = await this.files.attachments(tx, p.attachments);
+    const text = optStr(p.text, 1000) ?? "";
+    if (!text && !attachments.length) throw badRequest("Type a message or attach a file");
+    await tx.em.insert(P2PMessageEntity, { id: newId("pm"), orderId: o.id, from: role, authorId: tx.user.id, text, attachments, at: Date.now() });
   }
 
   /** p2p.resolveAppeal { id, outcome: "release" | "cancel", note } — team decision on an appeal. Never moves money. */

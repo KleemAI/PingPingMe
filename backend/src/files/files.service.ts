@@ -10,7 +10,10 @@ import { FileEntity } from "../database/entities";
 import { UnitOfWork, type Tx } from "../database/unit-of-work.service";
 
 export const ALLOWED_MIME = [
-  "image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "video/mp4", "audio/mpeg", "audio/ogg", "text/plain", "text/csv",
+  "image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "text/plain", "text/csv",
+  // videos and voice notes (browsers record webm / mp4, phones record m4a / aac / 3gp)
+  "video/mp4", "video/webm", "video/quicktime", "video/3gpp",
+  "audio/mpeg", "audio/ogg", "audio/webm", "audio/mp4", "audio/x-m4a", "audio/m4a", "audio/aac", "audio/wav", "audio/3gpp", "audio/amr",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 
@@ -55,11 +58,27 @@ export class FilesService {
     const em = this.uow.manager;
     const own = await em.count(FileEntity, { where: { id: fileId, uploadedBy: user.id } });
     if (own) return true;
-    const proof = await em.query(
-      `SELECT 1 FROM p2p_orders WHERE proof @> $1::jsonb AND (buyer_id = $2 OR seller_id = $2) LIMIT 1`,
-      [JSON.stringify({ id: fileId }), user.id],
+    const att = JSON.stringify([{ id: fileId }]);
+    const shared = await em.query(
+      `SELECT 1 FROM p2p_orders WHERE proof @> $1::jsonb AND (buyer_id = $2 OR seller_id = $2)
+       UNION ALL
+       SELECT 1 FROM p2p_messages m JOIN p2p_orders o ON o.id = m.order_id
+         WHERE m.attachments @> $3::jsonb AND (o.buyer_id = $2 OR o.seller_id = $2)
+       UNION ALL
+       SELECT 1 FROM products WHERE image @> $1::jsonb AND (status = 'approved' AND active OR reseller_id = $4)
+       LIMIT 1`,
+      [JSON.stringify({ id: fileId }), user.id, att, user.resellerId ?? "-"],
     );
-    if (proof.length) return true;
+    if (shared.length) return true;
+    if (user.role === "customer") {
+      // files in the customer's own chat with our team (never internal notes)
+      const mine = await em.query(
+        `SELECT 1 FROM messages m JOIN conversations c ON c.id = m.conversation_id JOIN users u ON u.contact_id = c.contact_id
+           WHERE u.id = $1 AND m.audience = 'customer' AND m.attachments @> $2::jsonb LIMIT 1`,
+        [user.id, att],
+      );
+      return mine.length > 0;
+    }
     if (user.role !== "reseller") return false;
     const reqIds = await visibleRequestIds(em, user.resellerId!);
     if (!reqIds.length) return false;

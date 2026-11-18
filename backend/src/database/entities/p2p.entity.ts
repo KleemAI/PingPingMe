@@ -64,6 +64,7 @@ export class P2PMessageEntity {
   @Column({ name: "from_party", type: "varchar", length: 10 }) from: string;
   @Column({ name: "author_id", type: "varchar", length: 40, nullable: true }) authorId: string | null;
   @Column({ type: "text" }) text: string;
+  @Column({ type: "jsonb", default: () => "'[]'" }) attachments: Attachment[];
   @Column({ ...TS }) at: number;
 }
 

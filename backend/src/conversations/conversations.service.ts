@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import type { Attachment } from "../common/contract";
 import { badRequest, conflict, AppError } from "../common/errors";
-import { PRIORITIES, Payload, need, newId, oneOf, str } from "../common/util";
+import { PRIORITIES, Payload, need, newId, oneOf, optStr, str } from "../common/util";
 import { AuditService } from "../audit/audit.service";
 import { FilesService } from "../files/files.service";
 import { InboundService } from "../channel/inbound.service";
@@ -43,8 +43,9 @@ export class ConversationsService {
   /** conv.send — customer reply or internal note (internal notes are never sent to anyone outside the team). */
   async send(tx: Tx, p: Payload) {
     const audience = oneOf(p.audience, ["customer", "internal"] as const, "audience");
-    const text = str(p.text, "Message");
     const attachments = await this.files.attachments(tx, p.attachments);
+    // a picture, document or voice note may go without text
+    const text = attachments.length ? optStr(p.text) ?? "" : str(p.text, "Message");
     const conversationId = str(p.conversationId, "conversationId", 40);
     if (audience === "internal") {
       need(await tx.em.findOne(ConversationEntity, { where: { id: conversationId } }), "Conversation");

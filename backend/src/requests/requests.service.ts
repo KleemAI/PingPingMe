@@ -110,7 +110,7 @@ export class RequestsService {
     if (audience === "reseller" && !r.resellerId) throw conflict("Assign a reseller first");
     await tx.em.insert(MessageEntity, {
       id: newId("m"), audience, requestId: r.id, conversationId: audience === "internal" ? r.conversationId : null, direction: "out",
-      authorId: tx.user.id, authorName: tx.user.name, text: str(p.text, "Message"), attachments: await this.files.attachments(tx, p.attachments), createdAt: Date.now(),
+      authorId: tx.user.id, authorName: tx.user.name, ...(await this.textAndFiles(tx, p)), createdAt: Date.now(),
     });
     r.updatedAt = Date.now();
     await tx.em.save(r);
@@ -150,5 +150,11 @@ export class RequestsService {
     r.feedbackComment = optStr(p.comment, 1000);
     await tx.em.save(r);
     await this.audit.log(tx, "request", r.id, `Customer feedback recorded: ${rating}★`);
+  }
+
+  /** Message body: text, files, or both (a picture or voice note may go without text). */
+  private async textAndFiles(tx: Tx, p: Payload) {
+    const attachments = await this.files.attachments(tx, p.attachments);
+    return { text: attachments.length ? optStr(p.text) ?? "" : str(p.text, "Message"), attachments };
   }
 }

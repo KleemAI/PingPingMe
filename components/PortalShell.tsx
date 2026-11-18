@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, Package, LogOut, Moon, Sun, Loader2, Store, ArrowLeftRight } from "lucide-react";
+import { ClipboardList, Package, LogOut, Moon, Sun, Loader2, Store, ArrowLeftRight, ShoppingBag } from "lucide-react";
 import { logout, useReseller } from "@/lib/client/store";
 import { useDark } from "./TeamShell";
 
@@ -15,8 +15,9 @@ export default function PortalShell({ children }: { children: React.ReactNode })
   const needs = rs.requests.filter((r) => r.resellerId === rs.reseller.id && (r.resellerResponse === "pending" || r.resellerResponse === "clarification")).length;
   const activeOrders = rs.orders.filter((o) => ["confirmed", "in_progress"].includes(o.status)).length;
   const nav = [
-    { href: "/portal", label: "My requests", icon: ClipboardList, badge: needs, on: path === "/portal" || (path.startsWith("/portal/") && !path.startsWith("/portal/orders")) },
+    { href: "/portal", label: "My requests", icon: ClipboardList, badge: needs, on: path === "/portal" || (path.startsWith("/portal/") && !path.startsWith("/portal/orders") && !path.startsWith("/portal/products")) },
     { href: "/portal/orders", label: "Orders", icon: Package, badge: activeOrders, on: path.startsWith("/portal/orders") },
+    { href: "/portal/products", label: "My products", icon: ShoppingBag, badge: 0, on: path.startsWith("/portal/products") },
     { href: "/p2p", label: "P2P market", icon: ArrowLeftRight, badge: 0, on: false },
   ];
 

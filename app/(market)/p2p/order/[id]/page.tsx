@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { ChevronLeft, Copy, Paperclip, Send, ThumbsDown, ThumbsUp, AlertTriangle, CheckCircle2, XCircle, Scale, Timer } from "lucide-react";
+import { ChevronLeft, Copy, Paperclip, ThumbsDown, ThumbsUp, AlertTriangle, CheckCircle2, XCircle, Scale, Timer } from "lucide-react";
 import { inr, mmss, STATUS, useP2P, type Result } from "@/lib/p2p/store";
 import type { P2POrder } from "@/lib/p2p/types";
 import { AttachmentChip, Button, Card, Pill, inputCls } from "@/components/ui";
+import { Composer } from "@/components/Thread";
 import { MerchantLine } from "../../_components/bits";
 
 const time = (t: number) => new Date(t).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
@@ -46,7 +47,6 @@ export default function OrderPage() {
   const [checked, setChecked] = useState(false);
   const [appealOpen, setAppealOpen] = useState(false);
   const [reason, setReason] = useState("");
-  const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -231,16 +231,17 @@ export default function OrderPage() {
               const mine = m.from === role;
               return (
                 <div key={m.id} className={`max-w-[80%] rounded-lg px-3 py-1.5 text-[14px] shadow-sm ${mine ? "self-end bg-[var(--bubble-out)]" : "self-start bg-[var(--bubble-in)]"}`}>
-                  {m.text}
+                  {m.text && <span className="whitespace-pre-wrap break-words">{m.text}</span>}
+                  {m.attachments?.map((x) => <AttachmentChip key={x.id} a={x} />)}
                   <div className="mt-0.5 text-right text-[11px] text-[var(--muted)]">{time(m.at)}</div>
                 </div>
               );
             })}
           </div>
-          <form onSubmit={async (e) => { e.preventDefault(); if (!msg.trim()) return; if (await run(p2p.send(o.id, msg))) setMsg(""); }} className="flex gap-2 border-t border-[var(--border)] p-3">
-            <input value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Type a message" aria-label="Message" className={`${inputCls} h-11`} disabled={o.status === "cancelled"} />
-            <button type="submit" aria-label="Send" disabled={!msg.trim()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] text-white disabled:opacity-50"><Send size={17} /></button>
-          </form>
+          {o.status === "cancelled"
+            ? <p className="border-t border-[var(--border)] px-4 py-3 text-center text-[13px] text-[var(--muted)]">This order was cancelled.</p>
+            : <Composer modes={[{ id: "p2p", kind: "customer", label: "Message", hint: "Text, photos, videos, documents or a voice note" }]}
+                onSend={async (_m, text, att) => { const r = await p2p.send(o.id, text, att.map((x) => x.id)); if (!r.ok) { setErr(r.error); throw new Error(r.error); } }} />}
         </aside>
       </div>
     </div>

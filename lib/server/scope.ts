@@ -53,6 +53,7 @@ export function scopeFor(db: DB, user: User): AppState {
     orders,
     contacts,
     categories: db.settings.categories,
+    products: [], // the catalogue lives in the NestJS backend only
     version: db.version,
   };
 }

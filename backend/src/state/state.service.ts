@@ -7,13 +7,14 @@ import { isTeam } from "../auth/decorators";
 import {
   ActivityEntity, AssignmentEntity, CaseEntity, CaseEvidenceEntity, CaseHistoryEntity, CompanyEntity, ContactEntity,
   ConversationEntity, MessageEntity, OrderEntity, OrderHistoryEntity, QuoteEntity, QuoteRevisionEntity, ReminderEntity,
-  RequestEntity, ResellerEntity, SavedReplyEntity, SettingsEntity, UserEntity,
+  ProductEntity, RequestEntity, ResellerEntity, SavedReplyEntity, SettingsEntity, UserEntity,
 } from "../database/entities";
 import {
   groupBy, toActivity, toCase, toCompany, toContact, toConversation, toMessage, toOrder, toQuote, toReminder, toRequest,
-  toReseller, toSavedReply, toSettings, toUser,
+  toProduct, toReseller, toSavedReply, toSettings, toUser,
 } from "../database/mappers";
 import { UnitOfWork } from "../database/unit-of-work.service";
+import { CustomerService } from "../customer/customer.service";
 
 const ACTIVITY_WINDOW = 5000;
 
@@ -24,12 +25,12 @@ const ACTIVITY_WINDOW = 5000;
  */
 @Injectable()
 export class StateService {
-  constructor(private readonly uow: UnitOfWork) {}
+  constructor(private readonly uow: UnitOfWork, private readonly customer: CustomerService) {}
 
   version() { return this.uow.version(); }
 
   async forUser(user: User): Promise<TeamState | ResellerState | CustomerState> {
-    if (user.role === "customer") return { scope: "customer", me: user, version: await this.uow.version() };
+    if (user.role === "customer") return this.customer.state(user);
     return isTeam(user) ? this.team(user) : this.reseller(user);
   }
 
@@ -37,7 +38,7 @@ export class StateService {
     const em = this.uow.manager;
     const [
       users, companies, contacts, conversations, messages, resellers, requests, assignments, quotes, revisions,
-      orders, orderHistory, cases, evidence, caseHistory, activity, savedReplies, reminders, settings, version,
+      orders, orderHistory, cases, evidence, caseHistory, activity, savedReplies, reminders, settings, version, products,
     ] = await Promise.all([
       em.find(UserEntity, { order: { createdAt: "ASC" } }),
       em.find(CompanyEntity),
@@ -59,6 +60,7 @@ export class StateService {
       em.find(ReminderEntity, { order: { dueAt: "ASC" } }),
       em.findOne(SettingsEntity, { where: { id: 1 } }),
       this.uow.version(),
+      em.find(ProductEntity, { order: { category: "ASC", name: "ASC" } }),
     ]);
     const asg = groupBy(assignments, (a) => a.requestId);
     const revs = groupBy(revisions, (r) => r.quoteId);
@@ -81,6 +83,7 @@ export class StateService {
         quotes: quotes.map((q) => toQuote(q, revs.get(q.id) ?? [])),
         orders: orders.map((o) => toOrder(o, oh.get(o.id) ?? [])),
         cases: cases.map((c) => toCase(c, ev.get(c.id) ?? [], ch.get(c.id) ?? [])),
+        products: products.map(toProduct),
         activity: activity.reverse().map(toActivity),
         savedReplies: savedReplies.map(toSavedReply),
         reminders: reminders.map(toReminder),
@@ -94,7 +97,7 @@ export class StateService {
     const rid = user.resellerId!;
     const reqIds = await visibleRequestIds(em, rid);
     const anyIds = reqIds.length ? reqIds : ["-"];
-    const [reseller, requests, assignments, messages, quotes, orders, settings, version] = await Promise.all([
+    const [reseller, requests, assignments, messages, quotes, orders, settings, version, products] = await Promise.all([
       em.findOne(ResellerEntity, { where: { id: rid } }),
       em.find(RequestEntity, { where: { id: In(anyIds) }, order: { createdAt: "ASC" } }),
       em.find(AssignmentEntity, { where: { requestId: In(anyIds), resellerId: rid }, order: { seq: "ASC" } }),
@@ -103,6 +106,7 @@ export class StateService {
       em.find(OrderEntity, { where: { resellerId: rid }, order: { createdAt: "ASC" } }),
       em.findOne(SettingsEntity, { where: { id: 1 } }),
       this.uow.version(),
+      em.find(ProductEntity, { where: { resellerId: rid }, order: { updatedAt: "DESC" } }),
     ]);
     const quoteIds = quotes.map((q) => q.id);
     const orderIds = orders.map((o) => o.id);
@@ -140,6 +144,8 @@ export class StateService {
       // only what the task needs: first name + city
       contacts: contacts.map((c): MaskedContact => clean({ id: c.id, name: c.name.split(" ")[0], city: c.city ?? undefined }) as MaskedContact),
       categories: need(settings, "Settings").categories,
+      // their own catalogue proposals — without the customer price our team set
+      products: products.map((x) => { const { price, ...rest } = toProduct(x); return rest; }), // eslint-disable-line @typescript-eslint/no-unused-vars
       version,
     };
   }
