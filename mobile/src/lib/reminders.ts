@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Platform } from "react-native";
+import { Alert, Platform } from "react-native";
 import { router } from "expo-router";
 import * as Notifications from "expo-notifications";
 import type { Broadcast } from "./types";
@@ -12,14 +12,34 @@ import type { Broadcast } from "./types";
  */
 
 const CHANNEL = "reminders";
-const keyOf = (b: Broadcast) => `${b.id}:${b.dueAt}:${b.title}:${b.message ?? ""}`;
+// bump the "v" when the notification text changes, so phones re-schedule with the new wording
+const keyOf = (b: Broadcast) => `v2:${b.id}:${b.dueAt}:${b.title}:${b.message ?? ""}`;
+const timeText = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+/** What the notification says: a clear title, the message, and who sent it. */
+function content(b: Broadcast): Notifications.NotificationContentInput {
+  const lines = [b.message?.trim() || "Tap to see the details.", `${timeText(b.dueAt)} · from ${b.createdByName}`];
+  return {
+    title: `⏰ Reminder: ${b.title}`,
+    subtitle: "Business Messaging",
+    body: lines.join("\n"),
+    data: { broadcastId: b.id, key: keyOf(b), title: b.title, message: b.message ?? "", from: b.createdByName },
+    sound: "default",
+    priority: Notifications.AndroidNotificationPriority.HIGH,
+    color: "#00a884",
+  };
+}
 let handlerSet = false;
 
 function setHandler() {
   if (handlerSet || Platform.OS === "web") return;
   handlerSet = true;
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
+    // while the app is open a reminder shows as an in-app pop-up (see below) instead of a second banner
+    handleNotification: async (n) => {
+      const reminder = !!n.request.content.data?.broadcastId;
+      return { shouldShowBanner: !reminder, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false };
+    },
   });
 }
 
@@ -47,7 +67,10 @@ export async function syncReminderNotifications(list: Broadcast[] | null) {
   }
   if (!(await notificationsAllowed())) return;
   if (Platform.OS === "android") {
-    await Notifications.setNotificationChannelAsync(CHANNEL, { name: "Reminders", importance: Notifications.AndroidImportance.HIGH, sound: "default", vibrationPattern: [0, 250, 250, 250] });
+    await Notifications.setNotificationChannelAsync(CHANNEL, {
+      name: "Reminders", description: "Reminders from our team, at the time they set", importance: Notifications.AndroidImportance.HIGH,
+      sound: "default", vibrationPattern: [0, 250, 250, 250], lightColor: "#00a884", lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    });
   }
   const want = new Map(list.filter((b) => b.dueAt > Date.now() + 5_000).map((b) => [b.id, b]));
   for (const n of scheduled) {
@@ -58,7 +81,7 @@ export async function syncReminderNotifications(list: Broadcast[] | null) {
   for (const b of want.values()) {
     await Notifications.scheduleNotificationAsync({
       identifier: `broadcast-${b.id}`,
-      content: { title: `⏰ ${b.title}`, body: b.message || `Reminder from ${b.createdByName}`, data: { broadcastId: b.id, key: keyOf(b) }, sound: "default" },
+      content: content(b),
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(b.dueAt), channelId: CHANNEL },
     });
   }
@@ -77,9 +100,19 @@ export function useReminderNotifications(list: Broadcast[] | undefined, signedIn
 
   useEffect(() => {
     if (Platform.OS === "web") return;
-    const sub = Notifications.addNotificationResponseReceivedListener((r) => {
+    // tapped in the notification shade → open Reminders
+    const tapped = Notifications.addNotificationResponseReceivedListener((r) => {
       if (r.notification.request.content.data?.broadcastId) router.push("/reminders");
     });
-    return () => sub.remove();
+    // app is open when it rings → also show a clear pop-up inside the app
+    const received = Notifications.addNotificationReceivedListener((n) => {
+      const d = n.request.content.data ?? {};
+      if (!d.broadcastId) return;
+      Alert.alert(`⏰ ${String(d.title ?? "Reminder")}`, [String(d.message ?? ""), d.from ? `From ${String(d.from)}` : ""].filter(Boolean).join("\n\n"), [
+        { text: "OK", style: "cancel" },
+        { text: "View reminders", onPress: () => router.push("/reminders") },
+      ]);
+    });
+    return () => { tapped.remove(); received.remove(); };
   }, []);
 }
