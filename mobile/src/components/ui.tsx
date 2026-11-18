@@ -4,6 +4,7 @@ import {
   type TextInputProps, type ViewStyle, type StyleProp,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, type Tone } from "@/lib/theme";
 import { colorFor, initials } from "@/lib/format";
@@ -246,6 +247,33 @@ export function AppearanceCard() {
       </View>
       <Text style={{ color: c.muted, fontSize: 12, paddingHorizontal: 14, paddingBottom: 12 }}>System follows your phone&apos;s dark mode setting.</Text>
     </Card>
+  );
+}
+
+/** Alarm button for headers: opens "Reminders for everyone", with a badge for upcoming ones. */
+export function RemindersButton() {
+  const { c } = useTheme();
+  const { state, now } = useStore();
+  const n = (state?.broadcasts ?? []).filter((b) => b.dueAt > now).length;
+  return (
+    <Pressable onPress={() => router.push("/reminders")} hitSlop={10} style={{ paddingHorizontal: 8 }} accessibilityLabel={n ? `Reminders, ${n} upcoming` : "Reminders"}>
+      <Ionicons name="alarm-outline" size={23} color={c.text} />
+      {n > 0 && (
+        <View style={{ position: "absolute", top: -4, right: 2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: c.danger, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }}>
+          <Text style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}>{n}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+/** Header buttons on every main tab: reminders + light/dark. */
+export function HeaderActions() {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 2 }}>
+      <RemindersButton />
+      <ThemeToggle />
+    </View>
   );
 }
 
