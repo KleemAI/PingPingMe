@@ -55,6 +55,17 @@
         }
       ]
     ],
-    "scheme": "bizmsg"
+    "scheme": "bizmsg",
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "86bfc32e-7b40-48cd-968f-40383ba34e53"
+      }
+    },
+    "owner": "2535"
   }
 }
