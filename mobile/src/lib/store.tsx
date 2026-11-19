@@ -37,8 +37,8 @@ type Ctx = {
   /** Step 1 of sign-in: does this email have an account? (true → ask password, false → sign-up form) */
   checkEmail: (server: string, email: string) => Promise<boolean>;
   login: (server: string, email: string, password: string) => Promise<void>;
-  /** creates the account and emails a code → confirm with verifyEmail */
-  signup: (server: string, name: string, email: string, password: string) => Promise<CodeSent>;
+  /** creates the account: signed in at once (null), or — when the server asks for email codes — a code was emailed → verifyEmail */
+  signup: (server: string, name: string, email: string, password: string) => Promise<CodeSent | null>;
   verifyEmail: (server: string, email: string, code: string) => Promise<void>;
   resendCode: (server: string, email: string) => Promise<CodeSent>;
   /** Signed-in GET/POST to the backend, e.g. api("/p2p"). */
@@ -198,8 +198,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       e.status = res.status; // 409 = this email already has an account → ask for the password
       throw e;
     }
+    if (!data.needsVerification) { await startSession(base, data); return null; } // email codes off → signed in
     return { email: data.email, retryIn: data.retryIn ?? 60_000, devCode: data.devCode } as CodeSent;
-  }, [authPost]);
+  }, [authPost, startSession]);
 
   const verifyEmail = useCallback(async (srv: string, email: string, code: string) => {
     const base = normalizeServer(srv);

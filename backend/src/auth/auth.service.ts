@@ -12,6 +12,7 @@ import { checkPassword, hashPassword } from "./password";
 import { ensureContact } from "../customer/customer-link";
 import { EmailVerification } from "./email-verification.service";
 import { AppError } from "../common/errors";
+import { env } from "../config/env";
 
 type TokenPayload = { sub: string; role: string };
 
@@ -45,7 +46,7 @@ export class AuthService {
     if (!row || !(await checkPassword(String(password ?? ""), row.passwordHash))) throw unauthorized("Wrong email or password");
     if (!row.active) throw forbidden("Account disabled");
     await this.assertResellerActive(row);
-    if (row.role === "customer" && !row.emailVerified) {
+    if (env.emailVerification && row.role === "customer" && !row.emailVerified) {
       // right password, but the email isn't confirmed yet → (re)send a code and ask for it
       const sent = await this.codes.send(row).catch(() => ({ sent: false, retryIn: 0, devCode: undefined }));
       throw new AppError(403, `Please confirm your email first — we sent a 6-digit code to ${row.email}`, { code: "email_unverified", email: row.email, retryIn: sent.retryIn, ...(sent.devCode ? { devCode: sent.devCode } : {}) });
@@ -80,15 +81,26 @@ export class AuthService {
         // someone started signing up with this email but never confirmed it — the person who can read the mail takes it over
         taken.name = n;
         taken.passwordHash = passwordHash;
+        if (!env.emailVerification) taken.emailVerified = true;
         await em.save(taken);
+        if (!env.emailVerification) await this.welcome(em, taken);
         return taken;
       }
-      const u = em.create(UserEntity, { id: newId("u"), name: n, email: e, role: "customer", active: true, verified: false, emailVerified: false, passwordHash });
+      const confirmed = !env.emailVerification; // email codes switched off → the account works at once
+      const u = em.create(UserEntity, { id: newId("u"), name: n, email: e, role: "customer", active: true, verified: false, emailVerified: confirmed, passwordHash });
       await em.save(u);
+      if (confirmed) await this.welcome(em, u);
       return (await em.findOne(UserEntity, { where: { id: u.id } }))!;
     });
+    if (!env.emailVerification) return this.issue(row); // signed in straight away (same answer as login)
     const sent = await this.codes.send(row);
     return { ok: true, needsVerification: true, email: row.email, retryIn: sent.retryIn, ...(sent.devCode ? { devCode: sent.devCode } : {}) };
+  }
+
+  /** A new customer becomes a customer contact for the team (+ an activity line). */
+  private async welcome(em: import("typeorm").EntityManager, u: UserEntity) {
+    await ensureContact(em, u.id);
+    await em.insert(ActivityEntity, { id: newId("a"), entity: "user", entityId: u.id, actorId: u.id, text: `Customer ${u.name} signed up`, sensitive: true, at: Date.now() });
   }
 
   /** `{ email, code }` → the email is confirmed and the customer is signed in (same answer as login). */
@@ -100,8 +112,7 @@ export class AuthService {
     await this.codes.check(row, code);
     const done = await this.uow.write(SYSTEM_USER, async ({ em }) => {
       await em.update(UserEntity, { id: row.id }, { emailVerified: true });
-      await ensureContact(em, row.id); // now shows up as a customer contact for the team
-      await em.insert(ActivityEntity, { id: newId("a"), entity: "user", entityId: row.id, actorId: row.id, text: `Customer ${row.name} signed up`, sensitive: true, at: Date.now() });
+      await this.welcome(em, row);
       return (await em.findOne(UserEntity, { where: { id: row.id } }))!;
     });
     return this.issue(done);
@@ -127,7 +138,7 @@ export class AuthService {
     }
     const row = await this.uow.manager.findOne(UserEntity, { where: { id: payload.sub } });
     if (!row || !row.active) throw unauthorized("Account disabled");
-    if (row.role === "customer" && !row.emailVerified) throw unauthorized("Please confirm your email first — sign in again to get a code");
+    if (env.emailVerification && row.role === "customer" && !row.emailVerified) throw unauthorized("Please confirm your email first — sign in again to get a code");
     await this.assertResellerActive(row);
     return toUser(row);
   }

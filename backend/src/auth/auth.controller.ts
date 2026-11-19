@@ -52,8 +52,9 @@ export class AuthController {
   }
 
   /**
-   * Customer sign-up: `{ name, email, password }` → `{ needsVerification: true, email }` and a 6-digit code by email;
-   * POST /auth/verify-email with the code signs them in. Name: letters and spaces only.
+   * Customer sign-up: `{ name, email, password }` → signed in (same answer as login). Name: letters and spaces only.
+   * With EMAIL_VERIFICATION=true: `{ needsVerification: true, email }` and a 6-digit code by email instead;
+   * POST /auth/verify-email with the code signs them in.
    * Limits: a few new accounts per IP per hour / day, a cap on sign-ups per hour overall, no throw-away mailboxes,
    * and a hidden "website" field that only bots fill in.
    */
@@ -64,7 +65,10 @@ export class AuthController {
     this.limiter.take(`signup-h:${ip}`, LIMITS.signupPerIpHour, "Too many new accounts from your network");
     this.limiter.take(`signup-d:${ip}`, LIMITS.signupPerIpDay, "Too many new accounts from your network today");
     this.limiter.take("signup-all", LIMITS.signupGlobalHour, "Sign-ups are busy right now");
-    return this.auth.signup(body?.name, body?.email, body?.password); // → { needsVerification, email } — a code is emailed
+    const result = await this.auth.signup(body?.name, body?.email, body?.password);
+    // signed in at once — or, with EMAIL_VERIFICATION on, `{ needsVerification, email }` and a code is emailed
+    if ("accessToken" in result) setSessionCookie(res, result.accessToken);
+    return result;
   }
 
   /** `{ email, code }` → email confirmed and signed in (same answer as login, plus the session cookie). */

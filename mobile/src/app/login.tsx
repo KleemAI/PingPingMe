@@ -66,7 +66,8 @@ export default function Login() {
     if (n.length < 2) return setErr("Enter your name (letters only)");
     if (password.length < PASSWORD_MIN) return setErr(`Password must be at least ${PASSWORD_MIN} characters`);
     try {
-      askCode(await signup(srv, n, email, password));
+      const s = await signup(srv, n, email, password);
+      if (s) askCode(s); // the server asks for the emailed code first
     } catch (e) {
       const ex = e as Error & { status?: number };
       if (ex.status === 409) { go("password"); setNote("You already have an account — enter your password."); return; }

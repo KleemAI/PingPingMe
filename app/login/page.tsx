@@ -20,7 +20,7 @@ const PASSWORD_MIN = 8;
 const HOME: Record<string, string> = { reseller: "/portal", customer: "/c/products" };
 
 type Step = "email" | "password" | "signup" | "code";
-type Body = { error?: string; role?: string; exists?: boolean; code?: string; email?: string; retryIn?: number; devCode?: string };
+type Body = { error?: string; role?: string; exists?: boolean; needsVerification?: boolean; code?: string; email?: string; retryIn?: number; devCode?: string };
 
 export default function Login() {
   const [step, setStep] = useState<Step>("email");
@@ -101,7 +101,8 @@ export default function Login() {
     setBusy(false);
     if (status === 409) { setStep("password"); setPassword(""); return setErr("This email already has an account — enter your password."); }
     if (!ok) return setErr(data.error ?? "Sign-up failed");
-    askCode(data); // a 6-digit code was emailed
+    if (data.needsVerification) return askCode(data); // a 6-digit code was emailed
+    go(data.role);
   };
 
   // Step 3 — the code from the email → signed in.

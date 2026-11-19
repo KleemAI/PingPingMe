@@ -5,11 +5,12 @@ import assert from "node:assert/strict";
 
 const API = (process.env.API_URL ?? "http://localhost:4000") + "/api/v1";
 const post = (path, body, token) => fetch(API + path, { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
-// sign up + confirm the email with the code (the API returns it as `devCode` while SMTP isn't set)
+// sign up (+ confirm the email with the code when EMAIL_VERIFICATION is on; the API returns it as `devCode` while SMTP isn't set)
 const signupOk = async (body) => {
   const r = await post("/auth/signup", body);
   const b = await r.json();
   if (r.status !== 201) throw new Error(`signup ${r.status}: ${b.error}`);
+  if (b.accessToken) return b; // email codes switched off (EMAIL_VERIFICATION) → signed in already
   return (await post("/auth/verify-email", { email: b.email, code: b.devCode })).json();
 };
 const get = (path, token) => fetch(API + path, { headers: { authorization: `Bearer ${token}` } });

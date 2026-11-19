@@ -22,11 +22,20 @@ test("signup validates name (letters only), email and password", async () => {
   assert.equal((await post("/auth/signup", { name: "Ravi Shah", email: "bad", password: "secret123" })).status, 400, "bad email");
 });
 
-test("signup emails a code; the account works only after the email is confirmed", async () => {
+test("signup: signed in at once, or (EMAIL_VERIFICATION=true) only after the emailed code", async () => {
   const r = await post("/auth/signup", { name: "  Ravi   Shah ", email, password: "secret123" });
   assert.equal(r.status, 201);
   const s = await r.json();
-  assert.equal(s.needsVerification, true);
+  if (!s.needsVerification) {
+    // EMAIL_VERIFICATION is off: signed in straight away (cookie + token)
+    assert.match(r.headers.get("set-cookie") ?? "", /bm_session=/);
+    assert.equal(s.role, "customer");
+    assert.equal(s.user.name, "Ravi Shah", "spaces tidied");
+    assert.equal(s.user.verified, false, "P2P selling still needs our team");
+    custToken = s.accessToken; custId = s.user.id;
+    assert.equal((await post("/auth/signup", { name: "રવિ શાહ", email: "guj." + email, password: "secret123" })).status, 201, "Gujarati letters are a valid name");
+    return;
+  }
   assert.equal(s.email, email);
   assert.ok(!s.accessToken, "no session before the email is confirmed");
   assert.match(s.devCode, /^\d{6}$/, "development: code returned while SMTP isn't set");
@@ -61,9 +70,11 @@ test("signup emails a code; the account works only after the email is confirmed"
   assert.equal(gu.status, 201, "Gujarati letters are a valid name");
 });
 
-test("an unconfirmed sign-up can be taken over by whoever can read the mailbox", async () => {
+test("an unconfirmed sign-up can be taken over by whoever can read the mailbox", async (t) => {
   const e2 = `squat.${Date.now()}@example.in`;
-  assert.equal((await post("/auth/signup", { name: "Squatter One", email: e2, password: "secret123" })).status, 201);
+  const first = await post("/auth/signup", { name: "Squatter One", email: e2, password: "secret123" });
+  assert.equal(first.status, 201);
+  if (!(await first.json()).needsVerification) return t.skip("EMAIL_VERIFICATION is off");
   const again = await post("/auth/signup", { name: "Real Owner", email: e2, password: "owner-pass-1" });
   assert.equal(again.status, 201, "not confirmed yet → can sign up again");
   // the old code still works within the minute (no new one was sent), and the new name + password apply

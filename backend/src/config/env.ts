@@ -33,6 +33,11 @@ export const env = {
     };
   },
   /**
+   * New customers must confirm their email with a 6-digit code before they can sign in.
+   * Off for now (EMAIL_VERIFICATION=true turns it on — set up SMTP first).
+   */
+  get emailVerification() { return bool(process.env.EMAIL_VERIFICATION, false); },
+  /**
    * Development helper: the sign-up / resend answers include the code (`devCode`) so the apps and tests can show it.
    * On by default only outside production and while SMTP isn't set.
    */

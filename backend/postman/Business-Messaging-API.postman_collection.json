@@ -4412,7 +4412,7 @@
             "auth": {
               "type": "noauth"
             },
-            "description": "Creates the account (not signed in yet) and emails a 6-digit code. While SMTP isn't set (development) the answer also has `devCode`, and the code is printed in the backend log."
+            "description": "Creates the account and signs the customer in (token + session cookie). With EMAIL_VERIFICATION=true in backend/.env it answers `{ needsVerification: true }` instead and emails a 6-digit code (in development also returned as `devCode` and printed in the backend log)."
           },
           "event": [
             {
@@ -4422,15 +4422,16 @@
                 "exec": [
                   "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
                   "const j = pm.response.json();",
-                  "pm.test(\"Needs the email code\", () => { pm.expect(j.needsVerification).to.eql(true); pm.expect(j.accessToken).to.be.undefined; });",
-                  "if (j.devCode) pm.collectionVariables.set(\"emailCode\", j.devCode);"
+                  "pm.collectionVariables.set(\"emailCode\", j.devCode || \"\");",
+                  "if (j.accessToken) { pm.collectionVariables.set(\"customerToken\", j.accessToken); pm.collectionVariables.set(\"customerId\", j.user.id); }",
+                  "pm.test(\"Signed in, or asked for the email code\", () => pm.expect(!!j.accessToken || j.needsVerification === true).to.eql(true));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "Sign in before confirming (403)",
+          "name": "Sign in (403 email_unverified while email codes are on)",
           "request": {
             "method": "POST",
             "header": [
@@ -4469,8 +4470,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
-                  "pm.test(\"email_unverified\", () => pm.expect(pm.response.json().code).to.eql(\"email_unverified\"));"
+                  "const j = pm.response.json();",
+                  "pm.test(\"Signed in, or asked to confirm the email\", () => pm.expect(pm.response.code === 200 || j.code === \"email_unverified\").to.eql(true));"
                 ]
               }
             }
@@ -4523,7 +4524,7 @@
           ]
         },
         {
-          "name": "Confirm email with the code (200)",
+          "name": "Confirm email with the code (only with EMAIL_VERIFICATION=true)",
           "request": {
             "method": "POST",
             "header": [
@@ -4562,11 +4563,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
-                  "pm.collectionVariables.set(\"customerToken\", j.accessToken);",
-                  "pm.collectionVariables.set(\"customerId\", j.user.id);",
-                  "pm.test(\"Customer, not verified for P2P selling yet\", () => { pm.expect(j.role).to.eql(\"customer\"); pm.expect(j.user.verified).to.eql(false); });"
+                  "if (pm.response.code === 200) { pm.collectionVariables.set(\"customerToken\", j.accessToken); pm.collectionVariables.set(\"customerId\", j.user.id); }",
+                  "pm.test(\"Confirmed, or nothing to confirm\", () => pm.expect([200, 400, 409]).to.include(pm.response.code));"
                 ]
               }
             }
