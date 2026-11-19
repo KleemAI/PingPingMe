@@ -19,7 +19,6 @@ export default function TaskEdit() {
   const { state, act } = useStore();
   const existing = id !== "new" ? state?.tasks?.find((t) => t.id === id) : undefined;
   const lists = state?.taskLists ?? [];
-  const isTeam = state?.scope === "team";
   const [f, setF] = useState(() => ({
     title: existing?.title ?? "",
     note: existing?.note ?? "",
@@ -28,8 +27,8 @@ export default function TaskEdit() {
     repeat: (existing?.repeat ?? "none") as Repeat,
     repeatEvery: String(existing?.repeatEvery ?? 1),
     repeatUnit: (existing?.repeatUnit ?? "day") as RepeatUnit,
-    listId: existing?.listId ?? (list && list !== "all" && list !== "today" && list !== "default" && list !== "shared" ? list : ""),
-    audience: existing?.audience ?? (list === "shared" && isTeam ? "everyone" : "me") as "me" | "everyone",
+    listId: existing?.listId ?? (list && list !== "all" && list !== "today" && list !== "default" ? list : ""),
+    audience: existing?.audience ?? ("me" as "me" | "everyone"),
   }));
   const [newList, setNewList] = useState<string | null>(null);
   const [custom, setCustom] = useState(false);
@@ -112,21 +111,6 @@ export default function TaskEdit() {
           </View>
         )}
 
-        {isTeam && !readOnly && (
-          <View style={{ gap: 6 }}>
-            <Label>Who is it for?</Label>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              {(["me", "everyone"] as const).map((a) => (
-                <Pressable key={a} onPress={() => set("audience", a)} accessibilityState={{ selected: f.audience === a }}
-                  style={{ flex: 1, alignItems: "center", gap: 2, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, borderColor: f.audience === a ? c.accent : c.border, backgroundColor: f.audience === a ? c.accentSoft : c.card }}>
-                  <Ionicons name={a === "me" ? "person-outline" : "people-outline"} size={20} color={f.audience === a ? c.accentStrong : c.muted} />
-                  <T weight="600" size={13.5} color={f.audience === a ? c.accentStrong : c.text}>{a === "me" ? "Only me" : "Everyone"}</T>
-                </Pressable>
-              ))}
-            </View>
-            {f.audience === "everyone" && <T muted size={12.5}>Every user — team, resellers and customers — sees it and gets the notification.</T>}
-          </View>
-        )}
         {existing && existing.audience === "everyone" && existing.ownerId !== state.me.id && <T muted size={13}>Shared with everyone by {existing.ownerName}.</T>}
 
         {f.audience === "me" && !readOnly && (

@@ -29,6 +29,7 @@ export default function Account() {
         <Row title="Open the P2P market" subtitle="Sell your stock to customers and other businesses, or buy" onPress={() => router.push("/p2p")} />
       </Card>
       <Card title="Reminders" icon="alarm-outline">
+        <Row title="My To-Do" subtitle="Your own tasks, with date, time and repeat" onPress={() => router.push("/todo")} />
         <Row title="Reminders from our team" subtitle={`${(rs.broadcasts ?? []).filter((b) => b.dueAt > Date.now()).length} upcoming`} onPress={() => router.push("/reminders")} />
       </Card>
       <Card title="Catalogue" icon="bag-handle-outline">

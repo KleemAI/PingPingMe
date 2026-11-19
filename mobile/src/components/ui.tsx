@@ -250,17 +250,11 @@ export function AppearanceCard() {
   );
 }
 
-/** Alarm button for headers: opens "Tasks & reminders", with a badge for tasks due today / overdue and upcoming reminders. */
-export function RemindersButton() {
+function HeaderIcon({ icon, n, onPress, label }: { icon: IconName; n: number; onPress: () => void; label: string }) {
   const { c } = useTheme();
-  const { state, now } = useStore();
-  const d = new Date(now);
-  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const n = (state?.tasks ?? []).filter((t) => !t.done && !!t.dueDate && t.dueDate <= today).length
-    + (state?.broadcasts ?? []).filter((b) => !b.id.startsWith("task:") && b.dueAt > now && b.dueAt - now < 86_400_000).length;
   return (
-    <Pressable onPress={() => router.push("/reminders")} hitSlop={10} style={{ paddingHorizontal: 8 }} accessibilityLabel={n ? `Tasks, ${n} due` : "Tasks and reminders"}>
-      <Ionicons name="checkbox-outline" size={23} color={c.text} />
+    <Pressable onPress={onPress} hitSlop={8} style={{ paddingHorizontal: 8 }} accessibilityLabel={label}>
+      <Ionicons name={icon} size={23} color={c.text} />
       {n > 0 && (
         <View style={{ position: "absolute", top: -4, right: 2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: c.danger, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }}>
           <Text style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}>{n}</Text>
@@ -270,10 +264,27 @@ export function RemindersButton() {
   );
 }
 
-/** Header buttons on every main tab: reminders + light/dark. */
+/** ⏰ Reminders for everyone (from our team) — badge: upcoming ones. */
+export function RemindersButton() {
+  const { state, now } = useStore();
+  const n = (state?.broadcasts ?? []).filter((b) => b.dueAt > now).length;
+  return <HeaderIcon icon="alarm-outline" n={n} onPress={() => router.push("/reminders")} label={n ? `Reminders, ${n} upcoming` : "Reminders"} />;
+}
+
+/** ☑ My To-Do — badge: tasks due today or overdue. */
+export function TodoButton() {
+  const { state, now } = useStore();
+  const d = new Date(now);
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const n = (state?.tasks ?? []).filter((t) => t.audience === "me" && !t.done && !!t.dueDate && t.dueDate <= today).length;
+  return <HeaderIcon icon="checkbox-outline" n={n} onPress={() => router.push("/todo")} label={n ? `To-Do, ${n} due` : "To-Do"} />;
+}
+
+/** Header buttons on every main tab: to-do, reminders, light/dark. */
 export function HeaderActions() {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 2 }}>
+      <TodoButton />
       <RemindersButton />
       <ThemeToggle />
     </View>

@@ -29,7 +29,8 @@ function Root() {
         <Stack.Screen name="portal" options={{ headerShown: false }} />
         <Stack.Screen name="p2p" options={{ headerShown: false }} />
         <Stack.Screen name="shop" options={{ headerShown: false }} />
-        <Stack.Screen name="reminders" options={{ title: "Tasks & reminders" }} />
+        <Stack.Screen name="reminders" options={{ title: "Reminders" }} />
+        <Stack.Screen name="todo" options={{ title: "To-Do" }} />
         <Stack.Screen name="task/[id]" options={{ title: "New Task" }} />
         <Stack.Screen name="task/batch" options={{ title: "Add in Batch Mode" }} />
       </Stack>

@@ -111,9 +111,12 @@ export function useReminderNotifications(broadcasts: Broadcast[] | undefined, si
   useEffect(() => {
     if (Platform.OS === "web") return;
     const ours = (d: Record<string, unknown> | undefined) => !!(d?.planId || d?.broadcastId);
-    // tapped in the notification shade → open Tasks & reminders
+    // to-do → To-Do; reminders for everyone (and shared reminders) → Reminders
+    const screen = (d: Record<string, unknown>) => (d.kind === "broadcast" || d.broadcastId || String(d.title ?? "").startsWith("⏰") ? "/reminders" : "/todo");
+    // tapped in the notification shade → open the To-Do or Reminders screen
     const tapped = Notifications.addNotificationResponseReceivedListener((r) => {
-      if (ours(r.notification.request.content.data)) router.push("/reminders");
+      const d = r.notification.request.content.data;
+      if (ours(d)) router.push(screen(d ?? {}));
     });
     // app is open when it rings → show a clear pop-up inside the app
     const received = Notifications.addNotificationReceivedListener((n) => {
@@ -121,7 +124,7 @@ export function useReminderNotifications(broadcasts: Broadcast[] | undefined, si
       if (!ours(d)) return;
       Alert.alert(String(d.title ?? n.request.content.title ?? "Reminder"), String(d.message ?? n.request.content.body ?? ""), [
         { text: "OK", style: "cancel" },
-        { text: "Open tasks", onPress: () => router.push("/reminders") },
+        { text: "Open", onPress: () => router.push(screen(d)) },
       ]);
     });
     return () => { tapped.remove(); received.remove(); };
