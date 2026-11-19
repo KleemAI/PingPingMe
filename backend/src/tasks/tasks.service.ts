@@ -1,10 +1,10 @@
 import { Injectable } from "@nestjs/common";
-import { IsNull, Not } from "typeorm";
-import type { Broadcast, Task, TaskList, User } from "../common/contract";
+import { In, IsNull, Not } from "typeorm";
+import type { Broadcast, Task, TaskList, TaskPerson, User } from "../common/contract";
 import { badRequest, conflict, forbidden, notFound } from "../common/errors";
 import { clean, Payload, newId, oneOf, optStr, str } from "../common/util";
 import { isTeam } from "../auth/decorators";
-import { TaskEntity, TaskListEntity } from "../database/entities";
+import { TaskEntity, TaskListEntity, UserEntity } from "../database/entities";
 import { UnitOfWork, type Tx } from "../database/unit-of-work.service";
 import { REPEATS, UNITS, epochOf, isDate, isTime, nextDate, occurrences, todayIn, type RepeatRule } from "./recurrence";
 
@@ -12,6 +12,9 @@ const MAX_OPEN = 500; // open tasks per user
 const MAX_LISTS = 30;
 const DONE_SHOWN = 100; // completed tasks kept in the app's "Completed" section
 const DAY_SUMMARY = "08:00"; // all-day tasks ring at 8:00 on their day
+const MAX_ASSIGNEES = 50;
+const TEAM_ROLES = ["admin", "agent"];
+const kindOf = (role: string): TaskPerson["kind"] => (TEAM_ROLES.includes(role) ? "team" : role === "reseller" ? "reseller" : "customer");
 
 const ruleOf = (t: TaskEntity): RepeatRule => ({ repeat: t.repeat as RepeatRule["repeat"], repeatEvery: t.repeatEvery, repeatUnit: t.repeatUnit as RepeatRule["repeatUnit"], anchorDay: t.anchorDay ?? undefined });
 
@@ -19,6 +22,8 @@ const toTask = (t: TaskEntity): Task => clean({
   id: t.id, ownerId: t.ownerId, ownerName: t.ownerName, audience: t.audience as Task["audience"], title: t.title, note: t.note || undefined,
   listId: t.listId ?? undefined, dueDate: t.dueDate ?? undefined, dueTime: t.dueTime ?? undefined, tzOffset: t.tzOffset,
   repeat: t.repeat as Task["repeat"], repeatEvery: t.repeatEvery, repeatUnit: t.repeatUnit as Task["repeatUnit"], anchorDay: t.anchorDay ?? undefined,
+  assignedBy: t.assignedBy ?? undefined, assignedByName: t.assignedByName ?? undefined, status: (t.status || "accepted") as Task["status"],
+  respondedAt: t.respondedAt ?? undefined, lastDoneAt: t.lastDoneAt ?? undefined,
   done: t.done, doneAt: t.doneAt ?? undefined, createdAt: t.createdAt, updatedAt: t.updatedAt,
 }) as Task;
 
@@ -30,18 +35,30 @@ const toTask = (t: TaskEntity): Task => clean({
 export class TasksService {
   constructor(private readonly uow: UnitOfWork) {}
 
-  /** Your tasks (open + recent completed), tasks shared with everyone by the team, and your lists. */
-  async forUser(user: User): Promise<{ tasks: Task[]; taskLists: TaskList[] }> {
+  /**
+   * Your tasks (open + recent completed, incl. ones given to you that wait for your OK), tasks shared with everyone by the team,
+   * your lists, the to-dos you gave to others, and who you can give one to.
+   */
+  async forUser(user: User): Promise<{ tasks: Task[]; taskLists: TaskList[]; assignedTasks: Task[]; taskPeople: TaskPerson[] }> {
     const em = this.uow.manager;
-    const [open, done, shared, lists] = await Promise.all([
-      em.find(TaskEntity, { where: { ownerId: user.id, done: false }, order: { createdAt: "ASC" } }),
-      em.find(TaskEntity, { where: { ownerId: user.id, done: true }, order: { doneAt: "DESC" }, take: DONE_SHOWN }),
+    const notDeclined = Not("declined");
+    const [open, done, shared, lists, given, people] = await Promise.all([
+      em.find(TaskEntity, { where: { ownerId: user.id, done: false, status: notDeclined }, order: { createdAt: "ASC" } }),
+      em.find(TaskEntity, { where: { ownerId: user.id, done: true, status: notDeclined }, order: { doneAt: "DESC" }, take: DONE_SHOWN }),
       em.find(TaskEntity, { where: { audience: "everyone", done: false, ownerId: Not(user.id) }, order: { createdAt: "ASC" }, take: 200 }),
       em.find(TaskListEntity, { where: { ownerId: user.id }, order: { createdAt: "ASC" } }),
+      em.find(TaskEntity, { where: { assignedBy: user.id, ownerId: Not(user.id) }, order: { updatedAt: "DESC" }, take: 200 }),
+      em.find(UserEntity, {
+        select: { id: true, name: true, role: true },
+        where: isTeam(user) ? { active: true, id: Not(user.id) } : { active: true, id: Not(user.id), role: In(TEAM_ROLES) },
+        order: { name: "ASC" }, take: 1000,
+      }),
     ]);
     return {
       tasks: [...open, ...done, ...shared].map(toTask),
       taskLists: lists.map((l) => ({ id: l.id, name: l.name, createdAt: l.createdAt })),
+      assignedTasks: given.map(toTask),
+      taskPeople: people.map((u) => ({ id: u.id, name: u.name, kind: kindOf(u.role) })),
     };
   }
 
@@ -109,6 +126,7 @@ export class TasksService {
       listId: audience === "everyone" ? null : await this.validList(tx, p.listId), audience, ...this.when(p),
     };
     const now = Date.now();
+    if (!p.id && Array.isArray(p.assignees) && p.assignees.length) return this.give(tx, p, fields, now);
     if (p.id) {
       const t = await this.own(tx, p.id);
       if (t.ownerId !== tx.user.id) fields.listId = t.listId; // an admin editing someone's shared task keeps their list
@@ -120,6 +138,47 @@ export class TasksService {
     const id = newId("tk");
     await tx.em.insert(TaskEntity, { id, ownerId: tx.user.id, ownerName: tx.user.name, ...fields, done: false, doneAt: null, createdAt: now, updatedAt: now });
     return id;
+  }
+
+  /**
+   * task.save { …, assignees: [userId…] } — give the to-do to one or more people (you can include yourself).
+   * Each gets their own copy that waits for them to accept it. Team → anyone; resellers and customers → our team only.
+   */
+  private async give(tx: Tx, p: Payload, fields: Record<string, unknown>, now: number) {
+    if (fields.audience === "everyone") throw badRequest("Pick people or everyone, not both");
+    const ids = [...new Set((p.assignees as unknown[]).map(String))];
+    if (ids.length > MAX_ASSIGNEES) throw badRequest(`Up to ${MAX_ASSIGNEES} people at a time`);
+    const others = ids.filter((id) => id !== tx.user.id);
+    const users = others.length ? await tx.em.find(UserEntity, { where: { id: In(others), active: true } }) : [];
+    if (users.length !== others.length) throw notFound("Person");
+    if (!isTeam(tx.user) && users.some((u) => !TEAM_ROLES.includes(u.role))) throw forbidden("You can give a to-do to our team only");
+    const out: string[] = [];
+    if (ids.includes(tx.user.id)) {
+      const id = newId("tk");
+      await tx.em.insert(TaskEntity, { id, ownerId: tx.user.id, ownerName: tx.user.name, ...fields, done: false, doneAt: null, createdAt: now, updatedAt: now });
+      out.push(id);
+    }
+    for (const u of users) {
+      if ((await tx.em.count(TaskEntity, { where: { ownerId: u.id, done: false } })) >= MAX_OPEN) throw conflict(`${u.name} has too many open tasks`);
+      const id = newId("tk");
+      await tx.em.insert(TaskEntity, {
+        id, ownerId: u.id, ownerName: u.name, ...fields, listId: null, audience: "me",
+        assignedBy: tx.user.id, assignedByName: tx.user.name, status: "pending", done: false, doneAt: null, createdAt: now, updatedAt: now,
+      });
+      out.push(id);
+    }
+    return out;
+  }
+
+  /** task.respond { id, accept } — accept or decline a to-do someone gave you. */
+  async respond(tx: Tx, p: Payload) {
+    const t = await tx.em.findOne(TaskEntity, { where: { id: String(p.id ?? ""), ownerId: tx.user.id } });
+    if (!t) throw notFound("Task");
+    if (t.status !== "pending") throw conflict(t.status === "accepted" ? "Already accepted" : "Already declined");
+    t.status = p.accept === false ? "declined" : "accepted";
+    t.respondedAt = t.updatedAt = Date.now();
+    await tx.em.save(t);
+    return t.status;
   }
 
   /** task.batch { titles: string[] | "line 1\nline 2", dueDate?, listId?, tzOffset } — "Add in batch mode" (own tasks). */
@@ -151,6 +210,8 @@ export class TasksService {
     const t = await this.own(tx, p.id);
     const done = p.done !== false;
     const now = Date.now();
+    if (t.status === "pending") throw conflict("Accept this to-do first");
+    if (done) t.lastDoneAt = now;
     if (done && t.repeat !== "none" && t.dueDate) {
       t.dueDate = nextDate(t.dueDate, ruleOf(t)) ?? t.dueDate;
       t.updatedAt = now;
@@ -166,7 +227,8 @@ export class TasksService {
 
   /** task.delete { id } */
   async remove(tx: Tx, p: Payload) {
-    const t = await this.own(tx, p.id);
+    const given = await tx.em.findOne(TaskEntity, { where: { id: String(p.id ?? ""), assignedBy: tx.user.id } });
+    const t = given && given.ownerId !== tx.user.id ? given : await this.own(tx, p.id); // the giver can take it back
     await tx.em.delete(TaskEntity, { id: t.id });
   }
 

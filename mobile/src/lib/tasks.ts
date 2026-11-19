@@ -63,7 +63,7 @@ export function planTaskNotifications(tasks: Task[], now = Date.now()): PlannedN
   const until = localDate(60);
   const allDay = new Map<string, string[]>();
   for (const t of tasks) {
-    if (t.done || !t.dueDate) continue;
+    if (t.done || !t.dueDate || (t.status && t.status !== "accepted")) continue; // given to-dos ring once accepted
     const dates = occurrences(t.dueDate, ruleOf(t), from, t.dueTime ? 8 : 31, until);
     for (const date of dates) {
       if (t.dueTime) {

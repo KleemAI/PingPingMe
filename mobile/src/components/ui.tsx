@@ -271,12 +271,12 @@ export function RemindersButton() {
   return <HeaderIcon icon="alarm-outline" n={n} onPress={() => router.push("/reminders")} label={n ? `Reminders, ${n} upcoming` : "Reminders"} />;
 }
 
-/** ☑ My To-Do — badge: tasks due today or overdue. */
+/** ☑ My To-Do — badge: new to-dos waiting for your OK + tasks due today or overdue. */
 export function TodoButton() {
   const { state, now } = useStore();
   const d = new Date(now);
   const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const n = (state?.tasks ?? []).filter((t) => t.audience === "me" && !t.done && !!t.dueDate && t.dueDate <= today).length;
+  const n = (state?.tasks ?? []).filter((t) => t.audience === "me" && (t.status === "pending" || (!t.done && !!t.dueDate && t.dueDate <= today))).length;
   return <HeaderIcon icon="checkbox-outline" n={n} onPress={() => router.push("/todo")} label={n ? `To-Do, ${n} due` : "To-Do"} />;
 }
 

@@ -58,6 +58,7 @@ export class ActionsService {
       "task.save": (t, p) => tasks.save(t, p),
       "task.batch": (t, p) => tasks.batch(t, p),
       "task.done": (t, p) => tasks.done(t, p),
+      "task.respond": (t, p) => tasks.respond(t, p),
       "task.delete": (t, p) => tasks.remove(t, p),
       "task.clearDone": (t) => tasks.clearDone(t),
       "list.save": (t, p) => tasks.saveList(t, p),

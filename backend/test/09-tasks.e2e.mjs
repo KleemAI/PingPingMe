@@ -98,3 +98,40 @@ test("team shares a task with everyone: all see it (also as a reminder); only th
   await ok(admin, "task.delete", { id });
   assert.ok(!(await state(cust)).tasks.some((x) => x.id === id));
 });
+
+test("give a to-do to others: they accept or decline, the giver sees it", async () => {
+  const [sa, sAgent, sCust, sRes] = [await state(admin), await state(agent), await state(cust), await state(reseller)];
+  const [me, agentId, custId, resId] = [sa.me.id, sAgent.me.id, sCust.me.id, sRes.me.id];
+  assert.ok(sa.taskPeople.some((p) => p.id === custId && p.kind === "customer"), "team can pick customers");
+  assert.ok(!sCust.taskPeople.some((p) => p.kind !== "team"), "customers see only our team");
+  assert.equal((await act(cust, "task.save", { title: "x", assignees: [resId] })).status, 403, "customer → reseller not allowed");
+  assert.equal((await act(admin, "task.save", { title: "x", assignees: ["u_nope"] })).status, 404);
+
+  const ids = await ok(admin, "task.save", { title: "Call the courier", dueDate: day(1), dueTime: "11:00", tzOffset: IST, assignees: [me, agentId, custId] });
+  assert.equal(ids.length, 3);
+  const mine = (await state(admin)).tasks.find((t) => t.id === ids[0]);
+  assert.equal(mine.status, "accepted", "own copy needs no OK");
+  const theirs = (await state(agent)).tasks.find((t) => t.title === "Call the courier");
+  assert.equal(theirs.status, "pending");
+  assert.equal(theirs.assignedByName, sa.me.name);
+  assert.equal((await act(agent, "task.done", { id: theirs.id })).status, 409, "accept first");
+  assert.equal((await act(cust, "task.respond", { id: theirs.id })).status, 404, "not yours");
+
+  await ok(agent, "task.respond", { id: theirs.id, accept: true });
+  await ok(agent, "task.done", { id: theirs.id });
+  const custCopy = (await state(cust)).tasks.find((t) => t.title === "Call the courier");
+  await ok(cust, "task.respond", { id: custCopy.id, accept: false });
+  assert.ok(!(await state(cust)).tasks.some((t) => t.id === custCopy.id), "declined ones leave the list");
+
+  const given = (await state(admin)).assignedTasks;
+  const a = given.find((t) => t.id === theirs.id);
+  assert.equal(a.status, "accepted");
+  assert.ok(a.done && a.lastDoneAt, "giver sees it's done");
+  assert.equal(given.find((t) => t.id === custCopy.id).status, "declined");
+
+  // a customer can give one to our team; the giver can take it back
+  const [cid] = await ok(cust, "task.save", { title: "Send my invoice", assignees: [agentId] });
+  assert.equal((await state(agent)).tasks.find((t) => t.id === cid).status, "pending");
+  await ok(cust, "task.delete", { id: cid });
+  assert.ok(!(await state(agent)).tasks.some((t) => t.id === cid));
+});

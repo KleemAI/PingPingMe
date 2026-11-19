@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { Alert, Platform, Pressable, View } from "react-native";
+import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { REPEAT_LABEL, UNITS, repeatText, type Repeat, type RepeatUnit } from "@/lib/recurrence";
 import { localDate, timeText, tz } from "@/lib/tasks";
-import { Button, Input, Select, Sheet, T } from "@/components/ui";
+import { Button, Input, SearchBar, Select, Sheet, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
+import type { TaskPerson } from "@/lib/types";
 import { DateTimeField } from "@/components/DateTimeField";
 
 const Label = ({ children }: { children: React.ReactNode }) => { const { c } = useTheme(); return <T weight="700" size={15} color={c.accentStrong}>{children}</T>; };
@@ -32,8 +33,17 @@ export default function TaskEdit() {
   }));
   const [newList, setNewList] = useState<string | null>(null);
   const [custom, setCustom] = useState(false);
+  const [to, setTo] = useState<string[]>(() => (state ? [state.me.id] : [])); // assign to (new tasks): me and/or others
+  const [picking, setPicking] = useState(false);
+  const [who, setWho] = useState("");
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   if (!state) return null;
+  const me = state.me.id;
+  const people = state.taskPeople ?? [];
+  const forMe = !existing ? to.includes(me) : true;
+  const others = to.filter((x) => x !== me);
+  const nameOf = (uid: string) => (uid === me ? "Me" : people.find((p) => p.id === uid)?.name ?? "Someone");
+  const toggleTo = (uid: string) => setTo((x) => (x.includes(uid) ? x.filter((y) => y !== uid) : [...x, uid]));
   const readOnly = !!existing && existing.ownerId !== state.me.id && state.me.role !== "admin";
 
   const notification = !f.dueDate
@@ -44,11 +54,14 @@ export default function TaskEdit() {
 
   const save = async () => {
     if (!f.title.trim()) return Alert.alert("What is to be done?", "Write the task first.");
+    if (!existing && !to.length) return Alert.alert("Assign to", "Pick yourself or at least one person.");
+    const giving = !existing && others.length > 0;
     await act("task.save", {
+      ...(giving ? { assignees: to } : {}),
       id: existing?.id, title: f.title.trim(), note: f.note.trim() || undefined, dueDate: f.dueDate ?? undefined, dueTime: f.dueDate ? f.dueTime ?? undefined : undefined,
       repeat: f.dueDate ? f.repeat : "none", repeatEvery: Number(f.repeatEvery) || 1, repeatUnit: f.repeatUnit,
       listId: f.audience === "everyone" ? undefined : f.listId || undefined, audience: f.audience, tzOffset: tz(),
-    }, existing ? "Task saved" : f.audience === "everyone" ? "Shared with everyone" : "Task added");
+    }, existing ? "Task saved" : giving ? `Sent to ${others.length === 1 ? nameOf(others[0]) : `${others.length} people`} — it starts once they accept` : "Task added");
     router.back();
   };
   const remove = () => {
@@ -113,7 +126,28 @@ export default function TaskEdit() {
 
         {existing && existing.audience === "everyone" && existing.ownerId !== state.me.id && <T muted size={13}>Shared with everyone by {existing.ownerName}.</T>}
 
-        {f.audience === "me" && !readOnly && (
+        {!existing && (
+          <View style={{ gap: 6 }}>
+            <Label>Assign to</Label>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+              {to.map((uid) => (
+                <Pressable key={uid} onPress={() => toggleTo(uid)} accessibilityLabel={`Remove ${nameOf(uid)}`}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: c.accentSoft, borderRadius: 999, paddingLeft: 12, paddingRight: 8, paddingVertical: 6 }}>
+                  <T size={13.5} weight="600" color={c.accentStrong}>{nameOf(uid)}</T>
+                  <Ionicons name="close" size={14} color={c.accentStrong} />
+                </Pressable>
+              ))}
+              <Pressable onPress={() => setPicking(true)} style={{ flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: c.borderStrong, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
+                <Ionicons name="person-add-outline" size={15} color={c.text} />
+                <T size={13.5}>{people.length ? "Choose people" : "Me"}</T>
+              </Pressable>
+            </View>
+            {others.length > 0 && <T muted size={12.5}>They get a notification and must accept it first. You'll be told when they accept, decline or finish it.</T>}
+          </View>
+        )}
+        {existing?.assignedBy && <T muted size={13}>Given to you by {existing.assignedByName}.</T>}
+
+        {f.audience === "me" && !readOnly && forMe && (
           <View style={{ gap: 4 }}>
             <Label>Add to List</Label>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -127,6 +161,27 @@ export default function TaskEdit() {
         {!readOnly && <Button title={existing ? "Save" : "Add task"} icon="checkmark" onPress={save} />}
         {existing && !readOnly && <Button variant="ghost" icon="trash-outline" title="Delete task" onPress={remove} />}
       </ScrollPad>
+
+      <Sheet open={picking} onClose={() => setPicking(false)} title="Assign to">
+        <SearchBar value={who} onChange={setWho} placeholder="Search people" />
+        {state.scope !== "team" && <T muted size={12.5}>You can give a to-do to our team.</T>}
+        <View style={{ maxHeight: 360 }}>
+          <ScrollView keyboardShouldPersistTaps="handled">
+            {[{ id: me, name: "Me", kind: "team" } as TaskPerson, ...people]
+              .filter((p) => !who.trim() || p.name.toLowerCase().includes(who.trim().toLowerCase()))
+              .slice(0, 200)
+              .map((p) => (
+                <Pressable key={p.id} onPress={() => toggleTo(p.id)} accessibilityRole="checkbox" accessibilityState={{ checked: to.includes(p.id) }}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 }}>
+                  <Ionicons name={to.includes(p.id) ? "checkbox" : "square-outline"} size={22} color={c.accentStrong} />
+                  <T style={{ flex: 1 }}>{p.name}</T>
+                  {p.id !== me && <T muted size={12}>{p.kind === "team" ? "Team" : p.kind === "reseller" ? "Reseller" : "Customer"}</T>}
+                </Pressable>
+              ))}
+          </ScrollView>
+        </View>
+        <Button title={`Done (${to.length})`} onPress={() => setPicking(false)} />
+      </Sheet>
 
       <Sheet open={newList !== null} onClose={() => setNewList(null)} title="New List">
         <Input value={newList ?? ""} onChangeText={setNewList} placeholder="Enter List Name" maxLength={60} autoFocus />

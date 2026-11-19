@@ -98,7 +98,7 @@ export function useReminderNotifications(broadcasts: Broadcast[] | undefined, si
   const last = useRef("");
   const sig = signedIn
     ? [(broadcasts ?? []).map((b) => `${b.id}:${b.dueAt}:${b.title}:${b.message ?? ""}`).join("|"),
-      (tasks ?? []).map((t) => `${t.id}:${t.done}:${t.dueDate}:${t.dueTime}:${t.repeat}:${t.repeatEvery}:${t.repeatUnit}:${t.title}:${t.note ?? ""}`).join("|"),
+      (tasks ?? []).map((t) => `${t.id}:${t.status}:${t.done}:${t.dueDate}:${t.dueTime}:${t.repeat}:${t.repeatEvery}:${t.repeatUnit}:${t.title}:${t.note ?? ""}`).join("|"),
       new Date().toDateString()].join("#")
     : "signed-out";
   useEffect(() => {

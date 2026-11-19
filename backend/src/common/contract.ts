@@ -341,12 +341,19 @@ export type Task = {
   repeatEvery: number;
   repeatUnit: "day" | "week" | "month" | "year";
   anchorDay?: number; // day of month a monthly / yearly series started on
+  assignedBy?: string; // given by someone else (user id)…
+  assignedByName?: string;
+  status: "pending" | "accepted" | "declined"; // …who the owner accepts or declines; own tasks are "accepted"
+  respondedAt?: number;
+  lastDoneAt?: number; // last time it was marked done (also for repeating ones)
   done: boolean;
   doneAt?: number;
   createdAt: number;
   updatedAt: number;
 };
 export type TaskList = { id: string; name: string; createdAt: number };
+/** Someone you can give a to-do to (team: anyone; resellers and customers: our team). */
+export type TaskPerson = { id: string; name: string; kind: "team" | "reseller" | "customer" };
 
 /** A reminder for everyone — phones show it as a notification at `dueAt`. */
 export type Broadcast = { id: string; title: string; message?: string; dueAt: number; createdBy: string; createdByName: string; createdAt: number };
@@ -358,6 +365,8 @@ export type TeamState = {
   broadcasts: Broadcast[];
   tasks: Task[]; // own tasks + tasks the team shared with everyone
   taskLists: TaskList[];
+  assignedTasks?: Task[]; // to-dos you gave to others (with their status)
+  taskPeople?: TaskPerson[]; // who you can give a to-do to
 };
 
 export type ResellerState = {
@@ -374,6 +383,8 @@ export type ResellerState = {
   broadcasts: Broadcast[]; // reminders for everyone
   tasks: Task[]; // own tasks + tasks the team shared with everyone
   taskLists: TaskList[];
+  assignedTasks?: Task[]; // to-dos you gave to others (with their status)
+  taskPeople?: TaskPerson[]; // who you can give a to-do to
   version: number;
 };
 
@@ -398,6 +409,8 @@ export type CustomerState = {
   broadcasts: Broadcast[]; // reminders for everyone
   tasks: Task[]; // own tasks + tasks the team shared with everyone
   taskLists: TaskList[];
+  assignedTasks?: Task[]; // to-dos you gave to others (with their status)
+  taskPeople?: TaskPerson[]; // who you can give a to-do to
   version: number;
 };
 

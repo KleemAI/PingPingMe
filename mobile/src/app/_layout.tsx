@@ -4,6 +4,7 @@ import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StoreProvider, useStore } from "@/lib/store";
 import { useReminderNotifications } from "@/lib/reminders";
+import { useTaskEvents } from "@/lib/taskEvents";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { Toasts } from "@/components/ui";
 
@@ -12,6 +13,8 @@ function Root() {
   const { state, token } = useStore();
   // reminders for everyone → notifications on this phone at their time
   useReminderNotifications(state?.broadcasts, !!token, state?.tasks);
+  // to-dos given to / by you: new, accepted, declined, finished
+  useTaskEvents(token ? state?.me.id : undefined, state?.tasks, state?.assignedTasks);
   return (
     <View style={{ flex: 1, backgroundColor: c.screen }}>
       <StatusBar style={dark ? "light" : "dark"} />

@@ -28,6 +28,14 @@ export class TaskEntity {
   @Column({ name: "repeat_unit", type: "varchar", length: 5, default: "day" }) repeatUnit: string;
   /** day of month the repeating series started on (monthly / yearly keep it, e.g. the 31st → month end) */
   @Column({ name: "anchor_day", type: "smallint", nullable: true }) anchorDay: number | null;
+  /** given by someone else: who gave it (the owner must accept it first) */
+  @Index() @Column({ name: "assigned_by", type: "varchar", length: 40, nullable: true }) assignedBy: string | null;
+  @Column({ name: "assigned_by_name", type: "varchar", length: 200, nullable: true }) assignedByName: string | null;
+  /** pending | accepted | declined — own tasks are "accepted" */
+  @Column({ type: "varchar", length: 10, default: "accepted" }) status: string;
+  @Column({ name: "responded_at", ...TS_NULL }) respondedAt: number | null;
+  /** last time it was marked done (repeating tasks move on instead of closing) — tells the giver */
+  @Column({ name: "last_done_at", ...TS_NULL }) lastDoneAt: number | null;
   @Index() @Column({ default: false }) done: boolean;
   @Column({ name: "done_at", ...TS_NULL }) doneAt: number | null;
   @Column({ name: "created_at", ...TS }) createdAt: number;
