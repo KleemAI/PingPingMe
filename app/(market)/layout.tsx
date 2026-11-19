@@ -6,6 +6,7 @@ import { logout, StoreProvider, useStore } from "@/lib/client/store";
 import TeamShell, { useDark } from "@/components/TeamShell";
 import CustomerShell from "@/components/CustomerShell";
 import { Avatar } from "@/components/ui";
+import { ReminderAlerts, RemindersButton } from "@/components/Reminders";
 
 /** Slim top bar for customers and resellers on the P2P market (no side menu). */
 function MarketShell({ children }: { children: React.ReactNode }) {
@@ -31,11 +32,13 @@ function MarketShell({ children }: { children: React.ReactNode }) {
               : <span className="hidden items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-[12px] font-semibold text-amber-700 dark:text-amber-300 sm:flex"><ShieldAlert size={14} /> Not verified</span>)}
             <Avatar name={me.name} size={32} />
             <span className="hidden max-w-[160px] truncate text-[13.5px] font-medium sm:inline">{me.name}</span>
+            <RemindersButton />
             <button onClick={toggle} title="Theme" aria-label="Toggle theme" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
             <button onClick={logout} title="Sign out" aria-label="Sign out" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><LogOut size={17} /></button>
           </div>
         </div>
       </header>
+      <ReminderAlerts />
       <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
     </div>
   );

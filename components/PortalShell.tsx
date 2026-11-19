@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { ClipboardList, Package, LogOut, Moon, Sun, Loader2, Store, ArrowLeftRight, ShoppingBag } from "lucide-react";
 import { logout, useReseller } from "@/lib/client/store";
 import { useDark } from "./TeamShell";
+import { ReminderAlerts, RemindersButton } from "./Reminders";
 
 export default function PortalShell({ children }: { children: React.ReactNode }) {
   const { rs, act } = useReseller();
@@ -42,7 +43,8 @@ export default function PortalShell({ children }: { children: React.ReactNode })
               className="hidden rounded-lg border border-[var(--border-strong)] bg-[var(--input)] px-2 py-1 text-[12.5px] md:block" title="Your availability">
               <option value="available">🟢 Available</option><option value="busy">🟡 Busy</option><option value="unavailable">⚪ Unavailable</option>
             </select>
-            <button onClick={toggle} className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
+            <RemindersButton />
+            <button onClick={toggle} title="Theme" aria-label="Toggle theme" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
             <button onClick={logout} title="Sign out" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><LogOut size={17} /></button>
           </div>
         </div>
@@ -54,6 +56,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
           ))}
         </nav>
       </header>
+      <ReminderAlerts />
       <main className="mx-auto w-full max-w-6xl flex-1">{children}</main>
     </div>
   );
