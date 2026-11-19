@@ -11,6 +11,7 @@ import { logout, useTeam } from "@/lib/client/store";
 import { overview, relative } from "@/lib/format";
 import { Avatar } from "./ui";
 import { ReminderAlerts, RemindersButton } from "./Reminders";
+import { TodoAlerts, TodoButton } from "./Todo";
 
 export function useDark() {
   const [dark, setDark] = useState(false);
@@ -108,6 +109,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
             <div className="truncate text-[13.5px] font-medium">{team.me.name}</div>
             <div className="text-[11.5px] capitalize text-[var(--muted)]">{team.me.role === "admin" ? "Owner / admin" : "Operations agent"}</div>
           </div>
+          <TodoButton className="p-1.5" />
           <RemindersButton className="p-1.5" />
           <button onClick={toggle} title="Theme" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
           <button onClick={logout} title="Sign out" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]"><LogOut size={17} /></button>
@@ -162,6 +164,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <ReminderAlerts />
+        <TodoAlerts />
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>

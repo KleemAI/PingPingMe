@@ -9,6 +9,7 @@ import type { CustomerState } from "@/lib/types";
 import { useDark } from "./TeamShell";
 import { Avatar } from "./ui";
 import { ReminderAlerts, RemindersButton } from "./Reminders";
+import { TodoAlerts, TodoButton } from "./Todo";
 
 /** Customer area: left side menu (drawer on phones) with Products, Chat, My requests and the P2P market. */
 export default function CustomerShell({ children }: { children: React.ReactNode }) {
@@ -62,6 +63,7 @@ export default function CustomerShell({ children }: { children: React.ReactNode 
             <div className="truncate text-[13.5px] font-medium">{cs.me.name}</div>
             <div className="truncate text-[11.5px] text-[var(--muted)]">{cs.me.email}</div>
           </div>
+          <TodoButton className="p-1.5" />
           <RemindersButton className="p-1.5" />
           <button onClick={toggle} title="Theme" aria-label="Toggle theme" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
           <button onClick={logout} title="Sign out" aria-label="Sign out" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]"><LogOut size={17} /></button>
@@ -84,6 +86,7 @@ export default function CustomerShell({ children }: { children: React.ReactNode 
           <span className="truncate text-sm font-medium">{nav.find((n) => active(n.href))?.label ?? cs.business.name}</span>
         </header>
         <ReminderAlerts />
+        <TodoAlerts />
         <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>

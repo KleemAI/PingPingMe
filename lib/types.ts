@@ -279,11 +279,45 @@ export type MaskedContact = { id: string; name: string; city?: string };
 /** A reminder for everyone — phones show it as a notification at `dueAt`. */
 export type Broadcast = { id: string; title: string; message?: string; dueAt: number; createdBy: string; createdByName: string; createdAt: number };
 
+/** A to-do (own, given by someone, or shared with everyone by the team). Dates are the creator's wall-clock values. */
+export type Task = {
+  id: string;
+  ownerId: string;
+  ownerName: string;
+  audience: "me" | "everyone";
+  title: string;
+  note?: string;
+  listId?: string; // none = "Default"
+  dueDate?: string; // "YYYY-MM-DD"
+  dueTime?: string; // "HH:MM" — none = all day (day summary at 8:00)
+  tzOffset: number;
+  repeat: "none" | "daily" | "weekdays" | "weekly" | "monthly" | "yearly" | "custom";
+  repeatEvery: number;
+  repeatUnit: "day" | "week" | "month" | "year";
+  anchorDay?: number;
+  assignedBy?: string; // given by someone else…
+  assignedByName?: string;
+  status?: "pending" | "accepted" | "declined"; // …who accepts or declines it (own tasks: accepted)
+  respondedAt?: number;
+  lastDoneAt?: number;
+  done: boolean;
+  doneAt?: number;
+  createdAt: number;
+  updatedAt: number;
+};
+export type TaskList = { id: string; name: string; createdAt: number };
+/** Someone you can give a to-do to (team: anyone; resellers and customers: our team). */
+export type TaskPerson = { id: string; name: string; kind: "team" | "reseller" | "customer" };
+
 export type TeamState = {
   scope: "team";
   me: User;
   db: Omit<DB, "processedEvents" | "counters" | "files">;
   broadcasts?: Broadcast[]; // reminders for everyone (NestJS backend)
+  tasks?: Task[]; // own to-dos (+ ones given to you, + shared with everyone)
+  taskLists?: TaskList[];
+  assignedTasks?: Task[]; // to-dos you gave to others
+  taskPeople?: TaskPerson[]; // who you can give a to-do to
 };
 
 export type ResellerState = {
@@ -298,6 +332,10 @@ export type ResellerState = {
   categories: string[];
   products: ResellerProduct[]; // their own catalogue proposals
   broadcasts?: Broadcast[]; // reminders for everyone
+  tasks?: Task[]; // own to-dos (+ ones given to you, + shared with everyone)
+  taskLists?: TaskList[];
+  assignedTasks?: Task[]; // to-dos you gave to others
+  taskPeople?: TaskPerson[]; // who you can give a to-do to
   version: number;
 };
 
@@ -342,6 +380,10 @@ export type CustomerState = {
   requests: CustomerRequest[];
   business: { name: string; phone: string; email: string; hours: string };
   broadcasts?: Broadcast[]; // reminders for everyone
+  tasks?: Task[]; // own to-dos (+ ones given to you, + shared with everyone)
+  taskLists?: TaskList[];
+  assignedTasks?: Task[]; // to-dos you gave to others
+  taskPeople?: TaskPerson[]; // who you can give a to-do to
   version: number;
 };
 
