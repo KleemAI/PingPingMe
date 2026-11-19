@@ -62,6 +62,7 @@ if not exist node_modules\expo-audio set NEED_INSTALL=1
 if not exist node_modules\expo-asset set NEED_INSTALL=1
 if not exist node_modules\expo-notifications set NEED_INSTALL=1
 if not exist node_modules\@react-native-community\datetimepicker set NEED_INSTALL=1
+if not exist node_modules\expo-image-manipulator set NEED_INSTALL=1
 if defined NEED_INSTALL (
   echo  Installing app packages, please wait...
   call npm install

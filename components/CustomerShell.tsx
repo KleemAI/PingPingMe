@@ -10,6 +10,7 @@ import { useDark } from "./TeamShell";
 import { Avatar } from "./ui";
 import { ReminderAlerts, RemindersButton } from "./Reminders";
 import { TodoAlerts, TodoButton } from "./Todo";
+import { StorageMeter } from "./Storage";
 
 /** Customer area: left side menu (drawer on phones) with Products, Chat, My requests and the P2P market. */
 export default function CustomerShell({ children }: { children: React.ReactNode }) {
@@ -57,6 +58,7 @@ export default function CustomerShell({ children }: { children: React.ReactNode 
           : <Link href="/p2p/profile" className="flex items-start gap-2 rounded-lg bg-amber-500/15 px-3 py-2 text-[12.5px] text-amber-800 dark:text-amber-200"><ShieldAlert size={16} className="mt-0.5 shrink-0" /><span><strong>Not verified.</strong> You can buy; selling on P2P opens once our team verifies you.</span></Link>}
       </div>
       <div className="border-t border-[var(--border)] p-3">
+        <StorageMeter />
         <div className="flex items-center gap-2.5">
           <Avatar name={cs.me.name} size={34} />
           <div className="min-w-0 flex-1">

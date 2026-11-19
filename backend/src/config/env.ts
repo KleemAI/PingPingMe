@@ -24,6 +24,11 @@ export const env = {
   /** Set COOKIE_SECURE=true when the web app is served over HTTPS. */
   get cookieSecure() { return bool(process.env.COOKIE_SECURE, false); },
   get maxUploadBytes() { return Number(process.env.MAX_UPLOAD_MB ?? 10) * 1024 * 1024; },
+  /** videos may be bigger when they arrive — they are compressed to 720p before they are stored */
+  get maxVideoBytes() { return Math.max(env.maxUploadBytes, Number(process.env.MAX_VIDEO_MB ?? 100) * 1024 * 1024); },
+  /** total storage per user (all their uploads). Team members: TEAM_STORAGE_QUOTA_GB (0 = no limit). */
+  get storageQuotaBytes() { return Number(process.env.STORAGE_QUOTA_GB ?? 20) * 1024 ** 3; },
+  get teamStorageQuotaBytes() { return Number(process.env.TEAM_STORAGE_QUOTA_GB ?? 0) * 1024 ** 3; },
   /** Outgoing email (SMTP). Not set = codes are written to the backend log instead of being emailed. */
   get smtp() {
     const port = Number(process.env.SMTP_PORT ?? 587);

@@ -14,9 +14,15 @@ export class FilesController {
   /** multipart/form-data with a `file` field → `{ id, name, size, mime }`. Pass the id in `attachments: [id]` when sending. */
   @Post() @HttpCode(200)
   @UseGuards(UploadLimitGuard) // a few at a time + a daily allowance per user
-  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: env.maxUploadBytes + 1 } }))
+  @UseInterceptors(FileInterceptor("file", { limits: { fileSize: env.maxVideoBytes + 1 } }))
   upload(@CurrentUser() u: User, @UploadedFile() file?: Express.Multer.File) {
     return this.files.upload(u, file);
+  }
+
+  /** `{ used, quota, files }` — how much of your storage your uploads take (quota 0 = no limit). */
+  @Get("usage")
+  usage(@CurrentUser() u: User) {
+    return this.files.usage(u);
   }
 
   /** Permission-checked download. Accepts `?access_token=` so it works in links. */

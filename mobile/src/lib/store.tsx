@@ -5,6 +5,7 @@ import * as Sharing from "expo-sharing";
 import type { AppState as ServerState, Attachment, CustomerState, ResellerState, TeamState } from "./types";
 import { io, type Socket } from "socket.io-client";
 import { storage } from "./storage";
+import { shrinkPhoto } from "./media";
 
 /** A sign-up code was emailed. `devCode` only while the server has no email set up (testing). */
 export type CodeSent = { email: string; retryIn: number; devCode?: string };
@@ -47,7 +48,7 @@ type Ctx = {
   refresh: () => Promise<void>;
   act: (type: string, payload?: Record<string, unknown>, okText?: string) => Promise<unknown>;
   toast: (text: string, kind?: Toast["kind"]) => void;
-  upload: (file: { uri: string; name: string; mimeType?: string; file?: Blob }) => Promise<Attachment>;
+  upload: (file: { uri: string; name: string; mimeType?: string; size?: number; file?: Blob }) => Promise<Attachment>;
   openFile: (a: Attachment) => Promise<void>;
 };
 
@@ -238,7 +239,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return data.result;
   }, [call, refresh, toast]);
 
-  const upload = useCallback(async (f: { uri: string; name: string; mimeType?: string; file?: Blob }) => {
+  const upload = useCallback(async (picked: { uri: string; name: string; mimeType?: string; size?: number; file?: Blob }) => {
+    const f = await shrinkPhoto(picked); // photos: 1080 px JPEG before they leave the phone
     const fd = new FormData();
     if (Platform.OS === "web" && f.file) fd.append("file", f.file, f.name);
     else fd.append("file", { uri: f.uri, name: f.name, type: f.mimeType ?? "application/octet-stream" } as unknown as Blob);

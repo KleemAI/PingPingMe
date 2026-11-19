@@ -9,6 +9,9 @@ import { env } from "../config/env";
 import { FileEntity } from "../database/entities";
 import { UnitOfWork, type Tx } from "../database/unit-of-work.service";
 import { overAllowance, uploadAllowance } from "../security/upload-limit.guard";
+import { compressVideo, isVideo } from "./media";
+
+const gb = (b: number) => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : `${Math.round(b / 1024 ** 2)} MB`);
 
 export const ALLOWED_MIME = [
   "image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "text/plain", "text/csv",
@@ -39,17 +42,36 @@ export class FilesService {
 
   async upload(user: User, file?: Express.Multer.File): Promise<Attachment> {
     if (!file) throw badRequest("No file");
-    if (file.size > env.maxUploadBytes) throw new AppError(413, `File is larger than ${env.maxUploadBytes / 1024 / 1024} MB`);
+    const limit = isVideo(file.mimetype) ? env.maxVideoBytes : env.maxUploadBytes;
+    if (file.size > limit) throw new AppError(413, `${isVideo(file.mimetype) ? "Video" : "File"} is larger than ${Math.round(limit / 1024 / 1024)} MB`);
     if (!ALLOWED_MIME.includes(file.mimetype)) throw new AppError(415, `File type not allowed (${file.mimetype || "unknown"})`);
     if (!looksLike(file.mimetype, file.buffer)) throw new AppError(415, "File content does not match its type");
-    const over = overAllowance(await uploadAllowance(this.uow, user), file.size); // today's MB, now that the size is known
+    let data = file.buffer;
+    let mime = file.mimetype;
+    let name = (file.originalname || "file").replace(/[^\w.\- ]+/g, "_").slice(0, 120);
+    if (isVideo(mime)) {
+      // videos: 720p H.264 (photos are already made small on the phone / in the browser)
+      const v = await compressVideo(data, name);
+      if (v.compressed) ({ data, mime, name } = v);
+    }
+    const over = overAllowance(await uploadAllowance(this.uow, user), data.length); // today's MB, now that the size is known
     if (over) throw over;
+    const use = await this.usage(user);
+    if (use.quota && use.used + data.length > use.quota) {
+      throw new AppError(413, `Your storage is full — ${gb(use.used)} of ${gb(use.quota)} used. Delete old files or ask our team for more space.`);
+    }
     const id = newId("f");
-    const name = (file.originalname || "file").replace(/[^\w.\- ]+/g, "_").slice(0, 120);
     await this.uow.write(user, async ({ em }) => {
-      await em.insert(FileEntity, { id, name, size: file.size, mime: file.mimetype, data: file.buffer, uploadedBy: user.id, at: Date.now() });
+      await em.insert(FileEntity, { id, name, size: data.length, mime, data, uploadedBy: user.id, at: Date.now() });
     });
-    return { id, name, size: file.size, mime: file.mimetype };
+    return { id, name, size: data.length, mime };
+  }
+
+  /** Storage used by everything a user uploaded, and their quota (0 = no limit). */
+  async usage(user: User) {
+    const [row] = await this.uow.manager.query(`SELECT count(*)::int AS files, coalesce(sum(size), 0)::bigint AS used FROM files WHERE uploaded_by = $1`, [user.id]);
+    const quota = isTeam(user) ? env.teamStorageQuotaBytes : env.storageQuotaBytes;
+    return { used: Number(row?.used ?? 0), files: Number(row?.files ?? 0), quota };
   }
 
   /**

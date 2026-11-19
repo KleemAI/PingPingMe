@@ -6,6 +6,7 @@ import { useTheme } from "@/lib/theme";
 import { caseOverdue } from "@/lib/format";
 import { AppearanceCard, Avatar, Badge, Card, Row, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
+import { StorageCard } from "@/components/StorageCard";
 
 export default function More() {
   const { c } = useTheme();
@@ -45,6 +46,7 @@ export default function More() {
         <Row left={icon("alarm", "#2563eb")} title="Reminders for everyone" subtitle={`${(state?.broadcasts ?? []).filter((b) => b.dueAt > now).length} upcoming · rings on every phone`} right={chev} onPress={() => router.push("/reminders")} />
         <Row left={icon("swap-horizontal", "#00a884")} title="P2P market" subtitle="Buy & sell between users · appeals" right={chev} onPress={() => router.push("/p2p")} />
       </Card>
+      <StorageCard />
       <AppearanceCard />
       <Card title="Saved replies" icon="flash-outline">
         {db.savedReplies.map((s) => <Row key={s.id} title={`/${s.shortcut}`} subtitle={s.text} />)}

@@ -5,6 +5,7 @@ import { useCustomer } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { AppearanceCard, Avatar, Button, Card, Row, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
+import { StorageCard } from "@/components/StorageCard";
 
 /** Customer account: who you are, verification, how to reach us, appearance and sign out. */
 export default function Account() {
@@ -41,6 +42,7 @@ export default function Account() {
         {!!b.hours && <Row title="Hours" subtitle={b.hours} />}
         <Row title="Chat with us" subtitle="Usually the quickest way" onPress={() => router.push("/shop/chat")} />
       </Card>
+      <StorageCard />
       <AppearanceCard />
       <Card title="Connection" icon="cloud-outline"><Row title="Server" subtitle={server || "same origin"} /></Card>
       <Button variant="outline" icon="log-out-outline" title="Sign out" onPress={() => {

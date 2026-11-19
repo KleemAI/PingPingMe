@@ -4,6 +4,7 @@ import { useReseller } from "@/lib/store";
 import type { Availability } from "@/lib/types";
 import { AppearanceCard, Avatar, Button, Card, Pill, Row, Select, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
+import { StorageCard } from "@/components/StorageCard";
 
 export default function Account() {
   const { rs, act, logout, server } = useReseller();
@@ -35,6 +36,7 @@ export default function Account() {
       <Card title="Catalogue" icon="bag-handle-outline">
         <Row title="My products" subtitle={`${rs.products.filter((p) => p.status === "approved").length} live · ${rs.products.filter((p) => p.status === "pending").length} waiting for review`} onPress={() => router.push("/portal/products")} />
       </Card>
+      <StorageCard />
       <AppearanceCard />
       <Card title="Your coverage" icon="map-outline">
         <Row title="Categories" subtitle={r.categories.join(", ")} />

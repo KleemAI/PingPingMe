@@ -12,6 +12,7 @@ import { overview, relative } from "@/lib/format";
 import { Avatar } from "./ui";
 import { ReminderAlerts, RemindersButton } from "./Reminders";
 import { TodoAlerts, TodoButton } from "./Todo";
+import { StorageMeter } from "./Storage";
 
 export function useDark() {
   const [dark, setDark] = useState(false);
@@ -103,6 +104,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
         ))}
       </div>
       <div className="border-t border-[var(--border)] p-3">
+        <StorageMeter />
         <div className="flex items-center gap-2.5">
           <Avatar name={team.me.name} size={34} />
           <div className="min-w-0 flex-1">

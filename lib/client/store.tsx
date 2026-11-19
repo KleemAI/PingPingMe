@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import type { AppState, ResellerState, TeamState, Attachment } from "../types";
+import { shrinkPhoto } from "./media";
 
 /** NestJS backend address for Socket.IO (set from API_URL in next.config.mjs). Empty = built-in server, polling only. */
 const REALTIME_URL = process.env.NEXT_PUBLIC_REALTIME_URL ?? "";
@@ -115,7 +116,8 @@ export function StoreProvider({ children, expect }: { children: React.ReactNode;
     [refresh, toast]
   );
 
-  const upload = useCallback(async (f: File) => {
+  const upload = useCallback(async (picked: File) => {
+    const f = await shrinkPhoto(picked); // photos: 1080 px JPEG before upload (videos: 720p on the server)
     const fd = new FormData();
     fd.append("file", f);
     const res = await fetch("/api/upload", { method: "POST", body: fd });
