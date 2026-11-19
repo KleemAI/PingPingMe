@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { SecurityModule } from "./security/security.module";
 import { APP_FILTER } from "@nestjs/core";
 import { AllExceptionsFilter } from "./common/all-exceptions.filter";
 import { DatabaseModule } from "./database/database.module";
@@ -48,6 +49,7 @@ import { OpsController } from "./ops/ops.controller";
 @Module({
   imports: [
     DatabaseModule,
+    SecurityModule,
     AuthModule,
     AuditModule,
     FilesModule,

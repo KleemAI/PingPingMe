@@ -7,6 +7,9 @@ import { ChangeBus } from "../database/change-bus";
 import { UnitOfWork } from "../database/unit-of-work.service";
 import { env } from "../config/env";
 import { tokenFrom } from "../auth/session-cookie";
+import { clientIp } from "../security/client-ip";
+import { LIMITS } from "../security/limits";
+import { RateLimiter } from "../security/rate-limiter.service";
 
 /**
  * Real-time updates over Socket.IO (same port as the API).
@@ -30,7 +33,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   private pending?: NodeJS.Timeout;
   private latest = 0;
 
-  constructor(private readonly auth: AuthService, private readonly bus: ChangeBus, private readonly uow: UnitOfWork) {}
+  constructor(private readonly auth: AuthService, private readonly bus: ChangeBus, private readonly uow: UnitOfWork, private readonly limiter: RateLimiter) {}
 
   onModuleInit() {
     // Coalesce bursts of writes into one push every ~150 ms.
@@ -50,6 +53,11 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   async handleConnection(socket: Socket) {
+    if (this.limiter.hit(`ws:${clientIp(socket.request)}`, LIMITS.socketPerIp)) {
+      socket.emit("busy", { message: "Too many connections — try again in a minute" }); // not auth_error: that would sign the user out
+      socket.disconnect(true);
+      return;
+    }
     try {
       // mobile/API: auth.token or Bearer header · web app: the httpOnly session cookie
       const raw = (socket.handshake.auth?.token as string | undefined) || tokenFrom({ headers: socket.handshake.headers });

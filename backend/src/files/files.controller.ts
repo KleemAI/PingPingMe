@@ -1,4 +1,5 @@
-import { Controller, Get, HttpCode, Param, Post, Res, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { Controller, Get, HttpCode, Param, Post, Res, UploadedFile, UseGuards, UseInterceptors } from "@nestjs/common";
+import { UploadLimitGuard } from "../security/upload-limit.guard";
 import { FileInterceptor } from "@nestjs/platform-express";
 import type { Response } from "express";
 import type { User } from "../common/contract";
@@ -12,6 +13,7 @@ export class FilesController {
 
   /** multipart/form-data with a `file` field → `{ id, name, size, mime }`. Pass the id in `attachments: [id]` when sending. */
   @Post() @HttpCode(200)
+  @UseGuards(UploadLimitGuard) // a few at a time + a daily allowance per user
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: env.maxUploadBytes + 1 } }))
   upload(@CurrentUser() u: User, @UploadedFile() file?: Express.Multer.File) {
     return this.files.upload(u, file);

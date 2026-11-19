@@ -4,6 +4,8 @@ import { AppError } from "../common/errors";
 import type { Payload } from "../common/util";
 import { isTeam } from "../auth/decorators";
 import { UnitOfWork, type Tx } from "../database/unit-of-work.service";
+import { LIMITS } from "../security/limits";
+import { RateLimiter } from "../security/rate-limiter.service";
 import { CasesService } from "../cases/cases.service";
 import { ContactsService } from "../contacts/contacts.service";
 import { ConversationsService } from "../conversations/conversations.service";
@@ -36,6 +38,7 @@ export class ActionsService {
 
   constructor(
     private readonly uow: UnitOfWork,
+    private readonly limiter: RateLimiter,
     conversations: ConversationsService,
     contacts: ContactsService,
     requests: RequestsService,
@@ -163,6 +166,8 @@ export class ActionsService {
       const exists = type in this.team || type in this.reseller || type in this.customer;
       throw new AppError(exists ? 403 : 400, exists ? "Not allowed for your role" : `Unknown action: ${type}`);
     }
+    const rule = LIMITS.userActions;
+    this.limiter.take(`act:${user.id}`, isTeam(user) ? { ...rule, limit: rule.limit * 5 } : rule, "You're doing that too fast");
     const result = await this.uow.write(user, (tx) => handler(tx, payload && typeof payload === "object" ? payload : {}));
     return result ?? null;
   }

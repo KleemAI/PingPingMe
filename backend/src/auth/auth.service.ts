@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { DISPOSABLE_DOMAINS } from "../security/limits";
 import { JwtService } from "@nestjs/jwt";
 import { UnitOfWork } from "../database/unit-of-work.service";
 import { ActivityEntity, ResellerEntity, UserEntity } from "../database/entities";
@@ -60,6 +61,8 @@ export class AuthService {
     const pw = String(password ?? "");
     if (n.length < 2 || n.length > 60 || !NAME_RE.test(n)) throw badRequest("Name can only contain letters and spaces");
     if (!EMAIL_RE.test(e) || e.length > 200) throw badRequest("Enter a valid email address");
+    const domain = e.split("@")[1] ?? "";
+    if (DISPOSABLE_DOMAINS.has(domain) || [...DISPOSABLE_DOMAINS].some((d) => domain.endsWith(`.${d}`))) throw badRequest("Please use your own email address — temporary mailboxes aren't allowed");
     if (pw.length < PASSWORD_MIN) throw badRequest(`Password must be at least ${PASSWORD_MIN} characters`);
     if (pw.length > 128) throw badRequest("Password is too long");
     const passwordHash = await hashPassword(pw);

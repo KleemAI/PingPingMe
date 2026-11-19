@@ -43,7 +43,7 @@ Demo logins (password **demo123**): `nisha@company.in` (admin) · `arjun@company
 
 ## 3. Tests
 
-With the API running (they reset the demo data first):
+With the API running with `RATE_LIMIT_SCALE=100` in `.env` (the tests make many requests from one machine; they reset the demo data first):
 
 ```bash
 npm run test:e2e
@@ -52,7 +52,7 @@ npm run test:e2e
 23 end-to-end tests cover the brief's MVP acceptance checklist: separate inboxes, reclassify without losing history,
 full enquiry → reseller → quote → approval → order → delivery flow, **reseller isolation through API calls**,
 admin-only actions, decline/reassign, mediation open/resolve/reopen, failed-send retry, duplicate webhook events,
-upload validation, Socket.IO push to team and reseller, the REST endpoints, the mobile paths, and concurrent writes.
+upload validation, abuse protection (wrong-password lock, bot / throw-away-mailbox sign-ups, daily upload allowance), Socket.IO push to team and reseller, the REST endpoints, the mobile paths, and concurrent writes.
 
 ## Architecture
 

@@ -25,6 +25,9 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import type { NextFunction, Request, Response } from "express";
 import { AppModule } from "./app.module";
 import { env } from "./config/env";
+import { clientIp } from "./security/client-ip";
+import { LIMITS } from "./security/limits";
+import { RateLimiter } from "./security/rate-limiter.service";
 
 /**
  * The web app calls /api/v1/…; the mobile app (and older builds) call /api/…
@@ -41,6 +44,15 @@ async function bootstrap() {
   app.use((req: Request, _res: Response, next: NextFunction) => {
     for (const [re, to] of LEGACY) if (re.test(req.url)) { req.url = req.url.replace(re, to); break; }
     next();
+  });
+  // every call counts against its IP address (stops one machine flooding the API)
+  const limiter = app.get(RateLimiter);
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method === "OPTIONS" || !req.url.startsWith("/api/") || req.url.startsWith("/api/v1/health")) return next();
+    const retry = limiter.hit(`ip:${clientIp(req)}`, LIMITS.ipRequests);
+    if (!retry) return next();
+    res.setHeader("Retry-After", String(Math.ceil(retry / 1000)));
+    res.status(429).json({ error: "Too many requests from your network — please slow down and try again in a minute.", statusCode: 429 });
   });
   app.setGlobalPrefix("api/v1");
   app.useBodyParser("json", { limit: "1mb" });

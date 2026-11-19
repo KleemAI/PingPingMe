@@ -8,6 +8,7 @@ import { isTeam } from "../auth/decorators";
 import { env } from "../config/env";
 import { FileEntity } from "../database/entities";
 import { UnitOfWork, type Tx } from "../database/unit-of-work.service";
+import { overAllowance, uploadAllowance } from "../security/upload-limit.guard";
 
 export const ALLOWED_MIME = [
   "image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "text/plain", "text/csv",
@@ -41,6 +42,8 @@ export class FilesService {
     if (file.size > env.maxUploadBytes) throw new AppError(413, `File is larger than ${env.maxUploadBytes / 1024 / 1024} MB`);
     if (!ALLOWED_MIME.includes(file.mimetype)) throw new AppError(415, `File type not allowed (${file.mimetype || "unknown"})`);
     if (!looksLike(file.mimetype, file.buffer)) throw new AppError(415, "File content does not match its type");
+    const over = overAllowance(await uploadAllowance(this.uow, user), file.size); // today's MB, now that the size is known
+    if (over) throw over;
     const id = newId("f");
     const name = (file.originalname || "file").replace(/[^\w.\- ]+/g, "_").slice(0, 120);
     await this.uow.write(user, async ({ em }) => {
