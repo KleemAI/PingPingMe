@@ -16,16 +16,16 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const localInput = (ms: number) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 
 /** ⏰ button (next to the light/dark toggle) — opens the Reminders panel; the badge counts upcoming reminders. */
-export function RemindersButton({ className = "p-2" }: { className?: string }) {
+export function RemindersButton({ className = "p-2", label }: { className?: string; label?: boolean }) {
   const { state, now } = useStore();
   const [open, setOpen] = useState(false);
   const n = broadcastsOf(state).filter((b) => b.dueAt > now).length;
   return (
     <>
       <button onClick={() => setOpen(true)} title="Reminders" aria-label={n ? `Reminders, ${n} upcoming` : "Reminders"}
-        className={`relative rounded-full text-[var(--muted)] hover:bg-[var(--hover)] ${className}`}>
-        <AlarmClock size={17} />
-        {n > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-bold leading-4 text-white">{n}</span>}
+        className={`relative flex items-center gap-1.5 text-[var(--muted)] hover:bg-[var(--hover)] ${label ? "rounded-lg text-[12.5px] font-medium" : "rounded-full"} ${className}`}>
+        <AlarmClock size={17} />{label && <span>Reminders</span>}
+        {n > 0 && <span className={`${label ? "" : "absolute -top-0.5 -right-0.5 "}min-w-[16px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-bold leading-4 text-white`}>{n}</span>}
       </button>
       {open && <RemindersPanel onClose={() => setOpen(false)} />}
     </>

@@ -63,10 +63,12 @@ export default function CustomerShell({ children }: { children: React.ReactNode 
             <div className="truncate text-[13.5px] font-medium">{cs.me.name}</div>
             <div className="truncate text-[11.5px] text-[var(--muted)]">{cs.me.email}</div>
           </div>
-          <TodoButton className="p-1.5" />
-          <RemindersButton className="p-1.5" />
-          <button onClick={toggle} title="Theme" aria-label="Toggle theme" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
           <button onClick={logout} title="Sign out" aria-label="Sign out" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]"><LogOut size={17} /></button>
+        </div>
+        <div className="mt-2 flex items-center gap-1 border-t border-[var(--border)] pt-2">
+          <TodoButton label className="px-2 py-1.5" />
+          <RemindersButton label className="px-2 py-1.5" />
+          <button onClick={toggle} title="Theme" aria-label="Toggle theme" className="ml-auto rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
         </div>
       </div>
     </nav>

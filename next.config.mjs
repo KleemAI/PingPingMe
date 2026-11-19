@@ -8,6 +8,8 @@ const API_URL = (process.env.API_URL ?? "").replace(/\/$/, "");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // hide the "N" dev badge — it sat on top of the user's avatar at the bottom of the side menu
+  devIndicators: false,
   env: {
     // where the browser opens the Socket.IO connection for live updates
     NEXT_PUBLIC_REALTIME_URL: API_URL,

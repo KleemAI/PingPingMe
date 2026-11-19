@@ -13,16 +13,16 @@ const ORDER: Section[] = ["overdue", "today", "tomorrow", "later", "nodate"];
 const todayStr = () => localDate(0);
 
 /** ☑ button (next to ⏰) — opens My To-Do; the badge counts new to-dos waiting for your OK + tasks due today / overdue. */
-export function TodoButton({ className = "p-2" }: { className?: string }) {
+export function TodoButton({ className = "p-2", label }: { className?: string; label?: boolean }) {
   const { state } = useStore();
   const [open, setOpen] = useState(false);
   const n = (state?.tasks ?? []).filter((t) => t.audience === "me" && (t.status === "pending" || (!t.done && !!t.dueDate && t.dueDate <= todayStr()))).length;
   return (
     <>
       <button onClick={() => setOpen(true)} title="My To-Do" aria-label={n ? `To-Do, ${n} due` : "To-Do"}
-        className={`relative rounded-full text-[var(--muted)] hover:bg-[var(--hover)] ${className}`}>
-        <ListTodo size={17} />
-        {n > 0 && <span className="absolute -top-0.5 -right-0.5 min-w-[16px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-bold leading-4 text-white">{n}</span>}
+        className={`relative flex items-center gap-1.5 text-[var(--muted)] hover:bg-[var(--hover)] ${label ? "rounded-lg text-[12.5px] font-medium" : "rounded-full"} ${className}`}>
+        <ListTodo size={17} />{label && <span>To-Do</span>}
+        {n > 0 && <span className={`${label ? "" : "absolute -top-0.5 -right-0.5 "}min-w-[16px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-bold leading-4 text-white`}>{n}</span>}
       </button>
       {open && <TodoPanel onClose={() => setOpen(false)} />}
     </>
