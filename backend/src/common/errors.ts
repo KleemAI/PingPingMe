@@ -2,7 +2,8 @@ import { HttpException } from "@nestjs/common";
 
 /** Business-rule error with an HTTP status. The response body is `{ error: message }`. */
 export class AppError extends HttpException {
-  constructor(status: number, message: string) {
+  /** `extra` fields are sent along with `error` (e.g. `code: "email_unverified"`). */
+  constructor(status: number, message: string, readonly extra?: Record<string, unknown>) {
     super({ error: message, statusCode: status }, status);
   }
 }

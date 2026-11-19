@@ -22,17 +22,57 @@ test("signup validates name (letters only), email and password", async () => {
   assert.equal((await post("/auth/signup", { name: "Ravi Shah", email: "bad", password: "secret123" })).status, 400, "bad email");
 });
 
-test("signup creates an unverified customer and signs them in (cookie + token)", async () => {
+test("signup emails a code; the account works only after the email is confirmed", async () => {
   const r = await post("/auth/signup", { name: "  Ravi   Shah ", email, password: "secret123" });
   assert.equal(r.status, 201);
-  assert.match(r.headers.get("set-cookie") ?? "", /bm_session=/);
-  const b = await r.json();
+  const s = await r.json();
+  assert.equal(s.needsVerification, true);
+  assert.equal(s.email, email);
+  assert.ok(!s.accessToken, "no session before the email is confirmed");
+  assert.match(s.devCode, /^\d{6}$/, "development: code returned while SMTP isn't set");
+
+  // signing in before confirming → 403 email_unverified (and a code; within a minute the same one stays valid)
+  const early = await post("/auth/login", { email, password: "secret123" });
+  assert.equal(early.status, 403);
+  const eb = await early.json();
+  assert.equal(eb.code, "email_unverified");
+  assert.equal(eb.email, email);
+
+  const wrong = String((Number(s.devCode) + 1) % 1_000_000).padStart(6, "0");
+  const w = await post("/auth/verify-email", { email, code: wrong });
+  assert.equal(w.status, 400);
+  assert.match((await w.json()).error, /Wrong code — 4 tries left/);
+  assert.equal((await post("/auth/verify-email", { email, code: "12" })).status, 400, "6 digits");
+  const resend = await (await post("/auth/resend-code", { email })).json();
+  assert.ok(resend.ok && !resend.devCode, "no new code within a minute");
+  assert.deepEqual(await (await post("/auth/resend-code", { email: "nobody@example.in" })).json(), { ok: true, retryIn: 60000 }, "same answer for unknown emails");
+
+  const v = await post("/auth/verify-email", { email, code: s.devCode });
+  assert.equal(v.status, 200);
+  assert.match(v.headers.get("set-cookie") ?? "", /bm_session=/);
+  const b = await v.json();
   assert.equal(b.role, "customer");
   assert.equal(b.user.name, "Ravi Shah", "spaces tidied");
-  assert.equal(b.user.verified, false);
+  assert.equal(b.user.verified, false, "P2P selling still needs our team");
   custToken = b.accessToken; custId = b.user.id;
+  assert.equal((await post("/auth/verify-email", { email, code: s.devCode })).status, 409, "already confirmed");
+
   const gu = await post("/auth/signup", { name: "રવિ શાહ", email: "guj." + email, password: "secret123" });
   assert.equal(gu.status, 201, "Gujarati letters are a valid name");
+});
+
+test("an unconfirmed sign-up can be taken over by whoever can read the mailbox", async () => {
+  const e2 = `squat.${Date.now()}@example.in`;
+  assert.equal((await post("/auth/signup", { name: "Squatter One", email: e2, password: "secret123" })).status, 201);
+  const again = await post("/auth/signup", { name: "Real Owner", email: e2, password: "owner-pass-1" });
+  assert.equal(again.status, 201, "not confirmed yet → can sign up again");
+  // the old code still works within the minute (no new one was sent), and the new name + password apply
+  const code = (await again.json()).devCode ?? (await (await post("/auth/login", { email: e2, password: "owner-pass-1" })).json()).devCode;
+  if (code) {
+    const v = await (await post("/auth/verify-email", { email: e2, code })).json();
+    assert.equal(v.user?.name, "Real Owner");
+  }
+  assert.equal((await post("/auth/login", { email: e2, password: "secret123" })).status, 401, "squatter's password is gone");
 });
 
 test("same email again: signup refused (409), check-email says exists, login with password works", async () => {

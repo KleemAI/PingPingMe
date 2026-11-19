@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MessagesSquare, Loader2, Moon, Sun, Eye, EyeOff, ChevronLeft } from "lucide-react";
+import { MessagesSquare, Loader2, Moon, Sun, Eye, EyeOff, ChevronLeft, MailCheck } from "lucide-react";
 import { inputCls } from "@/components/ui";
 
 const DEMO = [
@@ -19,7 +19,8 @@ const NAME_RE = /^[\p{L}\p{M}]+(?: [\p{L}\p{M}]+)*$/u;
 const PASSWORD_MIN = 8;
 const HOME: Record<string, string> = { reseller: "/portal", customer: "/c/products" };
 
-type Step = "email" | "password" | "signup";
+type Step = "email" | "password" | "signup" | "code";
+type Body = { error?: string; role?: string; exists?: boolean; code?: string; email?: string; retryIn?: number; devCode?: string };
 
 export default function Login() {
   const [step, setStep] = useState<Step>("email");
@@ -31,6 +32,16 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [dark, setDark] = useState(false);
   const nextField = useRef<HTMLInputElement>(null);
+  const [code, setCode] = useState("");
+  const [sent, setSent] = useState<{ at: number; retryIn: number; devCode?: string } | null>(null);
+  const [note, setNote] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { // "Resend in 42s"
+    if (step !== "code") return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [step]);
+  const askCode = (d: Body) => { setSent({ at: Date.now(), retryIn: d.retryIn ?? 60_000, devCode: d.devCode }); setCode(""); setPassword(""); setNote(""); setStep("code"); };
   useEffect(() => setDark(document.documentElement.classList.contains("dark")), []);
   useEffect(() => { nextField.current?.focus(); }, [step]);
   const toggleDark = () => {
@@ -41,7 +52,7 @@ export default function Login() {
   };
 
   /** POST helper: returns [ok, status, body]; network trouble becomes a readable error. */
-  const call = async (path: string, body: unknown): Promise<[boolean, number, { error?: string; role?: string; exists?: boolean }]> => {
+  const call = async (path: string, body: unknown): Promise<[boolean, number, Body]> => {
     try {
       const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json().catch(() => ({ error: res.status >= 500 ? "Can't reach the backend — is it running? (backend\\start-backend.bat)" : "Something went wrong" }));
@@ -72,8 +83,9 @@ export default function Login() {
     e?.preventDefault();
     if (!pw) return setErr("Enter your password");
     setBusy(true); setErr("");
-    const [ok, , data] = await call("/api/auth/login", { email: em, password: pw });
+    const [ok, status, data] = await call("/api/auth/login", { email: em, password: pw });
     setBusy(false);
+    if (status === 403 && data.code === "email_unverified") { setEmail(data.email ?? em); return askCode(data); } // confirm the email first
     if (!ok) return setErr(data.error ?? "Login failed");
     go(data.role);
   };
@@ -89,10 +101,29 @@ export default function Login() {
     setBusy(false);
     if (status === 409) { setStep("password"); setPassword(""); return setErr("This email already has an account — enter your password."); }
     if (!ok) return setErr(data.error ?? "Sign-up failed");
-    go(data.role);
+    askCode(data); // a 6-digit code was emailed
   };
 
-  const back = () => { setStep("email"); setErr(""); setPassword(""); };
+  // Step 3 — the code from the email → signed in.
+  const confirm = async (e?: React.FormEvent, v = code) => {
+    e?.preventDefault();
+    if (v.length !== 6 || busy) return;
+    setBusy(true); setErr("");
+    const [ok, , data] = await call("/api/auth/verify-email", { email, code: v });
+    setBusy(false);
+    if (!ok) return setErr(data.error ?? "That code didn't work");
+    go(data.role);
+  };
+  const wait = sent ? Math.max(0, Math.ceil((sent.at + sent.retryIn - now) / 1000)) : 0;
+  const resend = async () => {
+    setErr("");
+    const [ok, , data] = await call("/api/auth/resend-code", { email });
+    if (!ok) return setErr(data.error ?? "Could not send a new code");
+    setSent({ at: Date.now(), retryIn: data.retryIn ?? 60_000, devCode: data.devCode ?? sent?.devCode });
+    setNote("We sent a new code.");
+  };
+
+  const back = () => { setStep("email"); setErr(""); setPassword(""); setSent(null); };
   const pwField = (autoComplete: string, placeholder: string) => (
     <div className="relative">
       <input ref={nextField} className={`${inputCls} h-11 pr-11`} type={show ? "text" : "password"} placeholder={placeholder} aria-label="Password"
@@ -120,7 +151,7 @@ export default function Login() {
           <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)] text-white"><MessagesSquare size={22} /></span>
           <div>
             <h1 className="text-xl font-bold">Business Messaging</h1>
-            <p className="text-sm text-[var(--muted)]">{step === "signup" ? "Create your account" : "Sign in or create an account"}</p>
+            <p className="text-sm text-[var(--muted)]">{step === "signup" ? "Create your account" : step === "code" ? "Confirm your email" : "Sign in or create an account"}</p>
           </div>
         </div>
 
@@ -149,6 +180,26 @@ export default function Login() {
             {pwField("current-password", "Password")}
             {err && <p role="alert" className="text-sm text-rose-600">{err}</p>}
             {submitBtn("Sign in")}
+          </form>
+        )}
+
+        {step === "code" && (
+          <form onSubmit={confirm} className="space-y-3" noValidate>
+            <div className="flex items-start gap-3 rounded-lg bg-[var(--accent-soft)] p-3 text-[13.5px]">
+              <MailCheck size={20} className="mt-0.5 shrink-0 text-[var(--accent-strong)]" />
+              <span>We sent a <b>6-digit code</b> to your email. Enter it here to finish. It works for 15 minutes — check spam if you can&apos;t find it.</span>
+            </div>
+            <input ref={nextField} className={`${inputCls} h-12 text-center text-2xl tracking-[0.5em]`} inputMode="numeric" autoComplete="one-time-code" placeholder="••••••" aria-label="Code" maxLength={6}
+              value={code} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 6); setCode(d); setErr(""); if (d.length === 6) confirm(undefined, d); }} />
+            {sent?.devCode && <p className="text-[12px] text-[var(--muted)]">Testing: the server has no email set up, so here is the code — <b>{sent.devCode}</b></p>}
+            {note && <p className="text-[13px] text-[var(--accent-strong)]">{note}</p>}
+            {err && <p role="alert" className="text-sm text-rose-600">{err}</p>}
+            {submitBtn("Confirm email")}
+            <div className="flex justify-end">
+              <button type="button" onClick={resend} disabled={wait > 0} className="text-[13px] font-medium text-[var(--accent-strong)] disabled:text-[var(--muted)]">
+                {wait > 0 ? `Resend code in ${wait}s` : "Resend code"}
+              </button>
+            </div>
           </form>
         )}
 

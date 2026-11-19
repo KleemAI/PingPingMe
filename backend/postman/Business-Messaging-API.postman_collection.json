@@ -4412,7 +4412,7 @@
             "auth": {
               "type": "noauth"
             },
-            "description": "Creates the account and signs the customer in (token + session cookie). They can buy on P2P at once; selling waits for manual verification."
+            "description": "Creates the account (not signed in yet) and emails a 6-digit code. While SMTP isn't set (development) the answer also has `devCode`, and the code is printed in the backend log."
           },
           "event": [
             {
@@ -4422,9 +4422,151 @@
                 "exec": [
                   "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
                   "const j = pm.response.json();",
+                  "pm.test(\"Needs the email code\", () => { pm.expect(j.needsVerification).to.eql(true); pm.expect(j.accessToken).to.be.undefined; });",
+                  "if (j.devCode) pm.collectionVariables.set(\"emailCode\", j.devCode);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sign in before confirming (403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"secret123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Right password, but the email isn't confirmed → 403 with `code: \"email_unverified\"` (the app shows the code screen)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"email_unverified\", () => pm.expect(pm.response.json().code).to.eql(\"email_unverified\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Send a new code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/resend-code",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "resend-code"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "At most one new code a minute (and a few per hour). Same answer for emails without an account."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirm email with the code (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify-email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "verify-email"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"code\": \"{{emailCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Use the 6-digit code from the email (or `devCode` / the backend log in development). Signs the customer in (token + session cookie). They can buy on P2P at once; selling waits for manual verification."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
                   "pm.collectionVariables.set(\"customerToken\", j.accessToken);",
                   "pm.collectionVariables.set(\"customerId\", j.user.id);",
-                  "pm.test(\"Customer, not verified yet\", () => { pm.expect(j.role).to.eql(\"customer\"); pm.expect(j.user.verified).to.eql(false); });"
+                  "pm.test(\"Customer, not verified for P2P selling yet\", () => { pm.expect(j.role).to.eql(\"customer\"); pm.expect(j.user.verified).to.eql(false); });"
                 ]
               }
             }
@@ -6502,6 +6644,10 @@
     },
     {
       "key": "broadcastId",
+      "value": ""
+    },
+    {
+      "key": "emailCode",
       "value": ""
     }
   ]

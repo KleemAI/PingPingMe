@@ -5,6 +5,13 @@ import assert from "node:assert/strict";
 
 const API = (process.env.API_URL ?? "http://localhost:4000") + "/api/v1";
 const post = (path, body, token) => fetch(API + path, { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
+// sign up + confirm the email with the code (the API returns it as `devCode` while SMTP isn't set)
+const signupOk = async (body) => {
+  const r = await post("/auth/signup", body);
+  const b = await r.json();
+  if (r.status !== 201) throw new Error(`signup ${r.status}: ${b.error}`);
+  return (await post("/auth/verify-email", { email: b.email, code: b.devCode })).json();
+};
 const get = (path, token) => fetch(API + path, { headers: { authorization: `Bearer ${token}` } });
 const login = async (email, password = "demo123") => (await (await post("/auth/login", { email, password })).json()).accessToken;
 const act = (token, type, payload) => post("/actions", { type, payload }, token);
@@ -16,8 +23,7 @@ const ok = async (token, type, payload) => {
 };
 const state = async (token) => (await (await get("/state", token)).json()).state;
 const signup = async (name) => {
-  const r = await post("/auth/signup", { name, email: `${name.replace(/ /g, ".").toLowerCase()}.${Date.now()}@example.in`, password: "secret123" });
-  return (await r.json()).accessToken;
+  return (await signupOk({ name, email: `${name.replace(/ /g, ".").toLowerCase()}.${Date.now()}@example.in`, password: "secret123" })).accessToken;
 };
 const uploadFile = async (token, bytesHex, type, name) => {
   const fd = new FormData();

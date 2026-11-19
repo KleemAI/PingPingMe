@@ -18,7 +18,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       else if (typeof body === "string") message = body;
       else message = Array.isArray(body.message) ? body.message.join(", ") : body.message ?? e.message;
       if (status === 413) message = "File is too large";
-      res.status(status).json({ error: message, statusCode: status });
+      res.status(status).json({ error: message, statusCode: status, ...(e instanceof AppError ? e.extra : undefined) });
       return;
     }
     this.log.error(e instanceof Error ? e.stack : String(e));

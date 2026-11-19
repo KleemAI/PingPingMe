@@ -6,6 +6,9 @@ import type { AppState as ServerState, Attachment, CustomerState, ResellerState,
 import { io, type Socket } from "socket.io-client";
 import { storage } from "./storage";
 
+/** A sign-up code was emailed. `devCode` only while the server has no email set up (testing). */
+export type CodeSent = { email: string; retryIn: number; devCode?: string };
+
 /**
  * Server = the NestJS backend (backend/ folder: PostgreSQL on Neon + Socket.IO), e.g. http://192.168.1.10:4000.
  * The web app's address (:3000) works too — it forwards /api/* to the backend.
@@ -34,8 +37,10 @@ type Ctx = {
   /** Step 1 of sign-in: does this email have an account? (true → ask password, false → sign-up form) */
   checkEmail: (server: string, email: string) => Promise<boolean>;
   login: (server: string, email: string, password: string) => Promise<void>;
-  /** Customer self-registration — signs them in straight away. */
-  signup: (server: string, name: string, email: string, password: string) => Promise<void>;
+  /** creates the account and emails a code → confirm with verifyEmail */
+  signup: (server: string, name: string, email: string, password: string) => Promise<CodeSent>;
+  verifyEmail: (server: string, email: string, code: string) => Promise<void>;
+  resendCode: (server: string, email: string) => Promise<CodeSent>;
   /** Signed-in GET/POST to the backend, e.g. api("/p2p"). */
   api: (path: string, init?: RequestInit) => Promise<Response>;
   logout: () => Promise<void>;
@@ -176,6 +181,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const base = normalizeServer(srv);
     serverRef.current = base;
     const { res, data } = await authPost(base, "/auth/login", { email: email.trim(), password });
+    if (res.status === 403 && data.code === "email_unverified") {
+      // right password, email not confirmed yet → the login screen asks for the code
+      throw Object.assign(new Error(data.error), { status: 403, unverified: { email: data.email, retryIn: data.retryIn ?? 60_000, devCode: data.devCode } as CodeSent });
+    }
     if (!res.ok) throw new Error(data.error ?? (res.status >= 500 ? "The server is not answering — is the backend running?" : "Login failed"));
     await startSession(base, data);
   }, [authPost, startSession]);
@@ -189,8 +198,23 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       e.status = res.status; // 409 = this email already has an account → ask for the password
       throw e;
     }
+    return { email: data.email, retryIn: data.retryIn ?? 60_000, devCode: data.devCode } as CodeSent;
+  }, [authPost]);
+
+  const verifyEmail = useCallback(async (srv: string, email: string, code: string) => {
+    const base = normalizeServer(srv);
+    serverRef.current = base;
+    const { res, data } = await authPost(base, "/auth/verify-email", { email: email.trim(), code });
+    if (!res.ok) throw new Error(data.error ?? "That code didn't work");
     await startSession(base, data);
   }, [authPost, startSession]);
+
+  const resendCode = useCallback(async (srv: string, email: string) => {
+    const base = normalizeServer(srv);
+    const { res, data } = await authPost(base, "/auth/resend-code", { email: email.trim() });
+    if (!res.ok) throw new Error(data.error ?? "Could not send a new code");
+    return { email: email.trim(), retryIn: data.retryIn ?? 60_000, devCode: data.devCode } as CodeSent;
+  }, [authPost]);
 
   const logout = useCallback(async () => {
     await call(`${API}/auth/logout`, { method: "POST" }).catch(() => {});
@@ -246,7 +270,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [toast]);
 
   return (
-    <StoreCtx.Provider value={{ ready, server, token, state, now, toasts, checkEmail, login, signup, api: call, logout, refresh, act, toast, upload, openFile }}>
+    <StoreCtx.Provider value={{ ready, server, token, state, now, toasts, checkEmail, login, signup, verifyEmail, resendCode, api: call, logout, refresh, act, toast, upload, openFile }}>
       {children}
     </StoreCtx.Provider>
   );

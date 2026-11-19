@@ -1,4 +1,4 @@
-import { UserEntity } from "./user.entity";
+import { EmailCodeEntity, UserEntity } from "./user.entity";
 import { CompanyEntity, ContactEntity } from "./contact.entity";
 import { ConversationEntity, MessageEntity } from "./conversation.entity";
 import { ResellerEntity } from "./reseller.entity";
@@ -25,7 +25,7 @@ export * from "./broadcast.entity";
 export * from "./task.entity";
 
 export const ENTITIES = [
-  UserEntity, CompanyEntity, ContactEntity, ConversationEntity, MessageEntity, ResellerEntity, RequestEntity, AssignmentEntity,
+  UserEntity, EmailCodeEntity, CompanyEntity, ContactEntity, ConversationEntity, MessageEntity, ResellerEntity, RequestEntity, AssignmentEntity,
   QuoteEntity, QuoteRevisionEntity, OrderEntity, OrderHistoryEntity, CaseEntity, CaseEvidenceEntity, CaseHistoryEntity,
   ActivityEntity, SavedReplyEntity, ReminderEntity, SettingsEntity, FileEntity, ProcessedEventEntity, CounterEntity, ProductEntity,
   P2PAdEntity, P2POrderEntity, P2PMessageEntity, P2PProfileEntity, BroadcastEntity, TaskEntity, TaskListEntity,

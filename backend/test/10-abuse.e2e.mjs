@@ -6,6 +6,13 @@ import assert from "node:assert/strict";
 
 const API = (process.env.API_URL ?? "http://localhost:4000") + "/api/v1";
 const post = (path, body, token) => fetch(API + path, { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
+// sign up + confirm the email with the code (the API returns it as `devCode` while SMTP isn't set)
+const signupOk = async (body) => {
+  const r = await post("/auth/signup", body);
+  const b = await r.json();
+  if (r.status !== 201) throw new Error(`signup ${r.status}: ${b.error}`);
+  return (await post("/auth/verify-email", { email: b.email, code: b.devCode })).json();
+};
 const uniq = (n) => `${n}.${Date.now()}.${Math.random().toString(36).slice(2, 7)}@example.in`;
 
 test("sign-up refuses bots (hidden field) and throw-away mailboxes", async () => {
@@ -30,14 +37,13 @@ test("an account locks after 5 wrong passwords in a row — even the right passw
   assert.match((await right.json()).error, /locked/);
   // a good login resets the counter for other accounts as usual
   const other = uniq("ok");
-  await post("/auth/signup", { name: "Other Person", email: other, password: "secret123" });
+  await signupOk({ name: "Other Person", email: other, password: "secret123" });
   assert.equal((await post("/auth/login", { email: other, password: "nope-nope" })).status, 401);
   assert.equal((await post("/auth/login", { email: other, password: "secret123" })).status, 200);
 });
 
 test("new accounts have a small daily upload allowance (30 files on day one)", async () => {
-  const r = await post("/auth/signup", { name: "Upload Test", email: uniq("up"), password: "secret123" });
-  const { accessToken } = await r.json();
+  const { accessToken } = await signupOk({ name: "Upload Test", email: uniq("up"), password: "secret123" });
   const up = (i) => {
     const fd = new FormData();
     fd.append("file", new Blob([`note ${i}`], { type: "text/plain" }), `n${i}.txt`);

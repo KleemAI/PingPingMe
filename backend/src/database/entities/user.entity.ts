@@ -1,6 +1,6 @@
 import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
 import { ResellerEntity } from "./reseller.entity";
-import { TS_NULL } from "../transformers";
+import { TS, TS_NULL } from "../transformers";
 
 @Entity("users")
 export class UserEntity {
@@ -18,6 +18,19 @@ export class UserEntity {
   @Column({ name: "verified_at", ...TS_NULL }) verifiedAt: number | null;
   /** customers only: their contact + web conversation, so their messages reach the team inbox */
   @Column({ name: "contact_id", type: "varchar", length: 40, nullable: true }) contactId: string | null;
+  /** the person proved the email is theirs (code sent by email). Accounts made by our team count as verified. */
+  @Column({ name: "email_verified", default: true }) emailVerified: boolean;
   @Column({ name: "password_hash", type: "varchar", length: 200, select: true }) passwordHash: string;
   @CreateDateColumn({ name: "created_at", type: "timestamptz" }) createdAt: Date;
+}
+
+/** One-time code emailed to confirm an address. Only a hash is stored; a few wrong tries make it unusable. */
+@Entity("email_codes")
+export class EmailCodeEntity {
+  @PrimaryColumn({ type: "varchar", length: 40 }) id: string;
+  @Index() @Column({ name: "user_id", type: "varchar", length: 40 }) userId: string;
+  @Column({ name: "code_hash", type: "varchar", length: 64 }) codeHash: string;
+  @Column({ type: "int", default: 0 }) attempts: number;
+  @Column({ name: "expires_at", ...TS }) expiresAt: number;
+  @Index() @Column({ name: "created_at", ...TS }) createdAt: number;
 }

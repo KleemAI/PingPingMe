@@ -3,7 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } fro
 import { Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useStore } from "@/lib/store";
+import { useStore, type CodeSent } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { Button, Input, T } from "@/components/ui";
 
@@ -18,12 +18,12 @@ const PASSWORD_MIN = 8;
 /** Names are letters and spaces only (the server checks this too). */
 const cleanName = (v: string) => v.replace(/[0-9!@#$%^&*()_+=[\]{};:"\\|,.<>/?~`'-]/g, "").replace(/\s{2,}/g, " ");
 
-type Step = "email" | "password" | "signup";
+type Step = "email" | "password" | "signup" | "code";
 
 export default function Login() {
   const { c, dark, toggle } = useTheme();
   const insets = useSafeAreaInsets();
-  const { server, checkEmail, login, signup, token, state } = useStore();
+  const { server, checkEmail, login, signup, verifyEmail, resendCode, token, state } = useStore();
   const [srv, setSrv] = useState(server);
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
@@ -32,7 +32,17 @@ export default function Login() {
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [note, setNote] = useState("");
+  const [sent, setSent] = useState<(CodeSent & { at: number }) | null>(null); // last code we emailed
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const askCode = (s: CodeSent) => { setSent({ ...s, at: Date.now() }); setCode(""); setStep("code"); setErr(""); setPassword(""); };
   useEffect(() => setSrv(server), [server]);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { // ticks for the "Resend in 42s" countdown
+    if (step !== "code") return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [step]);
 
   if (token && state) return <Redirect href="/" />;
 
@@ -44,7 +54,11 @@ export default function Login() {
   };
   const signIn = async (em = email, pw = password) => {
     setErr("");
-    try { await login(srv, em, pw); } catch (e) { setErr((e as Error).message); }
+    try { await login(srv, em, pw); } catch (e) {
+      const ex = e as Error & { unverified?: CodeSent };
+      if (ex.unverified) { setEmail(ex.unverified.email || em); askCode(ex.unverified); setNote(""); return; }
+      setErr(ex.message);
+    }
   };
   const create = async () => {
     setErr("");
@@ -52,12 +66,23 @@ export default function Login() {
     if (n.length < 2) return setErr("Enter your name (letters only)");
     if (password.length < PASSWORD_MIN) return setErr(`Password must be at least ${PASSWORD_MIN} characters`);
     try {
-      await signup(srv, n, email, password);
+      askCode(await signup(srv, n, email, password));
     } catch (e) {
       const ex = e as Error & { status?: number };
       if (ex.status === 409) { go("password"); setNote("You already have an account — enter your password."); return; }
       setErr(ex.message);
     }
+  };
+
+  const confirm = async (v = code) => {
+    if (v.length !== 6 || busy) return;
+    setErr(""); setBusy(true);
+    try { await verifyEmail(srv, email, v); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
+  const wait = sent ? Math.max(0, Math.ceil((sent.at + sent.retryIn - now) / 1000)) : 0;
+  const resend = async () => {
+    setErr("");
+    try { const s = await resendCode(srv, email); setSent({ ...s, at: Date.now() }); setNote("We sent a new code."); } catch (e) { setErr((e as Error).message); }
   };
 
   return (
@@ -94,6 +119,28 @@ export default function Login() {
                   ))}
                 </View>
               </View>
+            </>
+          ) : step === "code" ? (
+            <>
+              <View style={{ alignItems: "center", gap: 6 }}>
+                <View style={{ width: 54, height: 54, borderRadius: 27, backgroundColor: c.accentSoft, alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="mail-unread-outline" size={28} color={c.accentStrong} />
+                </View>
+                <T weight="700" size={18}>Check your email</T>
+                <T muted size={13.5} style={{ textAlign: "center" }}>We sent a 6-digit code to{"\n"}<T weight="600" size={13.5}>{email.trim()}</T></T>
+              </View>
+              <Input label="Code" value={code} onChangeText={(v) => { const d = v.replace(/\D/g, "").slice(0, 6); setCode(d); setErr(""); if (d.length === 6) confirm(d); }}
+                keyboardType="number-pad" autoComplete="one-time-code" textContentType="oneTimeCode" maxLength={6} placeholder="••••••" autoFocus
+                style={{ fontSize: 24, letterSpacing: 8, textAlign: "center" }} />
+              {!!sent?.devCode && <T muted size={12}>Testing: the server has no email set up, so here is the code — {sent.devCode}</T>}
+              {!!note && <T size={13.5} color={c.accentStrong}>{note}</T>}
+              {!!err && <Text style={{ color: c.danger, fontSize: 13.5 }}>{err}</Text>}
+              <Button title={busy ? "Checking…" : "Confirm email"} onPress={() => confirm()} disabled={code.length !== 6 || busy} />
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Pressable onPress={() => { go("email"); setNote(""); setSent(null); }} hitSlop={8}><T size={13.5} color={c.accentStrong}>Use a different email</T></Pressable>
+                <Pressable onPress={resend} disabled={wait > 0} hitSlop={8}><T size={13.5} weight="600" color={wait > 0 ? c.muted : c.accentStrong}>{wait > 0 ? `Resend in ${wait}s` : "Resend code"}</T></Pressable>
+              </View>
+              <T muted size={12}>Can't find it? Check spam / promotions. The code works for 15 minutes.</T>
             </>
           ) : (
             <>

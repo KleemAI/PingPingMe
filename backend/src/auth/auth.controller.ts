@@ -52,7 +52,8 @@ export class AuthController {
   }
 
   /**
-   * Customer sign-up: `{ name, email, password }` → signed in (same answer as login). Name: letters and spaces only.
+   * Customer sign-up: `{ name, email, password }` → `{ needsVerification: true, email }` and a 6-digit code by email;
+   * POST /auth/verify-email with the code signs them in. Name: letters and spaces only.
    * Limits: a few new accounts per IP per hour / day, a cap on sign-ups per hour overall, no throw-away mailboxes,
    * and a hidden "website" field that only bots fill in.
    */
@@ -63,9 +64,23 @@ export class AuthController {
     this.limiter.take(`signup-h:${ip}`, LIMITS.signupPerIpHour, "Too many new accounts from your network");
     this.limiter.take(`signup-d:${ip}`, LIMITS.signupPerIpDay, "Too many new accounts from your network today");
     this.limiter.take("signup-all", LIMITS.signupGlobalHour, "Sign-ups are busy right now");
-    const result = await this.auth.signup(body?.name, body?.email, body?.password);
+    return this.auth.signup(body?.name, body?.email, body?.password); // → { needsVerification, email } — a code is emailed
+  }
+
+  /** `{ email, code }` → email confirmed and signed in (same answer as login, plus the session cookie). */
+  @Public() @Post("verify-email") @HttpCode(200)
+  async verifyEmail(@Body() body: { email?: string; code?: string }, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    this.limiter.take(`verify:${clientIp(req)}`, LIMITS.verifyPerIp, "Too many tries from your network");
+    const result = await this.auth.verifyEmail(body?.email, body?.code);
     setSessionCookie(res, result.accessToken);
     return result;
+  }
+
+  /** `{ email }` → sends a new code (one a minute). */
+  @Public() @Post("resend-code") @HttpCode(200)
+  resendCode(@Body() body: { email?: string }, @Req() req: Request) {
+    this.limiter.take(`resend:${clientIp(req)}`, LIMITS.resendPerIp, "Too many codes requested from your network");
+    return this.auth.resendCode(body?.email);
   }
 
   @Get("me") @AllowCustomer()

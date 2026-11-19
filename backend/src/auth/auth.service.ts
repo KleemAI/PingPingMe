@@ -10,6 +10,8 @@ import { SYSTEM_USER } from "../common/system-user";
 import type { User } from "../common/contract";
 import { checkPassword, hashPassword } from "./password";
 import { ensureContact } from "../customer/customer-link";
+import { EmailVerification } from "./email-verification.service";
+import { AppError } from "../common/errors";
 
 type TokenPayload = { sub: string; role: string };
 
@@ -22,7 +24,7 @@ const normEmail = (v: unknown) => String(v ?? "").toLowerCase().trim();
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly jwt: JwtService, private readonly uow: UnitOfWork) {}
+  constructor(private readonly jwt: JwtService, private readonly uow: UnitOfWork, private readonly codes: EmailVerification) {}
 
   /** Resellers can sign in only while their partner account is active. */
   private async assertResellerActive(u: UserEntity) {
@@ -43,6 +45,11 @@ export class AuthService {
     if (!row || !(await checkPassword(String(password ?? ""), row.passwordHash))) throw unauthorized("Wrong email or password");
     if (!row.active) throw forbidden("Account disabled");
     await this.assertResellerActive(row);
+    if (row.role === "customer" && !row.emailVerified) {
+      // right password, but the email isn't confirmed yet → (re)send a code and ask for it
+      const sent = await this.codes.send(row).catch(() => ({ sent: false, retryIn: 0, devCode: undefined }));
+      throw new AppError(403, `Please confirm your email first — we sent a 6-digit code to ${row.email}`, { code: "email_unverified", email: row.email, retryIn: sent.retryIn, ...(sent.devCode ? { devCode: sent.devCode } : {}) });
+    }
     return this.issue(row);
   }
 
@@ -67,15 +74,47 @@ export class AuthService {
     if (pw.length > 128) throw badRequest("Password is too long");
     const passwordHash = await hashPassword(pw);
     const row = await this.uow.write(SYSTEM_USER, async ({ em }) => {
-      if (await em.count(UserEntity, { where: { email: e } })) throw conflict("An account with this email already exists — sign in with your password");
-      const u = em.create(UserEntity, { id: newId("u"), name: n, email: e, role: "customer", active: true, verified: false, passwordHash });
+      const taken = await em.findOne(UserEntity, { where: { email: e } });
+      if (taken && (taken.role !== "customer" || taken.emailVerified)) throw conflict("An account with this email already exists — sign in with your password");
+      if (taken) {
+        // someone started signing up with this email but never confirmed it — the person who can read the mail takes it over
+        taken.name = n;
+        taken.passwordHash = passwordHash;
+        await em.save(taken);
+        return taken;
+      }
+      const u = em.create(UserEntity, { id: newId("u"), name: n, email: e, role: "customer", active: true, verified: false, emailVerified: false, passwordHash });
       await em.save(u);
-      await ensureContact(em, u.id); // shows up as a customer contact for the team
-      await em.insert(ActivityEntity, { id: newId("a"), entity: "user", entityId: u.id, actorId: u.id, text: `Customer ${n} signed up`, sensitive: true, at: Date.now() });
       return (await em.findOne(UserEntity, { where: { id: u.id } }))!;
     });
-    return this.issue(row);
+    const sent = await this.codes.send(row);
+    return { ok: true, needsVerification: true, email: row.email, retryIn: sent.retryIn, ...(sent.devCode ? { devCode: sent.devCode } : {}) };
   }
+
+  /** `{ email, code }` → the email is confirmed and the customer is signed in (same answer as login). */
+  async verifyEmail(email: unknown, code: unknown) {
+    const row = await this.uow.manager.findOne(UserEntity, { where: { email: normEmail(email) } });
+    if (!row || row.role !== "customer") throw badRequest("Send a code first");
+    if (row.emailVerified) throw conflict("This email is already confirmed — sign in with your password");
+    if (!row.active) throw forbidden("Account disabled");
+    await this.codes.check(row, code);
+    const done = await this.uow.write(SYSTEM_USER, async ({ em }) => {
+      await em.update(UserEntity, { id: row.id }, { emailVerified: true });
+      await ensureContact(em, row.id); // now shows up as a customer contact for the team
+      await em.insert(ActivityEntity, { id: newId("a"), entity: "user", entityId: row.id, actorId: row.id, text: `Customer ${row.name} signed up`, sensitive: true, at: Date.now() });
+      return (await em.findOne(UserEntity, { where: { id: row.id } }))!;
+    });
+    return this.issue(done);
+  }
+
+  /** `{ email }` → a new code (at most one a minute). Same answer whether or not the email has an account. */
+  async resendCode(email: unknown) {
+    const row = await this.uow.manager.findOne(UserEntity, { where: { email: normEmail(email) } });
+    if (!row || row.role !== "customer" || row.emailVerified || !row.active) return { ok: true, retryIn: 60_000 };
+    const sent = await this.codes.send(row);
+    return { ok: true, retryIn: sent.retryIn, ...(sent.devCode ? { devCode: sent.devCode } : {}) };
+  }
+
 
   /** Validates the token and re-checks the account, so disabling a user or suspending a reseller takes effect at once. */
   async verify(token?: string | null): Promise<User> {
@@ -88,6 +127,7 @@ export class AuthService {
     }
     const row = await this.uow.manager.findOne(UserEntity, { where: { id: payload.sub } });
     if (!row || !row.active) throw unauthorized("Account disabled");
+    if (row.role === "customer" && !row.emailVerified) throw unauthorized("Please confirm your email first — sign in again to get a code");
     await this.assertResellerActive(row);
     return toUser(row);
   }

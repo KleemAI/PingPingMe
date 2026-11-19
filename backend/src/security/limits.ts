@@ -28,6 +28,10 @@ export const LIMITS = {
   /** "does this email exist?" checks per IP (stops people listing our users) */
   get checkEmailPerIp() { return { limit: Math.round(30 * scale()), windowMs: 10 * MIN }; },
 
+  /** email-code tries / new codes per IP */
+  get verifyPerIp() { return { limit: Math.round(30 * scale()), windowMs: 15 * MIN }; },
+  get resendPerIp() { return { limit: Math.round(10 * scale()), windowMs: 15 * MIN }; },
+
   /** new accounts per IP — per hour and per day */
   get signupPerIpHour() { return { limit: Math.round(num("SIGNUP_PER_IP_HOUR", 3) * scale()), windowMs: HOUR }; },
   get signupPerIpDay() { return { limit: Math.round(num("SIGNUP_PER_IP_DAY", 10) * scale()), windowMs: DAY }; },
