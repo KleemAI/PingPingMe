@@ -44,7 +44,7 @@ function RemindersPanel({ onClose }: { onClose: () => void }) {
   const isTeam = state.scope === "team";
   const upcoming = list.filter((b) => b.dueAt > now);
   const past = list.filter((b) => b.dueAt <= now).reverse();
-  const canCancel = (b: Broadcast) => isTeam && (b.createdBy === state.me.id || state.me.role === "admin");
+  const canCancel = (b: Broadcast) => isTeam && !b.id.startsWith("task:") && (b.createdBy === state.me.id || state.me.role === "admin");
   const quick = (ms: number) => setF((x) => ({ ...x, at: localInput(ms) }));
   const tomorrow = (h: number) => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(h, 0, 0, 0); return d.getTime(); };
 

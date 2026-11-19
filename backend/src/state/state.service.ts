@@ -16,6 +16,7 @@ import {
 import { UnitOfWork } from "../database/unit-of-work.service";
 import { CustomerService } from "../customer/customer.service";
 import { BroadcastsService } from "../broadcasts/broadcasts.service";
+import { TasksService } from "../tasks/tasks.service";
 
 const ACTIVITY_WINDOW = 5000;
 
@@ -26,19 +27,21 @@ const ACTIVITY_WINDOW = 5000;
  */
 @Injectable()
 export class StateService {
-  constructor(private readonly uow: UnitOfWork, private readonly customer: CustomerService, private readonly broadcasts: BroadcastsService) {}
+  constructor(private readonly uow: UnitOfWork, private readonly customer: CustomerService, private readonly broadcasts: BroadcastsService, private readonly tasks: TasksService) {}
 
   version() { return this.uow.version(); }
 
   async forUser(user: User): Promise<TeamState | ResellerState | CustomerState> {
-    const [state, broadcasts] = await Promise.all([
+    const [state, broadcasts, shared, tasks] = await Promise.all([
       user.role === "customer" ? this.customer.state(user) : isTeam(user) ? this.team(user) : this.reseller(user),
       this.broadcasts.list(), // reminders for everyone
+      this.tasks.sharedAsBroadcasts(), // tasks the team shared with everyone also show as reminders
+      this.tasks.forUser(user),
     ]);
-    return { ...state, broadcasts };
+    return { ...state, broadcasts: [...broadcasts, ...shared].sort((a, b) => a.dueAt - b.dueAt), ...tasks };
   }
 
-  async team(user: User): Promise<Omit<TeamState, "broadcasts">> {
+  async team(user: User): Promise<Omit<TeamState, "broadcasts" | "tasks" | "taskLists">> {
     const em = this.uow.manager;
     const [
       users, companies, contacts, conversations, messages, resellers, requests, assignments, quotes, revisions,
@@ -96,7 +99,7 @@ export class StateService {
     };
   }
 
-  async reseller(user: User): Promise<Omit<ResellerState, "broadcasts">> {
+  async reseller(user: User): Promise<Omit<ResellerState, "broadcasts" | "tasks" | "taskLists">> {
     const em = this.uow.manager;
     const rid = user.resellerId!;
     const reqIds = await visibleRequestIds(em, rid);

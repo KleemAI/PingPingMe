@@ -33,6 +33,7 @@ import { StateService } from "./state/state.service";
 import { P2PService } from "./p2p/p2p.service";
 import { CatalogService } from "./catalog/catalog.service";
 import { BroadcastsService } from "./broadcasts/broadcasts.service";
+import { TasksService } from "./tasks/tasks.service";
 import { CustomerService } from "./customer/customer.service";
 import { P2PController } from "./p2p/p2p.controller";
 import { QueryService } from "./state/query.service";
@@ -61,7 +62,7 @@ import { OpsController } from "./ops/ops.controller";
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     RealtimeGateway,
     ConversationsService, ContactsService, RequestsService, ResellersService, QuotesService, OrdersService, ExportService,
-    CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService, CatalogService, CustomerService, BroadcastsService,
+    CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService, CatalogService, CustomerService, BroadcastsService, TasksService,
   ],
 })
 export class AppModule {}

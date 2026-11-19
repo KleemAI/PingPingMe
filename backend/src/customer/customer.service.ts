@@ -29,7 +29,7 @@ export class CustomerService {
     return this.uow.write(SYSTEM_USER, async ({ em }) => (await ensureContact(em, user.id)).contact.id);
   }
 
-  async state(user: User): Promise<Omit<CustomerState, "broadcasts">> {
+  async state(user: User): Promise<Omit<CustomerState, "broadcasts" | "tasks" | "taskLists">> {
     const contactId = await this.contactIdFor(user);
     const em = this.uow.manager;
     const [contact, convs, products, requests, settings, version] = await Promise.all([

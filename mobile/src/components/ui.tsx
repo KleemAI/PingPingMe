@@ -250,14 +250,17 @@ export function AppearanceCard() {
   );
 }
 
-/** Alarm button for headers: opens "Reminders for everyone", with a badge for upcoming ones. */
+/** Alarm button for headers: opens "Tasks & reminders", with a badge for tasks due today / overdue and upcoming reminders. */
 export function RemindersButton() {
   const { c } = useTheme();
   const { state, now } = useStore();
-  const n = (state?.broadcasts ?? []).filter((b) => b.dueAt > now).length;
+  const d = new Date(now);
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const n = (state?.tasks ?? []).filter((t) => !t.done && !!t.dueDate && t.dueDate <= today).length
+    + (state?.broadcasts ?? []).filter((b) => !b.id.startsWith("task:") && b.dueAt > now && b.dueAt - now < 86_400_000).length;
   return (
-    <Pressable onPress={() => router.push("/reminders")} hitSlop={10} style={{ paddingHorizontal: 8 }} accessibilityLabel={n ? `Reminders, ${n} upcoming` : "Reminders"}>
-      <Ionicons name="alarm-outline" size={23} color={c.text} />
+    <Pressable onPress={() => router.push("/reminders")} hitSlop={10} style={{ paddingHorizontal: 8 }} accessibilityLabel={n ? `Tasks, ${n} due` : "Tasks and reminders"}>
+      <Ionicons name="checkbox-outline" size={23} color={c.text} />
       {n > 0 && (
         <View style={{ position: "absolute", top: -4, right: 2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: c.danger, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }}>
           <Text style={{ color: "#fff", fontSize: 10, fontWeight: "700" }}>{n}</Text>

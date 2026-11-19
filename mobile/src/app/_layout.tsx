@@ -11,7 +11,7 @@ function Root() {
   const { c, dark } = useTheme();
   const { state, token } = useStore();
   // reminders for everyone → notifications on this phone at their time
-  useReminderNotifications(state?.broadcasts, !!token);
+  useReminderNotifications(state?.broadcasts, !!token, state?.tasks);
   return (
     <View style={{ flex: 1, backgroundColor: c.screen }}>
       <StatusBar style={dark ? "light" : "dark"} />
@@ -29,7 +29,9 @@ function Root() {
         <Stack.Screen name="portal" options={{ headerShown: false }} />
         <Stack.Screen name="p2p" options={{ headerShown: false }} />
         <Stack.Screen name="shop" options={{ headerShown: false }} />
-        <Stack.Screen name="reminders" options={{ title: "Reminders" }} />
+        <Stack.Screen name="reminders" options={{ title: "Tasks & reminders" }} />
+        <Stack.Screen name="task/[id]" options={{ title: "New Task" }} />
+        <Stack.Screen name="task/batch" options={{ title: "Add in Batch Mode" }} />
       </Stack>
       <Toasts />
     </View>

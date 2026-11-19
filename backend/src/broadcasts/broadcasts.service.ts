@@ -45,6 +45,7 @@ export class BroadcastsService {
 
   /** broadcast.cancel { id } — the person who created it, or an admin. Phones drop the notification on their next sync. */
   async cancel(tx: Tx, p: Payload) {
+    if (String(p.id ?? "").startsWith("task:")) throw conflict("This reminder is a shared task — change or delete it in Tasks on the phone app");
     const b = await tx.em.findOne(BroadcastEntity, { where: { id: String(p.id ?? "") } });
     if (!b) throw notFound("Reminder");
     if (b.createdBy !== tx.user.id && tx.user.role !== "admin") throw forbidden("Only the person who created it or an admin can cancel it");

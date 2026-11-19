@@ -19,6 +19,7 @@ import { P2PService } from "../p2p/p2p.service";
 import { CatalogService } from "../catalog/catalog.service";
 import { CustomerService } from "../customer/customer.service";
 import { BroadcastsService } from "../broadcasts/broadcasts.service";
+import { TasksService } from "../tasks/tasks.service";
 
 type Handler = (tx: Tx, p: Payload) => Promise<unknown>;
 
@@ -50,7 +51,18 @@ export class ActionsService {
     catalog: CatalogService,
     customer: CustomerService,
     broadcasts: BroadcastsService,
+    tasks: TasksService,
   ) {
+    // to-do tasks — everyone has their own (sharing with everyone is checked inside: team only)
+    const todo: Record<string, Handler> = {
+      "task.save": (t, p) => tasks.save(t, p),
+      "task.batch": (t, p) => tasks.batch(t, p),
+      "task.done": (t, p) => tasks.done(t, p),
+      "task.delete": (t, p) => tasks.remove(t, p),
+      "task.clearDone": (t) => tasks.clearDone(t),
+      "list.save": (t, p) => tasks.saveList(t, p),
+      "list.delete": (t, p) => tasks.deleteList(t, p),
+    };
     // P2P market — the same commands for everyone who trades (team, resellers, customers)
     const market: Record<string, Handler> = {
       "p2p.order": (t, p) => p2p.placeOrder(t, p),
@@ -108,6 +120,7 @@ export class ActionsService {
       "customer.verify": (t, p) => users.verifyCustomer(t, p),
       ...market,
       "p2p.resolveAppeal": (t, p) => p2p.resolveAppeal(t, p),
+      ...todo,
       // catalogue
       "product.save": (t, p) => catalog.save(t, p),
       "product.review": (t, p) => catalog.review(t, p),
@@ -123,11 +136,13 @@ export class ActionsService {
       "portal.availability": (t, p) => resellers.setOwnAvailability(t, p),
       "me.password": (t, p) => users.changeOwnPassword(t, p),
       "portal.product": (t, p) => catalog.propose(t, p),
+      ...todo,
       ...market,
     };
     this.customer = {
       "chat.send": (t, p) => customer.sendMessage(t, p),
       "price.request": (t, p) => customer.requestPrice(t, p),
+      ...todo,
       "me.password": (t, p) => users.changeOwnPassword(t, p),
       ...market,
     };

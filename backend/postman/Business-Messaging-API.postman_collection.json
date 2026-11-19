@@ -4633,7 +4633,7 @@
                 "exec": [
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
                   "const a = pm.response.json().actions;",
-                  "pm.test(\"Own password, chat, ask for price and P2P only\", () => pm.expect(a.every((x) => [\"me.password\", \"chat.send\", \"price.request\"].includes(x) || x.startsWith(\"p2p.\"))).to.eql(true));",
+                  "pm.test(\"Own password, chat, ask for price, P2P and own tasks only\", () => pm.expect(a.every((x) => [\"me.password\", \"chat.send\", \"price.request\"].includes(x) || /^(p2p|task|list)\\./.test(x))).to.eql(true));",
                   "pm.test(\"No appeal decisions\", () => pm.expect(a).to.not.include(\"p2p.resolveAppeal\"));"
                 ]
               }

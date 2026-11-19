@@ -2,43 +2,42 @@ import { useEffect, useRef } from "react";
 import { Alert, Platform } from "react-native";
 import { router } from "expo-router";
 import * as Notifications from "expo-notifications";
-import type { Broadcast } from "./types";
+import type { Broadcast, Task } from "./types";
+import { planTaskNotifications } from "./tasks";
 
 /**
- * Reminders for everyone → local phone notifications.
- * Every time the app syncs, it schedules a notification for each upcoming reminder (and drops cancelled ones),
- * so the phone rings at the right time even if the app is closed then. A phone that never opened the app
- * after a reminder was created won't know about it (that needs real push: a development build + Firebase).
+ * Tasks and reminders → local phone notifications.
+ * On every sync the app schedules what should ring (reminders for everyone, timed tasks, an 8:00 day summary for
+ * all-day tasks) and drops what changed or was removed, so the phone rings on time even if the app is closed then.
+ * A phone that never opened the app after something was created won't know about it (that needs real push).
  */
 
 const CHANNEL = "reminders";
-// bump the "v" when the notification text changes, so phones re-schedule with the new wording
-const keyOf = (b: Broadcast) => `v2:${b.id}:${b.dueAt}:${b.title}:${b.message ?? ""}`;
-const timeText = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+type Plan = { id: string; at: number; title: string; body: string; key: string; kind: "broadcast" | "task" | "day"; from?: string };
 
-/** What the notification says: a clear title, the message, and who sent it. */
-function content(b: Broadcast): Notifications.NotificationContentInput {
-  const lines = [b.message?.trim() || "Tap to see the details.", `${timeText(b.dueAt)} · from ${b.createdByName}`];
-  return {
-    title: `⏰ Reminder: ${b.title}`,
-    subtitle: "Business Messaging",
-    body: lines.join("\n"),
-    data: { broadcastId: b.id, key: keyOf(b), title: b.title, message: b.message ?? "", from: b.createdByName },
-    sound: "default",
-    priority: Notifications.AndroidNotificationPriority.HIGH,
-    color: "#00a884",
-  };
+const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+/** Reminders created as reminders (tasks shared with everyone come through the tasks list instead). */
+function planBroadcasts(list: Broadcast[], now: number): Plan[] {
+  return list
+    .filter((b) => !b.id.startsWith("task:") && b.dueAt > now + 5_000)
+    .map((b) => ({
+      id: `broadcast-${b.id}`, at: b.dueAt, kind: "broadcast" as const, from: b.createdByName,
+      title: `⏰ Reminder: ${b.title}`,
+      body: [b.message?.trim() || "Tap to see the details.", `${clock(b.dueAt)} · from ${b.createdByName}`].join("\n"),
+      key: `v3:${b.id}:${b.dueAt}:${b.title}:${b.message ?? ""}`,
+    }));
 }
-let handlerSet = false;
 
+let handlerSet = false;
 function setHandler() {
   if (handlerSet || Platform.OS === "web") return;
   handlerSet = true;
   Notifications.setNotificationHandler({
-    // while the app is open a reminder shows as an in-app pop-up (see below) instead of a second banner
+    // while the app is open ours show as an in-app pop-up (see below) instead of a second banner
     handleNotification: async (n) => {
-      const reminder = !!n.request.content.data?.broadcastId;
-      return { shouldShowBanner: !reminder, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false };
+      const ours = typeof n.request.content.data?.planId === "string";
+      return { shouldShowBanner: !ours, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false };
     },
   });
 }
@@ -51,66 +50,78 @@ export async function notificationsAllowed(ask = true) {
   return (await Notifications.requestPermissionsAsync()).granted;
 }
 
-async function scheduledBroadcasts() {
+async function scheduledOurs() {
   const all = await Notifications.getAllScheduledNotificationsAsync();
-  return all.filter((n) => typeof n.content.data?.broadcastId === "string");
+  // planId = this version; broadcastId = notifications scheduled by an older app version
+  return all.filter((n) => typeof n.content.data?.planId === "string" || typeof n.content.data?.broadcastId === "string");
 }
 
-/** Make the phone's scheduled notifications match the list (null = signed out → remove them all). */
-export async function syncReminderNotifications(list: Broadcast[] | null) {
+/** Make the phone's scheduled notifications match the plan (null = signed out → remove them all). */
+export async function syncNotifications(broadcasts: Broadcast[] | null, tasks: Task[] = []) {
   if (Platform.OS === "web") return;
   setHandler();
-  const scheduled = await scheduledBroadcasts();
-  if (!list) {
+  const scheduled = await scheduledOurs();
+  if (!broadcasts) {
     for (const n of scheduled) await Notifications.cancelScheduledNotificationAsync(n.identifier);
     return;
   }
   if (!(await notificationsAllowed())) return;
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync(CHANNEL, {
-      name: "Reminders", description: "Reminders from our team, at the time they set", importance: Notifications.AndroidImportance.HIGH,
+      name: "Tasks & reminders", description: "Your tasks and reminders from our team, at their time", importance: Notifications.AndroidImportance.HIGH,
       sound: "default", vibrationPattern: [0, 250, 250, 250], lightColor: "#00a884", lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
   }
-  const want = new Map(list.filter((b) => b.dueAt > Date.now() + 5_000).map((b) => [b.id, b]));
+  const now = Date.now();
+  const plan: Plan[] = [...planBroadcasts(broadcasts, now), ...planTaskNotifications(tasks, now)];
+  const want = new Map(plan.map((p) => [p.id, p]));
   for (const n of scheduled) {
-    const b = want.get(String(n.content.data?.broadcastId));
-    if (b && n.content.data?.key === keyOf(b)) want.delete(b.id); // already scheduled, unchanged
-    else await Notifications.cancelScheduledNotificationAsync(n.identifier); // cancelled or changed
+    const p = want.get(n.identifier);
+    if (p && n.content.data?.key === p.key) want.delete(p.id); // already scheduled, unchanged
+    else await Notifications.cancelScheduledNotificationAsync(n.identifier); // removed, done or changed
   }
-  for (const b of want.values()) {
+  for (const p of want.values()) {
     await Notifications.scheduleNotificationAsync({
-      identifier: `broadcast-${b.id}`,
-      content: content(b),
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(b.dueAt), channelId: CHANNEL },
+      identifier: p.id,
+      content: {
+        title: p.title, subtitle: "Business Messaging", body: p.body, sound: "default",
+        data: { planId: p.id, key: p.key, kind: p.kind, title: p.title, message: p.body },
+        priority: Notifications.AndroidNotificationPriority.HIGH, color: "#00a884",
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(p.at), channelId: CHANNEL },
     });
   }
 }
 
-/** Keeps phone notifications in step with the reminders in the app state; tapping one opens the Reminders screen. */
-export function useReminderNotifications(list: Broadcast[] | undefined, signedIn: boolean) {
+/** Keeps phone notifications in step with tasks and reminders; tapping one opens Tasks & reminders. */
+export function useReminderNotifications(broadcasts: Broadcast[] | undefined, signedIn: boolean, tasks?: Task[]) {
   const last = useRef("");
-  const sig = signedIn ? (list ?? []).map(keyOf).join("|") : "signed-out";
+  const sig = signedIn
+    ? [(broadcasts ?? []).map((b) => `${b.id}:${b.dueAt}:${b.title}:${b.message ?? ""}`).join("|"),
+      (tasks ?? []).map((t) => `${t.id}:${t.done}:${t.dueDate}:${t.dueTime}:${t.repeat}:${t.repeatEvery}:${t.repeatUnit}:${t.title}:${t.note ?? ""}`).join("|"),
+      new Date().toDateString()].join("#")
+    : "signed-out";
   useEffect(() => {
     if (Platform.OS === "web" || sig === last.current) return;
-    if (signedIn && !list) return; // still loading
+    if (signedIn && !broadcasts) return; // still loading
     last.current = sig;
-    syncReminderNotifications(signedIn ? list ?? [] : null).catch(() => {});
+    syncNotifications(signedIn ? broadcasts ?? [] : null, tasks ?? []).catch(() => {});
   }, [sig]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (Platform.OS === "web") return;
-    // tapped in the notification shade → open Reminders
+    const ours = (d: Record<string, unknown> | undefined) => !!(d?.planId || d?.broadcastId);
+    // tapped in the notification shade → open Tasks & reminders
     const tapped = Notifications.addNotificationResponseReceivedListener((r) => {
-      if (r.notification.request.content.data?.broadcastId) router.push("/reminders");
+      if (ours(r.notification.request.content.data)) router.push("/reminders");
     });
-    // app is open when it rings → also show a clear pop-up inside the app
+    // app is open when it rings → show a clear pop-up inside the app
     const received = Notifications.addNotificationReceivedListener((n) => {
       const d = n.request.content.data ?? {};
-      if (!d.broadcastId) return;
-      Alert.alert(`⏰ ${String(d.title ?? "Reminder")}`, [String(d.message ?? ""), d.from ? `From ${String(d.from)}` : ""].filter(Boolean).join("\n\n"), [
+      if (!ours(d)) return;
+      Alert.alert(String(d.title ?? n.request.content.title ?? "Reminder"), String(d.message ?? n.request.content.body ?? ""), [
         { text: "OK", style: "cancel" },
-        { text: "View reminders", onPress: () => router.push("/reminders") },
+        { text: "Open tasks", onPress: () => router.push("/reminders") },
       ]);
     });
     return () => { tapped.remove(); received.remove(); };

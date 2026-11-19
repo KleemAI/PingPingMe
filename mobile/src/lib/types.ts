@@ -276,6 +276,29 @@ export type DB = {
 // What a reseller is allowed to see about the end customer — "only as needed for the task"
 export type MaskedContact = { id: string; name: string; city?: string };
 
+/** A to-do task (own, or shared with everyone by the team). Date/time are the creator's wall clock + UTC offset. */
+export type Task = {
+  id: string;
+  ownerId: string;
+  ownerName: string;
+  audience: "me" | "everyone";
+  title: string;
+  note?: string;
+  listId?: string; // none = "Default"
+  dueDate?: string; // "YYYY-MM-DD"
+  dueTime?: string; // "HH:MM" — none = all day (day summary at 8:00)
+  tzOffset: number;
+  repeat: "none" | "daily" | "weekdays" | "weekly" | "monthly" | "yearly" | "custom";
+  repeatEvery: number;
+  repeatUnit: "day" | "week" | "month" | "year";
+  anchorDay?: number;
+  done: boolean;
+  doneAt?: number;
+  createdAt: number;
+  updatedAt: number;
+};
+export type TaskList = { id: string; name: string; createdAt: number };
+
 /** A reminder for everyone — phones show it as a notification at `dueAt`. */
 export type Broadcast = { id: string; title: string; message?: string; dueAt: number; createdBy: string; createdByName: string; createdAt: number };
 
@@ -284,6 +307,8 @@ export type TeamState = {
   me: User;
   db: Omit<DB, "processedEvents" | "counters" | "files">;
   broadcasts?: Broadcast[]; // reminders for everyone (NestJS backend)
+  tasks?: Task[]; // own tasks + tasks the team shared with everyone
+  taskLists?: TaskList[];
 };
 
 export type ResellerState = {
@@ -298,6 +323,8 @@ export type ResellerState = {
   categories: string[];
   products: ResellerProduct[]; // their own catalogue proposals
   broadcasts?: Broadcast[]; // reminders for everyone
+  tasks?: Task[]; // own tasks + tasks the team shared with everyone
+  taskLists?: TaskList[];
   version: number;
 };
 
@@ -341,6 +368,8 @@ export type CustomerState = {
   requests: CustomerRequest[];
   business: { name: string; phone: string; email: string; hours: string };
   broadcasts?: Broadcast[]; // reminders for everyone
+  tasks?: Task[]; // own tasks + tasks the team shared with everyone
+  taskLists?: TaskList[];
   version: number;
 };
 
