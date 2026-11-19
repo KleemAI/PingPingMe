@@ -109,12 +109,8 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
             <div className="truncate text-[13.5px] font-medium">{team.me.name}</div>
             <div className="truncate text-[11.5px] text-[var(--muted)]">{team.me.role === "admin" ? "Owner / admin" : "Operations agent"}</div>
           </div>
+          <button onClick={toggle} title="Theme" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
           <button onClick={logout} title="Sign out" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]"><LogOut size={17} /></button>
-        </div>
-        <div className="mt-2 flex items-center gap-1 border-t border-[var(--border)] pt-2">
-          <TodoButton label className="px-2 py-1.5" />
-          <RemindersButton label className="px-2 py-1.5" />
-          <button onClick={toggle} title="Theme" className="ml-auto rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
         </div>
       </div>
     </nav>
@@ -134,6 +130,8 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
           <span className="truncate text-sm font-medium lg:hidden">{nav.find((n) => active(n.href))?.label}</span>
           <div className="ml-auto flex items-center gap-1">
             <span className="mr-2 hidden items-center gap-1.5 text-[12px] text-[var(--muted)] sm:flex"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" /> Live</span>
+            <TodoButton />
+            <RemindersButton />
             <div className="relative">
               <button onClick={() => setBell((b) => !b)} className="relative rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]" title="Alerts">
                 <Bell size={19} />
