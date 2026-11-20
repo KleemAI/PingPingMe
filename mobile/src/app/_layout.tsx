@@ -34,6 +34,8 @@ function Root() {
         <Stack.Screen name="shop" options={{ headerShown: false }} />
         <Stack.Screen name="reminders" options={{ title: "Reminders" }} />
         <Stack.Screen name="todo" options={{ title: "To-Do" }} />
+        <Stack.Screen name="chats/index" options={{ title: "Chats" }} />
+        <Stack.Screen name="chats/[id]" options={{ title: "Chat" }} />
         <Stack.Screen name="task/[id]" options={{ title: "New Task" }} />
         <Stack.Screen name="task/batch" options={{ title: "Add in Batch Mode" }} />
       </Stack>

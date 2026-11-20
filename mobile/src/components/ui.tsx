@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
   type TextInputProps, type ViewStyle, type StyleProp,
@@ -8,7 +8,7 @@ import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, type Tone } from "@/lib/theme";
 import { colorFor, initials } from "@/lib/format";
-import { useStore } from "@/lib/store";
+import { onDm, useStore } from "@/lib/store";
 
 export type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -271,6 +271,19 @@ export function RemindersButton() {
   return <HeaderIcon icon="alarm-outline" n={n} onPress={() => router.push("/reminders")} label={n ? `Reminders, ${n} upcoming` : "Reminders"} />;
 }
 
+/** 💬 Personal chats — badge: unread messages (refreshed on chat pushes). */
+export function ChatsButton() {
+  const { api, token } = useStore();
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (!token) return;
+    const load = () => api("/api/v1/dm").then((r) => (r.ok ? r.json() : null)).then((d) => d && setN((d.conversations as { unread: number }[]).reduce((s, cv) => s + cv.unread, 0))).catch(() => {});
+    load();
+    return onDm(load);
+  }, [api, token]);
+  return <HeaderIcon icon="chatbubble-ellipses-outline" n={n} onPress={() => router.push("/chats")} label={n ? `Chats, ${n} unread` : "Chats"} />;
+}
+
 /** ☑ My To-Do — badge: new to-dos waiting for your OK + tasks due today or overdue. */
 export function TodoButton() {
   const { state, now } = useStore();
@@ -284,6 +297,7 @@ export function TodoButton() {
 export function HeaderActions() {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 2 }}>
+      <ChatsButton />
       <TodoButton />
       <RemindersButton />
       <ThemeToggle />

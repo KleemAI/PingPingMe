@@ -13,7 +13,7 @@ export function StorageCard() {
   const [u, setU] = useState<{ used: number; quota: number; files: number } | null>(null);
   const version = (state as { version?: number } | null)?.version;
   useEffect(() => {
-    api("/files/usage").then((r) => (r.ok ? r.json() : null)).then(setU).catch(() => {});
+    api("/api/v1/files/usage").then((r) => (r.ok ? r.json() : null)).then(setU).catch(() => {});
   }, [api, version]);
   if (!u) return null;
   const pct = u.quota ? Math.min(100, (u.used / u.quota) * 100) : 0;
