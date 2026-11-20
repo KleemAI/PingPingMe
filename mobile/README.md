@@ -26,6 +26,13 @@ Open **http://localhost:3000/mobile-preview** — the app appears inside a phone
 
 After changing code in this `mobile` folder, refresh that build with `npm run mobile:web` (run in the parent folder).
 
+## Run on the Android emulator (Android Studio)
+
+1. Android Studio → More Actions → Virtual Device Manager → create a phone (once).
+2. Double-click **`run-android-emulator.bat`**. It finds the Android SDK, starts the emulator if it isn't running,
+   waits for it to boot, connects it to the backend (`adb reverse`, port 4000), starts the API and opens the app in Expo Go.
+3. Server address in the app: `http://localhost:4000`.
+
 ## Run on an Android phone over USB (developer mode) — recommended
 
 No Wi-Fi or firewall setup needed; everything goes through the USB cable.
