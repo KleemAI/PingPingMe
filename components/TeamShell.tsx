@@ -13,6 +13,7 @@ import { Avatar } from "./ui";
 import { ReminderAlerts, RemindersButton } from "./Reminders";
 import { TodoAlerts, TodoButton } from "./Todo";
 import { StorageMeter } from "./Storage";
+import { ChatsButton } from "./Chats";
 
 export function useDark() {
   const [dark, setDark] = useState(false);
@@ -132,6 +133,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
           <span className="truncate text-sm font-medium lg:hidden">{nav.find((n) => active(n.href))?.label}</span>
           <div className="ml-auto flex items-center gap-1">
             <span className="mr-2 hidden items-center gap-1.5 text-[12px] text-[var(--muted)] sm:flex"><span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" /> Live</span>
+            <ChatsButton />
             <TodoButton />
             <RemindersButton />
             <div className="relative">

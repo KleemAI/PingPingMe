@@ -6,6 +6,11 @@ import { io, type Socket } from "socket.io-client";
 import type { AppState, ResellerState, TeamState, Attachment } from "../types";
 import { shrinkPhoto } from "./media";
 
+/** Personal chat push (only to the two people in the chat). */
+export type DmEvent = { type: "message" | "read" | "block"; conversationId?: string; message?: unknown; by?: string; at?: number };
+const dmListeners = new Set<(e: DmEvent) => void>();
+export function onDm(f: (e: DmEvent) => void) { dmListeners.add(f); return () => { dmListeners.delete(f); }; }
+
 /** NestJS backend address for Socket.IO (set from API_URL in next.config.mjs). Empty = built-in server, polling only. */
 const REALTIME_URL = process.env.NEXT_PUBLIC_REALTIME_URL ?? "";
 
@@ -80,6 +85,7 @@ export function StoreProvider({ children, expect }: { children: React.ReactNode;
       socket = io(realtimeOrigin(), { withCredentials: true, transports: ["websocket", "polling"] });
       socket.on("ready", () => { live = true; refresh(); });
       socket.on("changed", () => refresh());
+      socket.on("dm", (d: DmEvent) => { for (const f of dmListeners) f(d); }); // personal chat pushes
       socket.on("disconnect", () => { live = false; });
       socket.on("auth_error", () => router.replace("/login"));
     }
