@@ -6,6 +6,9 @@ import { ChangeBus } from "./change-bus";
 import { ENTITIES } from "./entities";
 import { SeedService } from "./seed/seed.service";
 import { UnitOfWork } from "./unit-of-work.service";
+import { retryDroppedConnections } from "./connection-retry";
+
+retryDroppedConnections();
 
 @Global()
 @Module({
@@ -18,7 +21,9 @@ import { UnitOfWork } from "./unit-of-work.service";
           ...(await pgConnection(env.databaseUrl, env.dbSsl)),
           entities: ENTITIES,
           synchronize: env.dbSync,
-          extra: { max: 10, connectionTimeoutMillis: 15_000, idleTimeoutMillis: 30_000 },
+          // Neon (and its pooler) closes connections that sit idle, so don't keep them long:
+          // close idle ones after 10 s, recycle every connection after 4 minutes, and send TCP keep-alives.
+          extra: { max: 10, connectionTimeoutMillis: 15_000, idleTimeoutMillis: 10_000, maxLifetimeSeconds: 240, keepAlive: true, keepAliveInitialDelayMillis: 10_000 },
           retryAttempts: 5,
           retryDelay: 2000,
         };
