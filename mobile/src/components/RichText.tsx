@@ -55,14 +55,14 @@ export const isBare = (text: string) => { const p = parse(text); return !!(p.sti
 let recent: string[] = [];
 
 /** Emoji + sticker picker shown above the message box. */
-export function EmojiPanel({ onEmoji, onSticker }: { onEmoji: (e: string) => void; onSticker?: (text: string) => void }) {
+export function EmojiPanel({ onEmoji, onSticker, height = 290 }: { onEmoji: (e: string) => void; onSticker?: (text: string) => void; height?: number }) {
   const { c } = useTheme();
   const [tab, setTab] = useState<string>(recent.length ? "recent" : EMOJI[0].id);
   const tabs = [...(recent.length ? [{ id: "recent", icon: "🕘" }] : []), ...EMOJI.map((e) => ({ id: e.id, icon: e.icon })), ...(onSticker ? [{ id: "stickers", icon: "🏷️" }] : [])];
   const list = tab === "recent" ? recent : EMOJI.find((e) => e.id === tab)?.list ?? [];
   const pick = (e: string) => { recent = [e, ...recent.filter((x) => x !== e)].slice(0, 24); onEmoji(e); };
   return (
-    <View style={{ backgroundColor: c.card, borderRadius: 14, borderWidth: 1, borderColor: c.border, marginBottom: 6, overflow: "hidden" }}>
+    <View style={{ height, backgroundColor: c.card, borderRadius: 14, borderWidth: 1, borderColor: c.border, marginTop: 6, overflow: "hidden" }}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 4 }} style={{ borderBottomWidth: 1, borderColor: c.border }}>
         {tabs.map((t) => (
           <Pressable key={t.id} onPress={() => setTab(t.id)} accessibilityLabel={t.id} style={{ paddingHorizontal: 10, paddingVertical: 7, borderBottomWidth: 2, borderColor: tab === t.id ? c.accent : "transparent" }}>
@@ -70,7 +70,7 @@ export function EmojiPanel({ onEmoji, onSticker }: { onEmoji: (e: string) => voi
           </Pressable>
         ))}
       </ScrollView>
-      <ScrollView style={{ height: 210 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", padding: 6 }}>
+      <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={{ flexDirection: "row", flexWrap: "wrap", padding: 6 }}>
         {tab === "stickers" && onSticker
           ? STICKERS.map((s) => (
             <Pressable key={s.id} onPress={() => onSticker(stickerText(s))} accessibilityLabel={`Sticker ${s.label ?? s.emoji}`} style={{ width: "25%", alignItems: "center", justifyContent: "center", padding: 4, height: 78 }}>

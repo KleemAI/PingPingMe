@@ -1,5 +1,5 @@
-import { Fragment, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import type { Attachment, Message, SavedReply } from "@/lib/types";
@@ -110,7 +110,18 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
   const [files, setFiles] = useState<Attachment[]>([]);
   const [busy, setBusy] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
-  const [emoji, setEmoji] = useState(false); // emoji / sticker panel
+  // emoji / sticker panel: shown in place of the phone keyboard, at the keyboard's height (like WhatsApp)
+  const [emoji, setEmoji] = useState(false);
+  const [kbHeight, setKbHeight] = useState(290);
+  const input = useRef<React.ComponentRef<typeof TextInput>>(null);
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidShow", (e) => { if (e.endCoordinates.height > 150) setKbHeight(Math.min(380, e.endCoordinates.height)); });
+    return () => sub.remove();
+  }, []);
+  const toggleEmoji = () => {
+    if (emoji) { setEmoji(false); input.current?.focus(); } // back to the keyboard
+    else { Keyboard.dismiss(); setEmoji(true); }
+  };
   const [focused, setFocused] = useState(false);
   const sel = useRef({ start: 0, end: 0 });
   const mode = modes.find((m) => m.id === modeId) ?? modes[0];
@@ -169,7 +180,6 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
           </ScrollView>
         </View>
       )}
-      {emoji && <EmojiPanel onEmoji={insert} onSticker={mode.kind === "internal" ? undefined : sendSticker} />}
       {(focused || emoji) && <FormatBar onFormat={format} />}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, alignItems: "center", paddingBottom: 6 }} keyboardShouldPersistTaps="handled">
         {modes.map((m) => {
@@ -195,12 +205,13 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
       )}
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 6 }}>
         <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-end", backgroundColor: c.input, borderRadius: 22, borderWidth: 2, borderColor: color, paddingHorizontal: 4 }}>
-          <Pressable onPress={() => setEmoji((x) => !x)} hitSlop={6} style={{ padding: 9 }} accessibilityLabel={emoji ? "Close emoji and stickers" : "Emoji and stickers"}>
-            <Ionicons name={emoji ? "close-circle-outline" : "happy-outline"} size={21} color={emoji ? c.accentStrong : c.muted} />
+          <Pressable onPress={toggleEmoji} hitSlop={6} style={{ padding: 9 }} accessibilityLabel={emoji ? "Show keyboard" : "Emoji and stickers"}>
+            <Ionicons name={emoji ? "keypad-outline" : "happy-outline"} size={21} color={emoji ? c.accentStrong : c.muted} />
           </Pressable>
           <Pressable onPress={attach} hitSlop={6} style={{ padding: 9, paddingLeft: 2 }}><Ionicons name="attach" size={21} color={c.muted} /></Pressable>
           <TextInput value={text} onChangeText={setText} multiline onSelectionChange={(e) => { sel.current = e.nativeEvent.selection; }}
-            onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder={mode.kind === "internal" ? "Internal note…" : savedReplies.length ? "Message — / for saved replies" : "Message"}
+            ref={input} showSoftInputOnFocus
+            onFocus={() => { setFocused(true); setEmoji(false); }} onBlur={() => setFocused(false)} placeholder={mode.kind === "internal" ? "Internal note…" : savedReplies.length ? "Message — / for saved replies" : "Message"}
             placeholderTextColor={c.muted} style={{ flex: 1, color: c.text, fontSize: 15.5, maxHeight: 120, paddingTop: 10, paddingBottom: 10 }} />
           {savedReplies.length > 0 && <Pressable onPress={() => setShowSaved((s) => !s)} hitSlop={6} style={{ padding: 9 }}><Ionicons name="flash-outline" size={19} color={c.muted} /></Pressable>}
           {mode.kind !== "internal" && <VoiceRecordButton onRecorded={addFile} disabled={busy} />}
@@ -209,6 +220,7 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
           {busy ? <ActivityIndicator color="#fff" /> : <Ionicons name={mode.kind === "internal" ? "document-text" : "send"} size={19} color="#fff" />}
         </Pressable>
       </View>
+      {emoji && <EmojiPanel height={kbHeight} onEmoji={insert} onSticker={mode.kind === "internal" ? undefined : sendSticker} />}
     </View>
   );
 }
