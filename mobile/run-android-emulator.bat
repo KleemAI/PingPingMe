@@ -54,7 +54,13 @@ adb reverse tcp:4000 tcp:4000 >nul
 adb reverse tcp:8081 tcp:8081 >nul
 
 rem ---- 4. start the backend API (NestJS + Neon) in its own window ----
-start "Business Messaging - API" cmd /c ""%~dp0..\backend\start-backend.bat""
+rem    (skipped when something already listens on port 4000 - the API is running already)
+netstat -ano | findstr /r /c:":4000 .*LISTENING" >nul
+if %errorlevel%==0 (
+  echo  Backend API is already running on port 4000 - using it.
+) else (
+  start "Business Messaging - API" cmd /c ""%~dp0..\backend\start-backend.bat""
+)
 
 rem ---- 5. install new packages if needed, then open the app (installs Expo Go if needed) ----
 set NEED_INSTALL=
