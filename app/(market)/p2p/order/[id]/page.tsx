@@ -9,6 +9,7 @@ import type { P2POrder } from "@/lib/p2p/types";
 import { AttachmentChip, Button, Card, Pill, inputCls } from "@/components/ui";
 import { Composer } from "@/components/Thread";
 import { MerchantLine } from "../../_components/bits";
+import { RichText, isBare } from "@/components/RichText";
 
 const time = (t: number) => new Date(t).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
@@ -230,8 +231,8 @@ export default function OrderPage() {
               if (m.from === "system") return <p key={m.id} className="self-center rounded-md bg-[var(--panel)] px-2.5 py-1 text-center text-[12px] text-[var(--muted)]">{m.text}</p>;
               const mine = m.from === role;
               return (
-                <div key={m.id} className={`max-w-[80%] rounded-lg px-3 py-1.5 text-[14px] shadow-sm ${mine ? "self-end bg-[var(--bubble-out)]" : "self-start bg-[var(--bubble-in)]"}`}>
-                  {m.text && <span className="whitespace-pre-wrap break-words">{m.text}</span>}
+                <div key={m.id} className={`max-w-[80%] rounded-lg px-3 py-1.5 text-[14px] ${!m.attachments?.length && isBare(m.text) ? "" : "shadow-sm"} ${mine ? "self-end" : "self-start"} ${!m.attachments?.length && isBare(m.text) ? "" : mine ? "bg-[var(--bubble-out)]" : "bg-[var(--bubble-in)]"}`}>
+                  {m.text && <RichText text={m.text} />}
                   {m.attachments?.map((x) => <AttachmentChip key={x.id} a={x} />)}
                   <div className="mt-0.5 text-right text-[11px] text-[var(--muted)]">{time(m.at)}</div>
                 </div>

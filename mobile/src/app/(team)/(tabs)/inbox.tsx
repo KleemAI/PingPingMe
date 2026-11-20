@@ -8,6 +8,7 @@ import type { ContactType, Conversation } from "@/lib/types";
 import { CONV_STATUS, PRIORITY, isUnanswered, listTime } from "@/lib/format";
 import { Avatar, Chips, Empty, Input, Button, SearchBar, Sheet, StatusPill, T } from "@/components/ui";
 import { Ticks } from "@/components/Thread";
+import { plain } from "@/lib/chatFormat";
 
 type F = "open" | "mine" | "unassigned" | "unread" | "unanswered" | "waiting_customer" | "waiting_reseller" | "resolved" | "failed" | "all";
 
@@ -83,7 +84,7 @@ export default function Inbox() {
                 {co && <T size={12.5} muted numberOfLines={1}>{ct.name}{ct.designation ? ` · ${ct.designation}` : ""}</T>}
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   {failed(cv) ? <Ionicons name="alert-circle" size={14} color={c.danger} /> : last?.direction === "out" && last.audience === "customer" ? <Ticks m={last} size={15} /> : null}
-                  <T size={14} muted numberOfLines={1} style={{ flex: 1 }}>{last?.audience === "internal" ? `📝 ${last.text}` : last?.text}</T>
+                  <T size={14} muted numberOfLines={1} style={{ flex: 1 }}>{last?.audience === "internal" ? `📝 ${plain(last.text)}` : last ? plain(last.text) : ""}</T>
                   {cv.unread > 0 && <View style={{ backgroundColor: c.accent, borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}><T size={11} color="#fff" weight="700">{cv.unread}</T></View>}
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 }}>

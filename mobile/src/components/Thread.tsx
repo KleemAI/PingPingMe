@@ -8,6 +8,8 @@ import { useTheme } from "@/lib/theme";
 import { useStore } from "@/lib/store";
 import { T } from "./ui";
 import { MediaAttachment, VoiceRecordButton, type PickedFile } from "./Media";
+import { EmojiPanel, FormatBar, RichText, isBare } from "./RichText";
+import { wrapSelection } from "@/lib/chatFormat";
 
 export function Ticks({ m, size = 15 }: { m: Message; size?: number }) {
   const { c } = useTheme();
@@ -54,7 +56,7 @@ export function MessageList({ messages, side, onRetry, viewer = "team", wallpape
                   <Ionicons name="lock-closed" size={11} color={c.noteText} />
                   <Text style={{ fontSize: 11.5, fontWeight: "700", color: c.noteText }}>Internal note · {m.authorName} · team only</Text>
                 </View>
-                <T size={14}>{m.text}</T>
+                <RichText text={m.text} size={14} />
                 {m.attachments.map((a) => <AttachmentChip key={a.id} a={a} />)}
                 <T size={11} muted style={{ alignSelf: "flex-end" }}>{time(m.createdAt)}</T>
               </View>
@@ -63,14 +65,15 @@ export function MessageList({ messages, side, onRetry, viewer = "team", wallpape
         }
         const mine = s === "right";
         const resellerIn = m.audience === "reseller" && viewer === "team" && !mine;
-        const bg = resellerIn ? c.bubbleReseller : mine ? c.bubbleOut : c.bubbleIn;
+        const bare = !m.attachments.length && isBare(m.text); // sticker or big emoji: no bubble
+        const bg = bare ? "transparent" : resellerIn ? c.bubbleReseller : mine ? c.bubbleOut : c.bubbleIn;
         return (
           <Fragment key={m.id}>
             {divider}
             <View style={{ alignItems: mine ? "flex-end" : "flex-start", marginTop: first ? 8 : 2 }}>
-              <View style={{ maxWidth: "84%", backgroundColor: bg, borderRadius: 10, borderTopRightRadius: mine && first ? 2 : 10, borderTopLeftRadius: !mine && first ? 2 : 10, paddingHorizontal: 9, paddingTop: 6, paddingBottom: 4, borderWidth: m.status === "failed" ? 1 : 0, borderColor: c.danger, shadowColor: "#000", shadowOpacity: 0.06, shadowRadius: 1, shadowOffset: { width: 0, height: 1 }, elevation: 1 }}>
+              <View style={{ maxWidth: "84%", backgroundColor: bg, borderRadius: 10, borderTopRightRadius: mine && first ? 2 : 10, borderTopLeftRadius: !mine && first ? 2 : 10, paddingHorizontal: 9, paddingTop: 6, paddingBottom: 4, borderWidth: m.status === "failed" ? 1 : 0, borderColor: c.danger, shadowColor: "#000", shadowOpacity: bare ? 0 : 0.06, shadowRadius: 1, shadowOffset: { width: 0, height: 1 }, elevation: bare ? 0 : 1 }}>
                 {first && <Text style={{ fontSize: 12, fontWeight: "700", color: resellerIn ? c.reseller : c.accentStrong, marginBottom: 1 }}>{m.authorName}</Text>}
-                <T size={15}>{m.text}</T>
+                {!!m.text && <RichText text={m.text} />}
                 {m.attachments.map((a) => <AttachmentChip key={a.id} a={a} />)}
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 3, marginTop: 1 }}>
                   <T size={11} muted>{time(m.createdAt)}</T>
@@ -107,6 +110,9 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
   const [files, setFiles] = useState<Attachment[]>([]);
   const [busy, setBusy] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
+  const [emoji, setEmoji] = useState(false); // emoji / sticker panel
+  const [focused, setFocused] = useState(false);
+  const sel = useRef({ start: 0, end: 0 });
   const mode = modes.find((m) => m.id === modeId) ?? modes[0];
   const color = mode?.kind === "customer" ? c.accent : mode?.kind === "reseller" ? c.reseller : "#e0a400";
 
@@ -125,6 +131,22 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
     if (!canSend || busy) return;
     setBusy(true);
     try { await onSend(mode.id, text.trim(), files); setText(""); setFiles([]); setShowSaved(false); } catch {} finally { setBusy(false); }
+  };
+  const insert = (e: string) => {
+    const { start, end } = sel.current;
+    const s = Math.min(start, text.length);
+    setText(text.slice(0, s) + e + text.slice(Math.min(end, text.length)));
+    sel.current = { start: s + e.length, end: s + e.length };
+  };
+  const format = (mark: string) => {
+    const r = wrapSelection(text, Math.min(sel.current.start, text.length), Math.min(sel.current.end, text.length), mark);
+    setText(r.text);
+    sel.current = { start: r.cursor, end: r.cursor };
+  };
+  const sendSticker = async (sticker: string) => {
+    if (busy) return;
+    setBusy(true);
+    try { await onSend(mode.id, sticker, []); setEmoji(false); } catch {} finally { setBusy(false); }
   };
   const attach = async () => {
     // photos, videos, PDFs and other documents
@@ -147,6 +169,8 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
           </ScrollView>
         </View>
       )}
+      {emoji && <EmojiPanel onEmoji={insert} onSticker={mode.kind === "internal" ? undefined : sendSticker} />}
+      {(focused || emoji) && <FormatBar onFormat={format} />}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, alignItems: "center", paddingBottom: 6 }} keyboardShouldPersistTaps="handled">
         {modes.map((m) => {
           const on = m.id === mode.id;
@@ -171,8 +195,12 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
       )}
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 6 }}>
         <View style={{ flex: 1, flexDirection: "row", alignItems: "flex-end", backgroundColor: c.input, borderRadius: 22, borderWidth: 2, borderColor: color, paddingHorizontal: 4 }}>
-          <Pressable onPress={attach} hitSlop={6} style={{ padding: 9 }}><Ionicons name="attach" size={21} color={c.muted} /></Pressable>
-          <TextInput value={text} onChangeText={setText} multiline placeholder={mode.kind === "internal" ? "Internal note…" : savedReplies.length ? "Message — / for saved replies" : "Message"}
+          <Pressable onPress={() => setEmoji((x) => !x)} hitSlop={6} style={{ padding: 9 }} accessibilityLabel={emoji ? "Close emoji and stickers" : "Emoji and stickers"}>
+            <Ionicons name={emoji ? "close-circle-outline" : "happy-outline"} size={21} color={emoji ? c.accentStrong : c.muted} />
+          </Pressable>
+          <Pressable onPress={attach} hitSlop={6} style={{ padding: 9, paddingLeft: 2 }}><Ionicons name="attach" size={21} color={c.muted} /></Pressable>
+          <TextInput value={text} onChangeText={setText} multiline onSelectionChange={(e) => { sel.current = e.nativeEvent.selection; }}
+            onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} placeholder={mode.kind === "internal" ? "Internal note…" : savedReplies.length ? "Message — / for saved replies" : "Message"}
             placeholderTextColor={c.muted} style={{ flex: 1, color: c.text, fontSize: 15.5, maxHeight: 120, paddingTop: 10, paddingBottom: 10 }} />
           {savedReplies.length > 0 && <Pressable onPress={() => setShowSaved((s) => !s)} hitSlop={6} style={{ padding: 9 }}><Ionicons name="flash-outline" size={19} color={c.muted} /></Pressable>}
           {mode.kind !== "internal" && <VoiceRecordButton onRecorded={addFile} disabled={busy} />}

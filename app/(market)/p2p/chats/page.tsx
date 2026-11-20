@@ -4,6 +4,7 @@ import Link from "next/link";
 import { MessageSquare } from "lucide-react";
 import { STATUS, useP2P } from "@/lib/p2p/store";
 import { Avatar, Empty, Pill } from "@/components/ui";
+import { plain } from "@/lib/chatFormat";
 
 export default function P2PChats() {
   const { s, merchant, myRole } = useP2P();
@@ -29,7 +30,7 @@ export default function P2PChats() {
                   <span className="shrink-0 text-[12px] text-[var(--muted)]">{last ? new Date(last.at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}</span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[13px] text-[var(--muted)]">{o.ref} · {last?.text}</span>
+                  <span className="truncate text-[13px] text-[var(--muted)]">{o.ref} · {last ? plain(last.text) : ""}</span>
                   <Pill tone={STATUS[o.status].tone}>{STATUS[o.status].label}</Pill>
                 </div>
               </div>

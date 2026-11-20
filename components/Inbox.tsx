@@ -13,6 +13,7 @@ import { CONV_STATUS, PRIORITY, REQ_STATUS, ORDER_STATUS, CASE_STATUS, isUnanswe
 import { Avatar, Button, Card, Empty, Field, Modal, Pill, StatusPill, Tabs, inputCls } from "./ui";
 import { Composer, MessageList, Ticks } from "./Thread";
 import { CreateRequestModal, OpenCaseModal, ReminderModal } from "./forms";
+import { plain } from "@/lib/chatFormat";
 
 type Filter = "open" | "all" | "mine" | "unassigned" | "unread" | "unanswered" | "failed" | "waiting_customer" | "waiting_reseller" | "resolved" | `label:${string}`;
 
@@ -131,7 +132,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
                     {co && <div className="truncate text-[12px] text-[var(--muted)]">{ct.name}{ct.designation ? ` · ${ct.designation}` : ""}</div>}
                     <div className="mt-0.5 flex items-center gap-1 text-[13px] text-[var(--muted)]">
                       {failed ? <AlertCircle size={13} className="shrink-0 text-rose-500" /> : last?.direction === "out" && last.audience === "customer" && <Ticks m={last} />}
-                      <span className="truncate">{last?.audience === "internal" ? `📝 ${last.text}` : last?.text}</span>
+                      <span className="truncate">{last?.audience === "internal" ? `📝 ${plain(last.text)}` : last ? plain(last.text) : ""}</span>
                       {c.unread > 0 && <span className="ml-auto min-w-[19px] shrink-0 rounded-full bg-[var(--accent)] px-1.5 text-center text-[11px] font-semibold leading-[19px] text-white">{c.unread}</span>}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-1">

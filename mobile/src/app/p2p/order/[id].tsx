@@ -11,6 +11,7 @@ import { Button, Card, Empty, Input, KV, Pill, Sheet, T } from "@/components/ui"
 import { MerchantLine } from "@/components/P2P";
 import { MediaAttachment } from "@/components/Media";
 import { Composer } from "@/components/Thread";
+import { RichText, isBare } from "@/components/RichText";
 
 const confirm = (title: string, msg: string, ok: string, fn: () => unknown, destructive = false) => {
   if (Platform.OS === "web") { if (globalThis.confirm?.(`${title}\n\n${msg}`)) fn(); return; }
@@ -159,8 +160,8 @@ export default function OrderScreen() {
             {o.messages.map((m) => m.from === "system"
               ? <T key={m.id} muted size={12} style={{ alignSelf: "center", textAlign: "center", backgroundColor: c.card, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>{m.text}</T>
               : (
-                <View key={m.id} style={{ alignSelf: m.from === role ? "flex-end" : "flex-start", maxWidth: "82%", backgroundColor: m.from === role ? c.bubbleOut : c.bubbleIn, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-                  {!!m.text && <T size={14.5}>{m.text}</T>}
+                <View key={m.id} style={{ alignSelf: m.from === role ? "flex-end" : "flex-start", maxWidth: "82%", backgroundColor: !m.attachments?.length && isBare(m.text) ? "transparent" : m.from === role ? c.bubbleOut : c.bubbleIn, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
+                  {!!m.text && <RichText text={m.text} size={14.5} />}
                   {m.attachments?.map((x) => <MediaAttachment key={x.id} a={x} />)}
                   <T muted size={10.5} style={{ alignSelf: "flex-end" }}>{time(m.at)}</T>
                 </View>

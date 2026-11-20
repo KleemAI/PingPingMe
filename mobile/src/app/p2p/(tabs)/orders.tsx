@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { useTheme } from "@/lib/theme";
 import { inr, mmss, STATUS, useP2P } from "@/lib/p2p";
 import { Avatar, Chips, Empty, Pill, T } from "@/components/ui";
+import { plain } from "@/lib/chatFormat";
 
 type F = "active" | "completed" | "cancelled" | "all";
 const ACTIVE = ["pending_payment", "paid", "appeal"];
@@ -44,7 +45,7 @@ export default function P2POrders() {
                   <T weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>{role === "buyer" ? "Buy" : "Sell"} · {o.product} × {o.qty}</T>
                   <T weight="700">{inr(o.amount)}</T>
                 </View>
-                <T muted size={12.5} numberOfLines={1}>{o.ref} · with {other?.name}{last && last.from !== "system" ? ` · ${last.text}` : ""}</T>
+                <T muted size={12.5} numberOfLines={1}>{o.ref} · with {other?.name}{last && last.from !== "system" ? ` · ${plain(last.text)}` : ""}</T>
                 <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
                   <Pill tone={STATUS[o.status].tone} label={STATUS[o.status].label} />
                   {o.status === "pending_payment" && <T muted size={12}>{mmss(o.expiresAt - now)}</T>}
