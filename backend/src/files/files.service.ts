@@ -19,10 +19,7 @@ export const ALLOWED_MIME = [
   "video/mp4", "video/webm", "video/quicktime", "video/3gpp",
   "audio/mpeg", "audio/ogg", "audio/webm", "audio/mp4", "audio/x-m4a", "audio/m4a", "audio/aac", "audio/wav", "audio/3gpp", "audio/amr",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  // personal chat: attachments encrypted on the device (the server can't look inside)
-  "application/vnd.bm.e2e",
 ];
-const E2E = "application/vnd.bm.e2e";
 
 /** Magic-number check for binary types, so a renamed .exe can't pass as a PDF or image. */
 function looksLike(mime: string, b: Buffer) {
@@ -45,8 +42,7 @@ export class FilesService {
 
   async upload(user: User, file?: Express.Multer.File): Promise<Attachment> {
     if (!file) throw badRequest("No file");
-    const big = isVideo(file.mimetype) || file.mimetype === E2E; // encrypted chat files can be videos too
-    const limit = big ? env.maxVideoBytes : env.maxUploadBytes;
+    const limit = isVideo(file.mimetype) ? env.maxVideoBytes : env.maxUploadBytes;
     if (file.size > limit) throw new AppError(413, `${isVideo(file.mimetype) ? "Video" : "File"} is larger than ${Math.round(limit / 1024 / 1024)} MB`);
     if (!ALLOWED_MIME.includes(file.mimetype)) throw new AppError(415, `File type not allowed (${file.mimetype || "unknown"})`);
     if (!looksLike(file.mimetype, file.buffer)) throw new AppError(415, "File content does not match its type");
@@ -87,13 +83,6 @@ export class FilesService {
     const em = this.uow.manager;
     const own = await em.count(FileEntity, { where: { id: fileId, uploadedBy: user.id } });
     if (own) return true;
-    // personal chat: the two people in a chat that carries the (encrypted) file
-    const dm = await em.query(
-      `SELECT 1 FROM dm_messages m JOIN dm_conversations c ON c.id = m.conversation_id
-        WHERE m.file_ids @> $1::jsonb AND (c.user_a = $2 OR c.user_b = $2) LIMIT 1`,
-      [JSON.stringify([fileId]), user.id],
-    );
-    if (dm.length) return true;
     const att = JSON.stringify([{ id: fileId }]);
     const shared = await em.query(
       `SELECT 1 FROM p2p_orders WHERE proof @> $1::jsonb AND (buyer_id = $2 OR seller_id = $2)

@@ -7,12 +7,6 @@ import { io, type Socket } from "socket.io-client";
 import { storage } from "./storage";
 import { shrinkPhoto } from "./media";
 
-/** Personal chat push from the server (only to the two people in the chat). */
-export type DmEvent = { type: "message" | "read" | "block"; conversationId?: string; message?: unknown; by?: string; at?: number };
-const dmListeners = new Set<(e: DmEvent) => void>();
-/** Listen to personal chat pushes; returns an unsubscribe function. */
-export function onDm(f: (e: DmEvent) => void) { dmListeners.add(f); return () => { dmListeners.delete(f); }; }
-
 /** A sign-up code was emailed. `devCode` only while the server has no email set up (testing). */
 export type CodeSent = { email: string; retryIn: number; devCode?: string };
 
@@ -135,7 +129,6 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       socket = io(origin, { auth: { token }, transports: ["websocket"], reconnectionDelayMax: 10_000 });
       socket.on("ready", () => { live = true; refresh(); });
       socket.on("changed", () => { if (active) refresh(); });
-      socket.on("dm", (d: DmEvent) => { for (const f of dmListeners) f(d); }); // personal chat pushes
       socket.on("disconnect", () => { live = false; });
       socket.on("auth_error", (e: { message?: string }) => { toast(e?.message ?? "Session expired — please sign in again", "error"); clearSession(); });
     }

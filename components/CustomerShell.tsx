@@ -11,7 +11,6 @@ import { Avatar } from "./ui";
 import { ReminderAlerts, RemindersButton } from "./Reminders";
 import { TodoAlerts, TodoButton } from "./Todo";
 import { StorageMeter } from "./Storage";
-import { ChatsButton } from "./Chats";
 
 /** Customer area: left side menu (drawer on phones) with Products, Chat, My requests and the P2P market. */
 export default function CustomerShell({ children }: { children: React.ReactNode }) {
@@ -69,7 +68,6 @@ export default function CustomerShell({ children }: { children: React.ReactNode 
           <button onClick={logout} title="Sign out" aria-label="Sign out" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]"><LogOut size={17} /></button>
         </div>
         <div className="mt-2 flex items-center gap-1 border-t border-[var(--border)] pt-2">
-          <ChatsButton label className="px-2 py-1.5" />
           <TodoButton label className="px-2 py-1.5" />
           <RemindersButton label className="px-2 py-1.5" />
           <button onClick={toggle} title="Theme" aria-label="Toggle theme" className="ml-auto rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>

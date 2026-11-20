@@ -1,5 +1,4 @@
 import { EmailCodeEntity, UserEntity } from "./user.entity";
-import { DmBlockEntity, DmConversationEntity, DmMessageEntity } from "./dm.entity";
 import { CompanyEntity, ContactEntity } from "./contact.entity";
 import { ConversationEntity, MessageEntity } from "./conversation.entity";
 import { ResellerEntity } from "./reseller.entity";
@@ -13,7 +12,6 @@ import { TaskEntity, TaskListEntity } from "./task.entity";
 import { ActivityEntity, CounterEntity, FileEntity, ProcessedEventEntity, ReminderEntity, SavedReplyEntity, SettingsEntity } from "./misc.entity";
 
 export * from "./user.entity";
-export * from "./dm.entity";
 export * from "./contact.entity";
 export * from "./conversation.entity";
 export * from "./reseller.entity";
@@ -30,5 +28,5 @@ export const ENTITIES = [
   UserEntity, EmailCodeEntity, CompanyEntity, ContactEntity, ConversationEntity, MessageEntity, ResellerEntity, RequestEntity, AssignmentEntity,
   QuoteEntity, QuoteRevisionEntity, OrderEntity, OrderHistoryEntity, CaseEntity, CaseEvidenceEntity, CaseHistoryEntity,
   ActivityEntity, SavedReplyEntity, ReminderEntity, SettingsEntity, FileEntity, ProcessedEventEntity, CounterEntity, ProductEntity,
-  P2PAdEntity, P2POrderEntity, P2PMessageEntity, P2PProfileEntity, BroadcastEntity, TaskEntity, TaskListEntity, DmConversationEntity, DmMessageEntity, DmBlockEntity,
+  P2PAdEntity, P2POrderEntity, P2PMessageEntity, P2PProfileEntity, BroadcastEntity, TaskEntity, TaskListEntity,
 ];

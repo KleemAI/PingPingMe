@@ -64,18 +64,12 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       const user = await this.auth.verify(raw);
       socket.data.user = user;
       await socket.join("users");
-      await socket.join(`user:${user.id}`); // personal chat pushes
       await socket.join(user.role === "reseller" ? `reseller:${user.resellerId}` : user.role === "customer" ? `customer:${user.id}` : "team");
       socket.emit("ready", { user: { id: user.id, name: user.name, role: user.role }, version: await this.uow.version() });
     } catch (e) {
       socket.emit("auth_error", { message: (e as Error).message });
       socket.disconnect(true);
     }
-  }
-
-  /** Push to particular people (personal chat): no global version bump, nobody else refetches. */
-  toUsers(ids: string[], event: string, data: unknown) {
-    for (const id of new Set(ids)) this.server?.to(`user:${id}`).emit(event, data);
   }
 
   handleDisconnect() { /* nothing to clean up — rooms are released automatically */ }
