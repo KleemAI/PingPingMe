@@ -41,6 +41,8 @@ import { QueryService } from "./state/query.service";
 import { ActionsService } from "./state/actions.service";
 import { StateController } from "./state/state.controller";
 import { OpsController } from "./ops/ops.controller";
+import { DmController } from "./dm/dm.controller";
+import { DmService } from "./dm/dm.service";
 
 /**
  * Infrastructure modules are global (database, auth, audit, files, channel).
@@ -58,13 +60,13 @@ import { OpsController } from "./ops/ops.controller";
   controllers: [
     StateController, ConversationsController, MessagesController, ContactsController, RequestsController, ResellersController,
     QuotesController, OrdersController, ExportController, CasesController, WorkspaceController, SettingsController,
-    UsersController, CustomersController, PortalController, OpsController, P2PController,
+    UsersController, CustomersController, PortalController, OpsController, P2PController, DmController,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     RealtimeGateway,
     ConversationsService, ContactsService, RequestsService, ResellersService, QuotesService, OrdersService, ExportService,
-    CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService, CatalogService, CustomerService, BroadcastsService, TasksService,
+    CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService, CatalogService, CustomerService, BroadcastsService, TasksService, DmService,
   ],
 })
 export class AppModule {}

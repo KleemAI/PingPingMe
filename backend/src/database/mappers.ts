@@ -13,7 +13,7 @@ import type {
 
 export const toUser = (u: UserEntity): User =>
   clean({
-    id: u.id, name: u.name, email: u.email, role: u.role as User["role"], resellerId: u.resellerId, active: u.active,
+    id: u.id, name: u.name, email: u.email, role: u.role as User["role"], resellerId: u.resellerId, active: u.active, username: u.username ?? undefined,
     ...(u.role === "customer" ? { verified: !!u.verified, createdAt: u.createdAt ? new Date(u.createdAt).getTime() : undefined } : {}),
   }) as User;
 

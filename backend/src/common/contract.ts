@@ -11,6 +11,7 @@ export type User = {
   email: string;
   role: Role;
   resellerId?: string; // for reseller users
+  username?: string; // personal chat handle
   verified?: boolean; // customers only: may sell on P2P once our team has verified them
   createdAt?: number; // customers only
   active: boolean;
