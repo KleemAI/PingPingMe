@@ -60,7 +60,6 @@ export default function People() {
   const { found, searching } = usePeopleSearch(q);
   const [open, setOpen] = useState<Open | null>(null);
   const [newGroup, setNewGroup] = useState(false);
-  const [info, setInfo] = useState(false);
 
   const chat = useMemo(() => (open?.kind === "pm" ? chats?.find((c) => c.id === open.chatId || c.with.id === open.person.id) ?? null : null), [open, chats]);
   const group = useMemo(() => (open?.kind === "group" ? groups.find((g) => g.id === open.id) ?? null : null), [open, groups]);
@@ -69,9 +68,6 @@ export default function People() {
   useEffect(() => {
     if (chat?.unread) act("pm.read", { chatId: chat.id }).then(reload).catch(() => {});
   }, [chat?.id, chat?.unread]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (group?.unread) act("group.read", { groupId: group.id }).then(reload).catch(() => {});
-  }, [group?.id, group?.unread]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const t = q.trim().toLowerCase();
   type Item = { key: string; name: string; at: number; unread: number; sub: string; group: boolean; onClick: () => void; active: boolean };
@@ -107,23 +103,14 @@ export default function People() {
         } as Message;
       });
     }
-    return (group?.messages ?? []).map((m) => ({
-      id: m.id, audience: "customer", direction: m.authorId === me?.id ? "out" : "in", authorId: m.authorId, authorName: m.authorName,
-      text: m.text, attachments: m.attachments, createdAt: m.createdAt, expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
-      opened: m.opened, system: m.system,
-    } as Message));
-  }, [chat, group, me?.id, me?.name]);
+    return [];
+  }, [chat, me?.id, me?.name]);
 
   const sendPm = async (text: string, attachments: { id: string }[], viewOnce?: boolean) => {
     if (open?.kind !== "pm") return;
     const target = chat ? { chatId: chat.id } : { userId: open.person.id };
     const id = (await act("pm.send", { ...target, text, attachments: attachments.map((a) => a.id), viewOnce })) as string;
     setOpen((o) => (o?.kind === "pm" ? { ...o, chatId: id } : o));
-    await reload();
-  };
-  const sendGroup = async (text: string, attachments: { id: string }[], viewOnce?: boolean) => {
-    if (!group) return;
-    await act("group.send", { groupId: group.id, text, attachments: attachments.map((a) => a.id), viewOnce });
     await reload();
   };
 
@@ -140,8 +127,8 @@ export default function People() {
   );
 
   const header = open?.kind === "pm"
-    ? { name: open.person.name, sub: `${open.person.role === "team" ? "Our team" : "Customer"}${open.person.hint ? ` · ${open.person.hint}` : ""}`, isGroup: false }
-    : group ? { name: group.name, sub: group.members.map((m) => (m.id === me?.id ? "You" : m.name.split(" ")[0])).join(", "), isGroup: true } : null;
+    ? { name: open.person.name, sub: `${open.person.role === "team" ? "Our team" : "Customer"}${open.person.hint ? ` · ${open.person.hint}` : ""}` }
+    : null;
 
   return (
     <div className="flex h-full min-h-0">
@@ -185,34 +172,29 @@ export default function People() {
         </ul>
       </section>
       <section className={`min-w-0 flex-1 flex-col ${open ? "flex" : "hidden md:flex"}`}>
-        {!open || !header ? (
+        {group ? <GroupView key={group.id} group={group} meId={me?.id} onBack={() => setOpen(null)} reload={reload} /> : !open || !header ? (
           <div className="flex flex-1 items-center justify-center"><Empty icon={MessagesSquare} title="Chats" text="Search someone on the left and say hello — or make a group." /></div>
         ) : (
           <>
             <header className="flex min-h-[60px] shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--panel-2)] px-3 py-2">
               <button onClick={() => setOpen(null)} className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)] md:hidden" aria-label="Back"><ArrowLeft size={19} /></button>
-              <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => group && setInfo(true)} disabled={!group}>
-                <Avatar name={header.name} size={40} group={header.isGroup} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[15px] font-medium">{header.name}</div>
-                  <div className="truncate text-[12px] text-[var(--muted)]">{header.sub}</div>
-                </div>
-              </button>
+              <Avatar name={header.name} size={40} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[15px] font-medium">{header.name}</div>
+                <div className="truncate text-[12px] text-[var(--muted)]">{header.sub}</div>
+              </div>
               {chat && <DisappearingPicker value={chat.disappearSeconds} onChange={(v) => act("pm.disappearing", { chatId: chat.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />}
-              {group && <DisappearingPicker value={group.disappearSeconds} onChange={(v) => act("group.disappearing", { groupId: group.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />}
-              {group && <button onClick={() => setInfo(true)} title="Group info" aria-label="Group info" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><Info size={19} /></button>}
             </header>
-            <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction={group ? "group.open" : "pm.open"} />
+            <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="pm.open" />
             <Composer
               allowViewOnce
-              modes={[{ id: "pm", kind: "customer", label: "Message", hint: group ? `Everyone in ${group.name} sees this` : `Only ${header.name.split(" ")[0]} and you can see this chat` }]}
-              onSend={(_m, text, attachments, opts) => (group ? sendGroup(text, attachments, opts?.viewOnce) : sendPm(text, attachments, opts?.viewOnce))}
+              modes={[{ id: "pm", kind: "customer", label: "Message", hint: `Only ${header.name.split(" ")[0]} and you can see this chat` }]}
+              onSend={(_m, text, attachments, opts) => sendPm(text, attachments, opts?.viewOnce)}
             />
           </>
         )}
       </section>
       {newGroup && <NewGroup onClose={() => setNewGroup(false)} onCreated={async (id) => { setNewGroup(false); await reload(); setOpen({ kind: "group", id }); }} />}
-      {info && group && <GroupInfo group={group} meId={me?.id} onClose={() => setInfo(false)} onLeft={() => { setInfo(false); setOpen(null); reload(); }} reload={reload} />}
     </div>
   );
 }
@@ -257,7 +239,44 @@ function PeoplePicker({ picked, setPicked, exclude = [] }: { picked: Person[]; s
   );
 }
 
-function NewGroup({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+/** One group chat: header (calls, disappearing, info), messages and the message box. Used by Chats and the Customer inbox. */
+export function GroupView({ group, meId, onBack, reload }: { group: GroupChat; meId?: string; onBack: () => void; reload: () => Promise<void> }) {
+  const { act } = useStore();
+  const [info, setInfo] = useState(false);
+  useEffect(() => {
+    if (group.unread) act("group.read", { groupId: group.id }).then(reload).catch(() => {});
+  }, [group.id, group.unread]); // eslint-disable-line react-hooks/exhaustive-deps
+  const messages: Message[] = useMemo(() => group.messages.map((m) => ({
+    id: m.id, audience: "customer", direction: m.authorId === meId ? "out" : "in", authorId: m.authorId, authorName: m.authorName,
+    text: m.text, attachments: m.attachments, createdAt: m.createdAt, expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
+    opened: m.opened, system: m.system,
+  } as Message)), [group, meId]);
+  return (
+    <>
+      <header className="flex min-h-[60px] shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--panel-2)] px-3 py-2">
+        <button onClick={onBack} className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)] md:hidden" aria-label="Back"><ArrowLeft size={19} /></button>
+        <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={() => setInfo(true)}>
+          <Avatar name={group.name} size={40} group />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-medium">{group.name}</div>
+            <div className="truncate text-[12px] text-[var(--muted)]">{group.members.map((m) => (m.id === meId ? "You" : m.name.split(" ")[0])).join(", ")}</div>
+          </div>
+        </button>
+        <DisappearingPicker value={group.disappearSeconds} onChange={(v) => act("group.disappearing", { groupId: group.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />
+        <button onClick={() => setInfo(true)} title="Group info" aria-label="Group info" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><Info size={19} /></button>
+      </header>
+      <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="group.open" />
+      <Composer
+        allowViewOnce
+        modes={[{ id: "group", kind: "customer", label: "Message", hint: `Everyone in ${group.name} sees this` }]}
+        onSend={async (_m, text, attachments, opts) => { await act("group.send", { groupId: group.id, text, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce }); await reload(); }}
+      />
+      {info && <GroupInfo group={group} meId={meId} onClose={() => setInfo(false)} onLeft={() => { setInfo(false); onBack(); reload(); }} reload={reload} />}
+    </>
+  );
+}
+
+export function NewGroup({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const { act } = useStore();
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<Person[]>([]);

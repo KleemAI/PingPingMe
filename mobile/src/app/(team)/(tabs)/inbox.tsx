@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { matches, newChatCandidates, searchTerm, type NewChat } from "@/lib/inboxSearch";
+import { usePersonalChats } from "@/lib/people";
 import { Ionicons } from "@expo/vector-icons";
 import { useTeam } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
-import type { ContactType, Conversation } from "@/lib/types";
+import type { ContactType, Conversation, GroupChat } from "@/lib/types";
 import { CONV_STATUS, PRIORITY, isUnanswered, listTime } from "@/lib/format";
 import { Avatar, Chips, Empty, Input, Button, SearchBar, Sheet, StatusPill, T } from "@/components/ui";
 import { Ticks } from "@/components/Thread";
@@ -49,6 +50,13 @@ export default function Inbox() {
   }, [db, kind, filter, term, now]); // eslint-disable-line react-hooks/exhaustive-deps
   // people found by the search who have no chat yet (contacts and app customers)
   const fresh = useMemo(() => newChatCandidates(db, kind, term), [db, kind, term]);
+  // group chats live in the Customer inbox too (customers and the team together)
+  const { groups } = usePersonalChats();
+  const shownGroups = kind !== "customer" ? [] : groups.filter((g) => term.text
+    ? g.name.toLowerCase().includes(term.text) || g.members.some((m) => m.name.toLowerCase().includes(term.text))
+    : filter === "open" || filter === "all" || (filter === "unread" && g.unread > 0));
+  type Item = { id: string; at: number; cv?: Conversation; g?: GroupChat };
+  const rows: Item[] = [...list.map((cv) => ({ id: cv.id, at: cv.lastMessageAt, cv })), ...shownGroups.map((g) => ({ id: g.id, at: g.lastMessageAt, g }))].sort((a, b) => b.at - a.at);
   const [starting, setStarting] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const startChat = async (n: NewChat) => {
@@ -78,9 +86,15 @@ export default function Inbox() {
         ))}
       </View>
       <SearchBar value={q} onChange={setQ} placeholder={kind === "business" ? "Search company, contact, message" : "Search name, phone, message"} />
+      {kind === "customer" && (
+        <Pressable onPress={() => router.push("/people/new-group")} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 14, marginTop: 8, paddingVertical: 4, opacity: pressed ? 0.6 : 1 })}>
+          <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: c.accent, alignItems: "center", justifyContent: "center" }}><Ionicons name="people" size={17} color="#fff" /></View>
+          <T weight="600" color={c.accentStrong}>New group</T>
+        </Pressable>
+      )}
       <Chips items={chips} value={filter} onChange={setFilter} />
       <FlatList
-        data={list}
+        data={rows}
         keyExtractor={(x) => x.id}
         ListEmptyComponent={fresh.length ? undefined : term.digits.length >= 8
           ? <View style={{ padding: 24, gap: 10, alignItems: "center" }}>
@@ -103,7 +117,28 @@ export default function Inbox() {
             ))}
           </View>
         ) : undefined}
-        renderItem={({ item: cv }) => {
+        renderItem={({ item }) => {
+          if (item.g) {
+            const g = item.g;
+            const last = g.messages.at(-1);
+            return (
+              <Pressable onPress={() => router.push({ pathname: "/people/group/[id]", params: { id: g.id } })} style={({ pressed }) => ({ flexDirection: "row", gap: 12, paddingLeft: 14, backgroundColor: pressed ? c.card2 : c.card })}>
+                <View style={{ paddingVertical: 10 }}><Avatar name={g.name} size={50} icon="people" /></View>
+                <View style={{ flex: 1, paddingVertical: 10, paddingRight: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: c.border, gap: 2 }}>
+                  <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+                    <T size={16} numberOfLines={1} style={{ flex: 1 }}>{g.name}</T>
+                    <T size={12} color={g.unread ? c.accent : c.muted} weight={g.unread ? "600" : "400"}>{listTime(g.lastMessageAt)}</T>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <T size={14} muted numberOfLines={1} style={{ flex: 1 }}>{!last ? `${g.members.length} members` : last.system ? last.text : `${last.authorId === me.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}`}</T>
+                    {g.unread > 0 && <View style={{ backgroundColor: c.accent, borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}><T size={11} color="#fff" weight="700">{g.unread}</T></View>}
+                  </View>
+                  <T size={11.5} muted>Group · {g.members.length} members</T>
+                </View>
+              </Pressable>
+            );
+          }
+          const cv = item.cv!;
           const ct = contact(cv);
           const co = company(cv);
           const last = db.messages.filter((m) => m.conversationId === cv.id && m.audience !== "reseller").at(-1);

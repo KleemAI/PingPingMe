@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { matches, newChatCandidates, searchTerm, type NewChat } from "@/lib/inboxSearch";
+import { GroupView, NewGroup, usePersonalChats } from "./People";
 import {
   Loader2, Search, ArrowLeft, PanelRightOpen, PanelRightClose, Tag, Plus, ClipboardList, Bell, Scale, Building2, User as UserIcon, Pencil, RefreshCw,
   Phone, Mail, MapPin, MessageSquarePlus, Inbox as InboxIcon, AlertCircle, Users, Package, Download,
@@ -75,6 +76,23 @@ export default function Inbox({ kind }: { kind: ContactType }) {
   };
 
   const active = convs.find((c) => c.id === activeId) ?? null;
+  // group chats live in the Customer inbox too (customers and the team together)
+  const { groups, reload: reloadGroups } = usePersonalChats();
+  const [newGroup, setNewGroup] = useState(false);
+  const activeGroup = kind === "customer" ? groups.find((g) => g.id === params.get("g")) ?? null : null;
+  const shownGroups = kind !== "customer" ? [] : groups.filter((g) => term.text
+    ? g.name.toLowerCase().includes(term.text) || g.members.some((m) => m.name.toLowerCase().includes(term.text))
+    : filter === "open" || filter === "all" || (filter === "unread" && g.unread > 0));
+  const rows = [
+    ...list.map((c) => ({ kind: "conv" as const, c, at: c.lastMessageAt })),
+    ...shownGroups.map((g) => ({ kind: "group" as const, g, at: g.lastMessageAt })),
+  ].sort((a, b) => b.at - a.at);
+  const selectGroup = (id: string | null) => {
+    const sp = new URLSearchParams(params.toString());
+    sp.delete("c");
+    if (id) sp.set("g", id); else sp.delete("g");
+    router.replace(`?${sp.toString()}`, { scroll: false });
+  };
   // if the contact was reclassified, follow it to the other inbox
   const moved = !active && activeId ? db.conversations.find((c) => c.id === activeId) : null;
 
@@ -86,6 +104,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
     const sp = new URLSearchParams(params.toString());
     if (id) sp.set("c", id); else sp.delete("c");
     sp.delete("filter");
+    sp.delete("g");
     router.replace(`?${sp.toString()}`, { scroll: false });
   };
 
@@ -107,7 +126,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
   return (
     <div className="flex h-full min-h-0">
       {/* list */}
-      <section className={`${active ? "hidden md:flex" : "flex"} w-full flex-col border-r border-[var(--border)] bg-[var(--panel)] md:w-[340px] md:shrink-0 xl:w-[380px]`}>
+      <section className={`${active || activeGroup ? "hidden md:flex" : "flex"} w-full flex-col border-r border-[var(--border)] bg-[var(--panel)] md:w-[340px] md:shrink-0 xl:w-[380px]`}>
         <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
           <div>
             <h1 className="text-[20px] font-bold">{kind === "customer" ? "Customer inbox" : "Business inbox"}</h1>
@@ -116,6 +135,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
           <div className="flex gap-1">
             <button onClick={() => setSimulate(true)} title="Simulate incoming message" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><Download size={18} /></button>
             <button onClick={() => setNewChat(true)} title="New chat" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><MessageSquarePlus size={19} /></button>
+            {kind === "customer" && <button onClick={() => setNewGroup(true)} title="New group" aria-label="New group" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><Users size={19} /></button>}
           </div>
         </div>
         <div className="px-3 pb-2">
@@ -126,7 +146,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
         </div>
         <div className="px-3 pb-2"><Tabs tabs={tabs} value={filter} onChange={setFilter} /></div>
         <ul className="scroll-thin flex-1 overflow-y-auto">
-          {list.length === 0 && !fresh.length && (
+          {rows.length === 0 && !fresh.length && (
             term.digits.length >= 8
               ? <li className="p-4 text-center text-[13.5px]">
                   <p className="mb-2 text-[var(--muted)]">Nobody with this number yet.</p>
@@ -134,7 +154,30 @@ export default function Inbox({ kind }: { kind: ContactType }) {
                 </li>
               : <Empty icon={InboxIcon} title="Nothing here" text={term.text ? "No chat or contact matches your search." : "Try another filter or search."} />
           )}
-          {list.map((c) => {
+          {rows.map((row) => {
+            if (row.kind === "group") {
+              const g = row.g;
+              const last = g.messages.at(-1);
+              return (
+                <li key={g.id}>
+                  <button onClick={() => selectGroup(g.id)} className={`flex w-full items-center gap-3 px-3 text-left transition ${g.id === activeGroup?.id ? "bg-[var(--active)]" : "hover:bg-[var(--hover)]"}`}>
+                    <Avatar name={g.name} size={46} group />
+                    <div className="min-w-0 flex-1 border-b border-[var(--border)] py-2.5">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-[15px]">{g.name}</span>
+                        <span className={`shrink-0 text-[11.5px] ${g.unread ? "font-semibold text-[var(--accent)]" : "text-[var(--muted)]"}`}>{listTime(g.lastMessageAt)}</span>
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-1 text-[13px] text-[var(--muted)]">
+                        <span className="truncate">{!last ? `${g.members.length} members` : last.system ? last.text : `${last.authorId === me.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}`}</span>
+                        {g.unread > 0 && <span className="ml-auto min-w-[19px] shrink-0 rounded-full bg-[var(--accent)] px-1.5 text-center text-[11px] font-semibold leading-[19px] text-white">{g.unread}</span>}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1"><span className="rounded-full bg-[var(--panel-2)] px-2 py-0.5 text-[11px] text-[var(--muted)]">Group · {g.members.length}</span></div>
+                    </div>
+                  </button>
+                </li>
+              );
+            }
+            const c = row.c;
             const ct = contactOf(c);
             const co = companyOf(ct);
             const last = lastMsg(c.id);
@@ -187,7 +230,11 @@ export default function Inbox({ kind }: { kind: ContactType }) {
       </section>
 
       {/* chat */}
-      {active ? (
+      {activeGroup ? (
+        <section className="flex min-w-0 flex-1 flex-col">
+          <GroupView key={activeGroup.id} group={activeGroup} meId={me.id} onBack={() => selectGroup(null)} reload={reloadGroups} />
+        </section>
+      ) : active ? (
         <Chat key={active.id} conv={active} onBack={() => select(null)} details={details} setDetails={setDetails} />
       ) : (
         <div className="hidden flex-1 flex-col items-center justify-center gap-3 bg-[var(--panel-2)] text-center text-[var(--muted)] md:flex">
@@ -206,6 +253,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
         </div>
       )}
 
+      {newGroup && <NewGroup onClose={() => setNewGroup(false)} onCreated={async (id) => { setNewGroup(false); await reloadGroups(); selectGroup(id); }} />}
       <NewChatModal open={newChat} onClose={() => setNewChat(false)} kind={kind} phone={term.digits.length >= 8 ? q.trim() : ""} onCreated={(id) => { setQ(""); select(id); }} />
       <SimulateModal open={simulate} onClose={() => setSimulate(false)} />
     </div>

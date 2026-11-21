@@ -9,7 +9,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, type Tone } from "@/lib/theme";
 import { colorFor, initials } from "@/lib/format";
 import { useStore } from "@/lib/store";
-import { usePersonalChats } from "@/lib/people";
 
 export type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -281,18 +280,10 @@ export function TodoButton() {
   return <HeaderIcon icon="checkbox-outline" n={n} onPress={() => router.push("/todo")} label={n ? `To-Do, ${n} due` : "To-Do"} />;
 }
 
-/** 💬 Personal chats — badge: unread messages. Not shown to resellers. */
-export function PeopleButton() {
-  const { unread, enabled } = usePersonalChats();
-  if (!enabled) return null;
-  return <HeaderIcon icon="chatbubble-ellipses-outline" n={unread} onPress={() => router.push("/people")} label={unread ? `Chats, ${unread} unread` : "Chats"} />;
-}
-
-/** Header buttons on every main tab: chats, to-do, reminders, light/dark. */
+/** Header buttons on every main tab: to-do, reminders, light/dark. */
 export function HeaderActions() {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 2 }}>
-      <PeopleButton />
       <TodoButton />
       <RemindersButton />
       <ThemeToggle />
