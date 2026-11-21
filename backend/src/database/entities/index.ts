@@ -9,6 +9,8 @@ import { ProductEntity } from "./product.entity";
 import { P2PAdEntity, P2PMessageEntity, P2POrderEntity, P2PProfileEntity } from "./p2p.entity";
 import { BroadcastEntity } from "./broadcast.entity";
 import { TaskEntity, TaskListEntity } from "./task.entity";
+import { SessionEntity } from "./session.entity";
+import { PersonalChatEntity, PersonalMessageEntity } from "./people.entity";
 import { ActivityEntity, CounterEntity, FileEntity, ProcessedEventEntity, ReminderEntity, SavedReplyEntity, SettingsEntity } from "./misc.entity";
 
 export * from "./user.entity";
@@ -23,10 +25,12 @@ export * from "./product.entity";
 export * from "./p2p.entity";
 export * from "./broadcast.entity";
 export * from "./task.entity";
+export * from "./session.entity";
+export * from "./people.entity";
 
 export const ENTITIES = [
   UserEntity, EmailCodeEntity, CompanyEntity, ContactEntity, ConversationEntity, MessageEntity, ResellerEntity, RequestEntity, AssignmentEntity,
   QuoteEntity, QuoteRevisionEntity, OrderEntity, OrderHistoryEntity, CaseEntity, CaseEvidenceEntity, CaseHistoryEntity,
   ActivityEntity, SavedReplyEntity, ReminderEntity, SettingsEntity, FileEntity, ProcessedEventEntity, CounterEntity, ProductEntity,
-  P2PAdEntity, P2POrderEntity, P2PMessageEntity, P2PProfileEntity, BroadcastEntity, TaskEntity, TaskListEntity,
+  P2PAdEntity, P2POrderEntity, P2PMessageEntity, P2PProfileEntity, BroadcastEntity, TaskEntity, TaskListEntity, SessionEntity, PersonalChatEntity, PersonalMessageEntity,
 ];

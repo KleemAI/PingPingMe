@@ -17,10 +17,10 @@ export class ConversationsController {
   }
 
   @Get(":id")
-  get(@Param("id") id: string) { return this.query.conversation(id); }
+  get(@Param("id") id: string, @CurrentUser() user: User) { return this.query.conversation(id, user); }
 
   @Get(":id/messages")
-  async messages(@Param("id") id: string) { return (await this.query.conversation(id)).messages; }
+  async messages(@Param("id") id: string, @CurrentUser() user: User) { return (await this.query.conversation(id, user)).messages; }
 
   /** `{ audience: "customer" | "internal", text, attachments?: [fileId] }` */
   @Post(":id/messages") @HttpCode(200)

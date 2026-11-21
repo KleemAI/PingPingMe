@@ -52,6 +52,9 @@ export default function More() {
         {db.savedReplies.map((s) => <Row key={s.id} title={`/${s.shortcut}`} subtitle={s.text} />)}
         <T muted size={12} style={{ padding: 12 }}>Type “/” in any message box to use these. Manage them in the web app → Settings.</T>
       </Card>
+      <Card title="Linked devices" icon="phone-portrait-outline">
+        <Row title="Linked devices" subtitle="Phones and browsers signed in to your account" onPress={() => router.push("/devices")} />
+      </Card>
       <Card title="Connection" icon="cloud-outline">
         <Row title="Server" subtitle={server || "same origin"} />
         <Row title="Channels" subtitle={db.settings.channels.map((ch) => `${ch.name}: ${ch.status.replace("_", " ")}`).join("\n")} />

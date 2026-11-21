@@ -11,8 +11,7 @@ import {
 } from "../database/entities";
 import {
   groupBy, toActivity, toCase, toCompany, toContact, toConversation, toMessage, toOrder, toQuote, toReminder, toRequest,
-  toReseller, toSavedReply, toSettings, toUser,
-} from "../database/mappers";
+  toReseller, toSavedReply, toSettings, toUser, messagesFor } from "../database/mappers";
 import { UnitOfWork } from "../database/unit-of-work.service";
 import { StateService } from "./state.service";
 
@@ -38,13 +37,13 @@ export class QueryService {
     return rows.map((c) => ({ ...toConversation(c), contact: toContact(c.contact!) }));
   }
 
-  async conversation(id: string) {
+  async conversation(id: string, user: User) {
     const c = await this.em.findOne(ConversationEntity, { where: { id }, relations: { contact: true } });
     if (!c) throw notFound("Conversation");
     const messages = await this.em.find(MessageEntity, { where: { conversationId: id, audience: In(["customer", "internal"]) }, order: { createdAt: "ASC", seq: "ASC" } });
     const requests = await this.em.find(RequestEntity, { where: { conversationId: id } });
     const company = c.contact?.companyId ? await this.em.findOne(CompanyEntity, { where: { id: c.contact.companyId } }) : null;
-    return { conversation: toConversation(c), contact: toContact(c.contact!), company: company ? toCompany(company) : undefined, messages: messages.map(toMessage), requestIds: requests.map((r) => r.id) };
+    return { conversation: toConversation(c), contact: toContact(c.contact!), company: company ? toCompany(company) : undefined, messages: messagesFor(messages, user), requestIds: requests.map((r) => r.id) };
   }
 
   async contacts(f: { type?: string; q?: string }) {
@@ -106,8 +105,8 @@ export class QueryService {
     ]);
     return {
       request: toRequest(r, assignments), contact: contact ? toContact(contact) : undefined,
-      resellerThread: messages.filter((m) => m.audience === "reseller").map(toMessage),
-      notes: messages.filter((m) => m.audience === "internal").map(toMessage),
+      resellerThread: messagesFor(messages.filter((m) => m.audience === "reseller"), user),
+      notes: messagesFor(messages.filter((m) => m.audience === "internal"), user),
       quotes, orders, cases, activity,
     };
   }

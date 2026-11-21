@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { router } from "expo-router";
 import { Alert, FlatList, Platform, View } from "react-native";
 import { useTeam } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
@@ -54,6 +55,9 @@ export default function Customers() {
                 {!!u.createdAt && <T muted size={11.5}>Joined {dateTime(u.createdAt)}</T>}
               </View>
             </View>
+            <Button small variant="outline" icon="chatbubble-outline" title="Chat" onPress={async () => {
+              try { router.push(`/chat/${(await act("customer.chat", { id: u.id })) as string}`); } catch { /* toast shown */ }
+            }} />
             {u.verified
               ? <Button small variant="outline" title="Remove" onPress={() => setVerified(u, false)} />
               : <Button small icon="checkmark" title="Verify" onPress={() => setVerified(u, true)} />}

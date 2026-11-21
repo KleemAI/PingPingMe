@@ -40,10 +40,13 @@ export default function Account() {
         {!!b.phone && <Row title="Phone" subtitle={b.phone} />}
         {!!b.email && <Row title="Email" subtitle={b.email} />}
         {!!b.hours && <Row title="Hours" subtitle={b.hours} />}
-        <Row title="Chat with us" subtitle="Usually the quickest way" onPress={() => router.push("/shop/chat")} />
+        <Row title="Chat with us" subtitle="Usually the quickest way" onPress={() => router.push("/shop/support")} />
       </Card>
       <StorageCard />
       <AppearanceCard />
+      <Card title="Linked devices" icon="phone-portrait-outline">
+        <Row title="Linked devices" subtitle="Phones and browsers signed in to your account" onPress={() => router.push("/devices")} />
+      </Card>
       <Card title="Connection" icon="cloud-outline"><Row title="Server" subtitle={server || "same origin"} /></Card>
       <Button variant="outline" icon="log-out-outline" title="Sign out" onPress={() => {
         if (Platform.OS === "web") return logout();

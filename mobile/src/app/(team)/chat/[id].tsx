@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, View } from "react-native";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useHeaderHeight } from "expo-router/react-navigation";
@@ -7,7 +7,7 @@ import { useTeam } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { CONV_STATUS } from "@/lib/format";
 import { Avatar, Empty, T } from "@/components/ui";
-import { Composer, MessageList } from "@/components/Thread";
+import { Composer, DisappearingButton, MessageList, disappearLabel } from "@/components/Thread";
 
 export default function Chat() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -40,12 +40,16 @@ export default function Chat() {
           </Pressable>
         ),
         headerRight: () => (
-          <Pressable onPress={() => router.push({ pathname: "/chat/info", params: { id: conv.id } })} hitSlop={10}>
-            <Ionicons name="information-circle-outline" size={25} color={c.text} />
-          </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+            <DisappearingButton value={conv.disappearSeconds}
+              onChange={(v) => act("conv.disappearing", { conversationId: conv.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />
+            <Pressable onPress={() => router.push({ pathname: "/chat/info", params: { id: conv.id } })} hitSlop={10}>
+              <Ionicons name="information-circle-outline" size={25} color={c.text} />
+            </Pressable>
+          </View>
         ),
       }} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={headerHeight}>
         <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")}
           onRetry={(m) => act("conv.retry", { messageId: m.id, text: m.text.replace("[fail]", "").trim() }, "Retrying…")} />
         <Composer
@@ -54,7 +58,8 @@ export default function Chat() {
             { id: "customer", kind: "customer", label: `Reply to ${ct.name.split(" ")[0]}`, hint: `via ${channel}` },
             { id: "internal", kind: "internal", label: "Internal note", hint: "team only" },
           ]}
-          onSend={(mode, text, att) => act("conv.send", { conversationId: conv.id, audience: mode, text, attachments: att.map((a) => a.id) })}
+          allowViewOnce
+          onSend={(mode, text, att, opts) => act("conv.send", { conversationId: conv.id, audience: mode, text, attachments: att.map((a) => a.id), viewOnce: opts?.viewOnce })}
         />
       </KeyboardAvoidingView>
     </View>

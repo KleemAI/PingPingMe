@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { matches, newChatCandidates, searchTerm, type NewChat } from "@/lib/inboxSearch";
 import {
-  Search, ArrowLeft, PanelRightOpen, PanelRightClose, Tag, Plus, ClipboardList, Bell, Scale, Building2, User as UserIcon, Pencil, RefreshCw,
+  Loader2, Search, ArrowLeft, PanelRightOpen, PanelRightClose, Tag, Plus, ClipboardList, Bell, Scale, Building2, User as UserIcon, Pencil, RefreshCw,
   Phone, Mail, MapPin, MessageSquarePlus, Inbox as InboxIcon, AlertCircle, Users, Package, Download,
 } from "lucide-react";
 import { useTeam } from "@/lib/client/store";
 import type { Contact, Conversation, ContactType } from "@/lib/types";
 import { CONV_STATUS, PRIORITY, REQ_STATUS, ORDER_STATUS, CASE_STATUS, isUnanswered, listTime, rupees, relative } from "@/lib/format";
 import { Avatar, Button, Card, Empty, Field, Modal, Pill, StatusPill, Tabs, inputCls } from "./ui";
-import { Composer, MessageList, Ticks } from "./Thread";
+import { Composer, MessageList, Ticks, DisappearingPicker, disappearLabel } from "./Thread";
 import { CreateRequestModal, OpenCaseModal, ReminderModal } from "./forms";
 import { plain } from "@/lib/chatFormat";
 
@@ -39,11 +40,12 @@ export default function Inbox({ kind }: { kind: ContactType }) {
 
   const convs = useMemo(() => db.conversations.filter((c) => contactOf(c)?.type === kind), [db, kind]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const term = useMemo(() => searchTerm(q), [q]);
   const list = useMemo(() => {
-    const term = q.trim().toLowerCase();
     return convs
       .filter((c) => {
-        switch (filter) {
+        // a search looks through every chat, like WhatsApp — the filter tabs apply only without a search
+        if (!term.text) switch (filter) {
           case "open": if (c.status === "resolved") return false; break;
           case "mine": if (c.assigneeId !== me.id || c.status === "resolved") return false; break;
           case "unassigned": if (c.assigneeId || c.status === "resolved") return false; break;
@@ -53,13 +55,24 @@ export default function Inbox({ kind }: { kind: ContactType }) {
           case "waiting_customer": case "waiting_reseller": case "resolved": if (c.status !== filter) return false; break;
           default: if (filter.startsWith("label:") && !c.labels.includes(filter.slice(6))) return false;
         }
-        if (!term) return true;
+        if (!term.text) return true;
         const ct = contactOf(c);
-        return ct.name.toLowerCase().includes(term) || ct.phone.includes(term) || companyOf(ct)?.name.toLowerCase().includes(term) ||
-          db.messages.some((m) => m.conversationId === c.id && m.text.toLowerCase().includes(term));
+        return matches(term, { name: ct.name, phone: ct.phone, email: ct.email, company: companyOf(ct)?.name }) ||
+          db.messages.some((m) => m.conversationId === c.id && m.text.toLowerCase().includes(term.text));
       })
       .sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-  }, [convs, filter, q, db, now, me.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [convs, filter, term, db, now, me.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // people found by the search who have no chat yet (contacts and app customers)
+  const fresh = useMemo(() => newChatCandidates(db, kind, term), [db, kind, term]);
+  const [starting, setStarting] = useState<string | null>(null);
+  const startChat = async (n: NewChat) => {
+    setStarting(n.key);
+    try {
+      const id = (await (n.userId ? act("customer.chat", { id: n.userId }) : act("conv.start", { contactId: n.contactId }))) as string;
+      setQ("");
+      select(id);
+    } catch { /* toast shown */ } finally { setStarting(null); }
+  };
 
   const active = convs.find((c) => c.id === activeId) ?? null;
   // if the contact was reclassified, follow it to the other inbox
@@ -113,7 +126,14 @@ export default function Inbox({ kind }: { kind: ContactType }) {
         </div>
         <div className="px-3 pb-2"><Tabs tabs={tabs} value={filter} onChange={setFilter} /></div>
         <ul className="scroll-thin flex-1 overflow-y-auto">
-          {list.length === 0 && <Empty icon={InboxIcon} title="Nothing here" text="Try another filter or search." />}
+          {list.length === 0 && !fresh.length && (
+            term.digits.length >= 8
+              ? <li className="p-4 text-center text-[13.5px]">
+                  <p className="mb-2 text-[var(--muted)]">Nobody with this number yet.</p>
+                  <Button size="sm" onClick={() => setNewChat(true)}><MessageSquarePlus size={14} /> Add {q.trim()} as a new {kind === "business" ? "contact" : "customer"}</Button>
+                </li>
+              : <Empty icon={InboxIcon} title="Nothing here" text={term.text ? "No chat or contact matches your search." : "Try another filter or search."} />
+          )}
           {list.map((c) => {
             const ct = contactOf(c);
             const co = companyOf(ct);
@@ -146,6 +166,23 @@ export default function Inbox({ kind }: { kind: ContactType }) {
               </li>
             );
           })}
+          {fresh.length > 0 && (
+            <>
+              <li className="px-4 pt-3 pb-1 text-[12px] font-semibold uppercase tracking-wide text-[var(--accent-strong)]">Start a new chat</li>
+              {fresh.map((n) => (
+                <li key={n.key}>
+                  <button onClick={() => startChat(n)} disabled={!!starting} className="flex w-full items-center gap-3 px-3 text-left hover:bg-[var(--hover)] disabled:opacity-60">
+                    <Avatar name={n.name} size={46} />
+                    <div className="min-w-0 flex-1 border-b border-[var(--border)] py-3">
+                      <div className="truncate text-[15px]">{n.name}</div>
+                      <div className="truncate text-[12.5px] text-[var(--muted)]">{n.sub}</div>
+                    </div>
+                    <span className="shrink-0 text-[12px] font-medium text-[var(--accent)]">{starting === n.key ? <Loader2 size={15} className="animate-spin" /> : n.app ? "Chat in app" : "Message"}</span>
+                  </button>
+                </li>
+              ))}
+            </>
+          )}
         </ul>
       </section>
 
@@ -169,7 +206,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
         </div>
       )}
 
-      <NewChatModal open={newChat} onClose={() => setNewChat(false)} kind={kind} onCreated={(id) => select(id)} />
+      <NewChatModal open={newChat} onClose={() => setNewChat(false)} kind={kind} phone={term.digits.length >= 8 ? q.trim() : ""} onCreated={(id) => { setQ(""); select(id); }} />
       <SimulateModal open={simulate} onClose={() => setSimulate(false)} />
     </div>
   );
@@ -197,6 +234,7 @@ function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBac
           <select value={conv.status} onChange={(e) => act("conv.update", { id: conv.id, status: e.target.value }, "Status updated")} className="hidden rounded-lg border border-[var(--border-strong)] bg-[var(--input)] px-2 py-1.5 text-[13px] sm:block">
             {Object.entries(CONV_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
+          <DisappearingPicker value={conv.disappearSeconds} onChange={(v) => act("conv.disappearing", { conversationId: conv.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />
           <button onClick={() => setDetails(!details)} title="Details" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--active)]">{details ? <PanelRightClose size={19} /> : <PanelRightOpen size={19} />}</button>
         </header>
         <MessageList
@@ -210,7 +248,8 @@ function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBac
             { id: "customer", kind: "customer", label: `Reply to ${ct.name.split(" ")[0]}`, hint: `Sent to the customer via ${channel}` },
             { id: "internal", kind: "internal", label: "Internal note", hint: "Only your team can see this — never sent" },
           ]}
-          onSend={(mode, text, attachments) => act("conv.send", { conversationId: conv.id, audience: mode, text, attachments: attachments.map((a) => a.id) })}
+          allowViewOnce
+          onSend={(mode, text, attachments, opts) => act("conv.send", { conversationId: conv.id, audience: mode, text, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce })}
         />
       </section>
       {details && <Details conv={conv} onClose={() => setDetails(false)} />}
@@ -423,9 +462,10 @@ function CompanyModal({ open, onClose, contactId }: { open: boolean; onClose: ()
   );
 }
 
-function NewChatModal({ open, onClose, kind, onCreated }: { open: boolean; onClose: () => void; kind: ContactType; onCreated: (id: string) => void }) {
+function NewChatModal({ open, onClose, kind, onCreated, phone = "" }: { open: boolean; onClose: () => void; kind: ContactType; onCreated: (id: string) => void; phone?: string }) {
   const { team, act } = useTeam();
-  const [f, setF] = useState({ name: "", phone: "", email: "", city: "", companyId: "" });
+  const [f, setF] = useState({ name: "", phone, email: "", city: "", companyId: "" });
+  useEffect(() => { if (open && phone) setF((x) => ({ ...x, phone })); }, [open, phone]);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   return (
     <Modal open={open} onClose={onClose} title={kind === "business" ? "New business contact" : "New customer"}>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ClipboardList, Package, LogOut, Moon, Sun, Loader2, Store, ArrowLeftRight, ShoppingBag } from "lucide-react";
 import { logout, useReseller } from "@/lib/client/store";
+import { DevicesButton } from "./LinkedDevices";
 import { useDark } from "./TeamShell";
 import { ReminderAlerts, RemindersButton } from "./Reminders";
 import { TodoAlerts, TodoButton } from "./Todo";
@@ -47,6 +48,7 @@ export default function PortalShell({ children }: { children: React.ReactNode })
             <TodoButton />
             <RemindersButton />
             <button onClick={toggle} title="Theme" aria-label="Toggle theme" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
+            <DevicesButton />
             <button onClick={logout} title="Sign out" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><LogOut size={17} /></button>
           </div>
         </div>

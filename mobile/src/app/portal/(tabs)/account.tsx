@@ -43,6 +43,9 @@ export default function Account() {
         <Row title="Service areas" subtitle={r.serviceAreas.join(", ")} />
         <T muted size={12} style={{ padding: 12 }}>To change these, message our team.</T>
       </Card>
+      <Card title="Linked devices" icon="phone-portrait-outline">
+        <Row title="Linked devices" subtitle="Phones and browsers signed in to your account" onPress={() => router.push("/devices")} />
+      </Card>
       <Card title="Connection" icon="cloud-outline"><Row title="Server" subtitle={server || "same origin"} /></Card>
       <Button variant="outline" icon="log-out-outline" title="Sign out" onPress={() => {
         if (Platform.OS === "web") return logout();

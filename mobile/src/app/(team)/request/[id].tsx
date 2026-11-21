@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, ScrollView, View } from "react-native";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useHeaderHeight } from "expo-router/react-navigation";
@@ -67,7 +67,7 @@ export default function RequestWorkspace() {
       </View>
 
       {tab === "reseller" && (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight + 56 : 0}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={headerHeight + 56}>
           <MessageList messages={resMsgs} side={(m) => (m.direction === "out" ? "right" : "left")} wallpaper={false} />
           <Composer disabled={closed ? "Request is closed" : undefined} savedReplies={db.savedReplies}
             modes={[...(res ? [{ id: "reseller", kind: "reseller" as const, label: `Message ${res.name}`, hint: "reseller only" }] : []), { id: "internal", kind: "internal", label: "Internal note", hint: "team only" }]}
@@ -76,7 +76,7 @@ export default function RequestWorkspace() {
       )}
 
       {tab === "customer" && (conv ? (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight + 56 : 0}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={headerHeight + 56}>
           <MessageList messages={custMsgs} side={(m) => (m.direction === "out" ? "right" : "left")} onRetry={(m) => act("conv.retry", { messageId: m.id, text: m.text.replace("[fail]", "").trim() }, "Retrying…")} />
           <Composer savedReplies={db.savedReplies}
             modes={[{ id: "customer", kind: "customer", label: `Reply to ${ct.name.split(" ")[0]}`, hint: "reseller never sees this" }, { id: "internal", kind: "internal", label: "Internal note", hint: "team only" }]}

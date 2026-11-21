@@ -2,14 +2,15 @@ import { Injectable } from "@nestjs/common";
 import { In } from "typeorm";
 import type { CustomerProduct, CustomerRequest, CustomerState, RequestStatus, User } from "../common/contract";
 import { badRequest, conflict, notFound } from "../common/errors";
-import { Payload, need, newId, oneOf, optStr, str } from "../common/util";
+import { Payload, need, newId, oneOf, optStr, str, MAX_MESSAGE } from "../common/util";
 import { SYSTEM_USER } from "../common/system-user";
 import { AuditService } from "../audit/audit.service";
 import { FilesService } from "../files/files.service";
 import { ConversationEntity, MessageEntity, ProductEntity, RequestEntity, SettingsEntity, UserEntity, ContactEntity } from "../database/entities";
-import { toContact, toMessage, toProduct } from "../database/mappers";
+import { toContact, toMessage, toProduct, messagesFor } from "../database/mappers";
 import { nextRef, UnitOfWork, type Tx } from "../database/unit-of-work.service";
-import { ensureContact, ensureConversation } from "./customer-link";
+import { ensureContact, ensureConversation, relinkPossible } from "./customer-link";
+import { expiryFor, setDisappearing, viewOnceFlag } from "../conversations/disappearing";
 
 const MAX_OPEN_REQUESTS = 20;
 
@@ -25,7 +26,7 @@ export class CustomerService {
   /** The customer's contact (linked at sign-up; created here for older accounts). */
   private async contactIdFor(user: User): Promise<string> {
     const row = await this.uow.manager.findOne(UserEntity, { where: { id: user.id } });
-    if (row?.contactId) return row.contactId;
+    if (row?.contactId && !(await relinkPossible(this.uow.manager, row))) return row.contactId;
     return this.uow.write(SYSTEM_USER, async ({ em }) => (await ensureContact(em, user.id)).contact.id);
   }
 
@@ -50,7 +51,8 @@ export class CustomerService {
       me: user,
       profile: toContact(need(contact, "Contact")),
       conversationId: convs.find((c) => c.channel === "web")?.id,
-      messages: messages.map(toMessage),
+      disappearSeconds: convs.find((c) => c.channel === "web")?.disappearSeconds || undefined,
+      messages: messagesFor(messages, user),
       products: products.map((p): CustomerProduct => {
         // who proposed it and their price stay with the team
         const { status, resellerId, resellerPrice, reviewNote, ...rest } = toProduct(p); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -65,7 +67,7 @@ export class CustomerService {
   }
 
   /** Writes a customer message into their web conversation (it shows up in the team's Customer inbox). */
-  private async post(tx: Tx, text: string, attachments: Awaited<ReturnType<FilesService["attachments"]>>) {
+  private async post(tx: Tx, text: string, attachments: Awaited<ReturnType<FilesService["attachments"]>>, viewOnce = false) {
     const { contact } = await ensureContact(tx.em, tx.user.id);
     const conv = await ensureConversation(tx.em, contact.id);
     const now = Date.now();
@@ -76,16 +78,34 @@ export class CustomerService {
     const id = newId("m");
     await tx.em.insert(MessageEntity, {
       id, audience: "customer", conversationId: conv.id, direction: "in", authorId: tx.user.id, authorName: contact.name, text, attachments, createdAt: now,
+      expiresAt: expiryFor(conv, now), viewOnce,
     });
     return { id, conv, contact };
   }
 
   /** chat.send { text?, attachments?: fileId[] } — a message (and/or pictures, videos, documents, voice notes) to our team. */
   async sendMessage(tx: Tx, p: Payload) {
-    const text = optStr(p.text, 4000) ?? "";
+    const text = optStr(p.text, MAX_MESSAGE) ?? "";
     const attachments = await this.files.attachments(tx, p.attachments);
     if (!text && !attachments.length) throw badRequest("Type a message or attach a file");
-    return (await this.post(tx, text, attachments)).id;
+    return (await this.post(tx, text, attachments, viewOnceFlag(p.viewOnce, attachments))).id;
+  }
+
+  /**
+   * customer.chat { id: userId } (team) — open the app chat with a signed-up customer, even before they wrote.
+   * Returns the conversation id; the team's messages there show up in the customer's app.
+   */
+  async openChat(tx: Tx, p: Payload) {
+    const u = await tx.em.findOne(UserEntity, { where: { id: str(p.id, "Customer", 40), role: "customer" } });
+    if (!u) throw notFound("Customer");
+    const { contact } = await ensureContact(tx.em, u.id);
+    return (await ensureConversation(tx.em, contact.id)).id;
+  }
+
+  /** chat.disappearing { seconds } — disappearing messages in the customer's chat with our team. */
+  async disappearing(tx: Tx, p: Payload) {
+    const { contact } = await ensureContact(tx.em, tx.user.id);
+    return setDisappearing(tx, await ensureConversation(tx.em, contact.id), p.seconds);
   }
 
   /**

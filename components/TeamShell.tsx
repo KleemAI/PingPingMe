@@ -8,6 +8,8 @@ import {
   AlertTriangle, Clock, Send, Loader2, ArrowLeftRight, UserCheck, ShoppingBag,
 } from "lucide-react";
 import { logout, useTeam } from "@/lib/client/store";
+import { DevicesButton } from "./LinkedDevices";
+import { usePersonalChats } from "./People";
 import { overview, relative } from "@/lib/format";
 import { Avatar } from "./ui";
 import { ReminderAlerts, RemindersButton } from "./Reminders";
@@ -36,6 +38,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
   useEffect(() => { setDrawer(false); setBell(false); }, [path]);
 
   const o = useMemo(() => (team ? overview(team.db, now, team.me.id) : null), [team, now]);
+  const { unread: pmUnread } = usePersonalChats();
 
   // Browser notification + tab title when new customer messages arrive
   const unreadTotal = team ? team.db.conversations.reduce((n, c) => n + c.unread, 0) : 0;
@@ -64,6 +67,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
     { href: "/", label: "Overview", icon: LayoutDashboard },
     { href: "/inbox/customer", label: "Customer inbox", icon: MessageCircle, badge: unreadOf("customer") },
     { href: "/inbox/business", label: "Business inbox", icon: Building2, badge: unreadOf("business") },
+    { href: "/people", label: "Chats", icon: MessagesSquare, badge: pmUnread },
     { href: "/resellers", label: "Resellers", icon: Store },
     { href: "/requests", label: "Requests", icon: ClipboardList, badge: o.quotesToReview.length + o.resellerOverdue.length },
     { href: "/orders", label: "Orders", icon: Package },
@@ -112,6 +116,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
             <div className="truncate text-[11.5px] text-[var(--muted)]">{team.me.role === "admin" ? "Owner / admin" : "Operations agent"}</div>
           </div>
           <button onClick={toggle} title="Theme" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
+          <DevicesButton className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]" />
           <button onClick={logout} title="Sign out" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]"><LogOut size={17} /></button>
         </div>
       </div>

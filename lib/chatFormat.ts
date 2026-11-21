@@ -154,3 +154,29 @@ export function wrapSelection(text: string, start: number, end: number, mark: st
   const cursor = core ? start + lead.length + mid.length : start + lead.length + mark.length;
   return { text: next, cursor };
 }
+
+// ------------------------------------------------------------------ long messages ("Read more")
+
+/** Longest message, in characters (the server checks the same number). */
+export const MAX_MESSAGE = 68_000;
+/** Characters shown before the first "Read more"; each tap shows FOLD_STEP more (like WhatsApp). */
+export const FOLD_FIRST = 700;
+export const FOLD_STEP = 4000;
+const FOLD_LINES = 16;
+
+/**
+ * The part of `text` to show when up to `limit` characters are visible.
+ * Cuts at a line break or a space near the limit, and on the first fold also after FOLD_LINES lines.
+ */
+export function fold(text: string, limit: number): { text: string; more: boolean } {
+  let cut = limit;
+  if (limit === FOLD_FIRST) {
+    let at = -1;
+    for (let n = 0; n < FOLD_LINES; n++) { at = text.indexOf("\n", at + 1); if (at < 0) break; }
+    if (at > 0 && at < cut) cut = at;
+  }
+  if (text.length <= cut) return { text, more: false };
+  const near = Math.max(text.lastIndexOf("\n", cut), text.lastIndexOf(" ", cut));
+  if (near > cut - 80 && near > 0) cut = near;
+  return { text: text.slice(0, cut).trimEnd() + "…", more: true };
+}

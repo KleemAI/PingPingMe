@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useHeaderHeight } from "expo-router/react-navigation";
@@ -43,7 +43,7 @@ export default function PortalRequest() {
       </View>
 
       {tab === "chat" ? (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight + 48 : 0}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={headerHeight + 48}>
           <MessageList viewer="reseller" wallpaper={false} messages={msgs} side={(m) => (m.direction === "in" ? "right" : "left")} />
           <Composer disabled={!mine ? "No longer assigned to you" : undefined} modes={[{ id: "team", kind: "reseller", label: "Message our team", hint: "your coordinator replies here" }]}
             onSend={(_m, text, att) => act("portal.message", { requestId: r.id, text, attachments: att.map((a) => a.id) })} />

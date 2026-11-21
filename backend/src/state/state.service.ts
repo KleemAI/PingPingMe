@@ -11,8 +11,7 @@ import {
 } from "../database/entities";
 import {
   groupBy, toActivity, toCase, toCompany, toContact, toConversation, toMessage, toOrder, toQuote, toReminder, toRequest,
-  toProduct, toReseller, toSavedReply, toSettings, toUser,
-} from "../database/mappers";
+  toProduct, toReseller, toSavedReply, toSettings, toUser, messagesFor } from "../database/mappers";
 import { UnitOfWork } from "../database/unit-of-work.service";
 import { CustomerService } from "../customer/customer.service";
 import { BroadcastsService } from "../broadcasts/broadcasts.service";
@@ -84,7 +83,7 @@ export class StateService {
         companies: companies.map(toCompany),
         contacts: contacts.map(toContact),
         conversations: conversations.map(toConversation),
-        messages: messages.map(toMessage),
+        messages: messagesFor(messages, user),
         resellers: resellers.map(toReseller),
         requests: requests.map((r) => toRequest(r, asg.get(r.id) ?? [])),
         quotes: quotes.map((q) => toQuote(q, revs.get(q.id) ?? [])),
@@ -137,7 +136,7 @@ export class StateService {
         const { conversationId, feedback, followUpAt, ...visible } = full; // eslint-disable-line @typescript-eslint/no-unused-vars
         return visible;
       }),
-      messages: messages.map(toMessage),
+      messages: messagesFor(messages, user),
       quotes: quotes.map((q) => {
         // margin and approval details stay with the team
         const { sentById, approvalNote, ...rest } = toQuote(q, revs.get(q.id) ?? []); // eslint-disable-line @typescript-eslint/no-unused-vars

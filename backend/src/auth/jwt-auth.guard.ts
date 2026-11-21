@@ -18,9 +18,10 @@ export class JwtAuthGuard implements CanActivate {
     if (ctx.getType() !== "http") return true;
     const targets = [ctx.getHandler(), ctx.getClass()];
     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC, targets)) return true;
-    const req = ctx.switchToHttp().getRequest<Request & { user?: unknown }>();
-    const user = await this.auth.verify(tokenFrom(req));
+    const req = ctx.switchToHttp().getRequest<Request & { user?: unknown; sid?: string }>();
+    const { user, sid } = await this.auth.verifySession(tokenFrom(req));
     req.user = user;
+    req.sid = sid;
     // every signed-in account has its own request budget (the team gets more)
     const rule = LIMITS.userRequests;
     this.limiter.take(`user:${user.id}`, user.role === "admin" || user.role === "agent" ? { ...rule, limit: rule.limit * 5 } : rule, "Too many requests from your account");

@@ -1,14 +1,14 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Check, CheckCheck, Clock3, AlertCircle, RotateCw, Lock, Paperclip, SendHorizontal, Zap, X, StickyNote, Store, MessageCircle, Loader2, Smile } from "lucide-react";
+import { Check, CheckCheck, Clock3, AlertCircle, RotateCw, Lock, Paperclip, SendHorizontal, Zap, X, StickyNote, Store, MessageCircle, Loader2, Smile, Timer, EyeOff, CircleDot } from "lucide-react";
 import type { Attachment, Message, SavedReply } from "@/lib/types";
 import { dayDivider, time } from "@/lib/format";
 import { AttachmentChip } from "./ui";
 import { useStore } from "@/lib/client/store";
 import { VoiceRecorder } from "./VoiceRecorder";
 import { EmojiPanel, FormatBar, RichText, isBare } from "./RichText";
-import { wrapSelection } from "@/lib/chatFormat";
+import { MAX_MESSAGE, wrapSelection } from "@/lib/chatFormat";
 
 export function Ticks({ m }: { m: Message }) {
   if (m.status === "queued") return <Clock3 size={12} className="text-[var(--muted)]" />;
@@ -23,7 +23,67 @@ export function Ticks({ m }: { m: Message }) {
  * One message list that can mix the customer thread, the reseller thread and internal notes —
  * each rendered with a distinct look so nobody confuses who will see what.
  */
-export function MessageList({ messages, side, onRetry, wallpaper = true, viewer = "team" }: {
+/** Disappearing messages timer choices (seconds) — same as the server. */
+export const DISAPPEAR_CHOICES = [
+  { value: 0, label: "Off" }, { value: 86_400, label: "24 hours" }, { value: 604_800, label: "7 days" }, { value: 7_776_000, label: "90 days" },
+];
+export const disappearLabel = (s?: number) => DISAPPEAR_CHOICES.find((c) => c.value === (s ?? 0))?.label ?? "Off";
+
+/** Header control: turn disappearing messages on/off for a chat. */
+export function DisappearingPicker({ value, onChange }: { value?: number; onChange: (seconds: number) => unknown }) {
+  return (
+    <label title="Disappearing messages: new messages leave this chat after the chosen time (admins keep them for the audit log)"
+      className={`flex items-center gap-1 rounded-full px-2 py-1 text-[12px] ${value ? "bg-[var(--accent)]/15 text-[var(--accent-strong)]" : "text-[var(--muted)] hover:bg-[var(--hover)]"}`}>
+      <Timer size={15} />
+      <select value={value ?? 0} onChange={(e) => onChange(Number(e.target.value))} aria-label="Disappearing messages" className="cursor-pointer bg-transparent outline-none">
+        {DISAPPEAR_CHOICES.map((c) => <option key={c.value} value={c.value}>{c.value ? c.label : "Disappearing: off"}</option>)}
+      </select>
+    </label>
+  );
+}
+
+const isMedia = (a: Attachment) => a.mime.startsWith("image/") || a.mime.startsWith("video/");
+
+/** Full-screen viewer for a view-once photo / video (closing it is final, like WhatsApp). */
+function ViewOnceViewer({ items, onClose }: { items: Attachment[]; onClose: () => void }) {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-[90] flex flex-col items-center justify-center gap-3 bg-black/90 p-4" onContextMenu={(e) => e.preventDefault()}>
+      <button onClick={onClose} aria-label="Close" className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"><X size={20} /></button>
+      <div className="flex items-center gap-1.5 text-[13px] text-white/80"><CircleDot size={14} /> View once — closing this ends it</div>
+      {items.map((a) => a.mime.startsWith("video/")
+        ? <video key={a.id} src={`/api/files/${a.id}`} autoPlay controls controlsList="nodownload" className="max-h-[80vh] max-w-full rounded-md" />
+        // eslint-disable-next-line @next/next/no-img-element
+        : <img key={a.id} src={`/api/files/${a.id}`} alt="" draggable={false} className="max-h-[80vh] max-w-full rounded-md object-contain" />)}
+    </div>
+  );
+}
+
+/** The view-once part of a bubble: "Open" for the receiver, "Opened" / "Not opened yet" otherwise. */
+function ViewOnceBody({ m, mine, onOpen }: { m: Message; mine: boolean; onOpen: () => void }) {
+  const kind = m.attachments.some((a) => a.mime.startsWith("video/")) ? "Video" : "Photo";
+  if (m.attachments.length && !mine && !m.viewedAt) {
+    return (
+      <button onClick={onOpen} className="mt-1 flex items-center gap-2 rounded-md bg-black/5 px-3 py-2 text-[13.5px] font-medium hover:bg-black/10 dark:bg-white/10">
+        <CircleDot size={17} className="text-[var(--accent)]" /> {kind} · view once — click to open
+      </button>
+    );
+  }
+  const opened = m.viewedAt ? `Opened ${time(m.viewedAt)}` : mine ? "Not opened yet" : "Opened";
+  return (
+    <div className="mt-1">
+      {m.attachments.length > 0 && <div className="mb-1 text-[11.5px] font-semibold text-amber-600 dark:text-amber-300">View once · kept for admins (audit)</div>}
+      {m.attachments.map((a) => <AttachmentChip key={a.id} a={a} />)}
+      <div className="flex items-center gap-2 rounded-md bg-black/5 px-3 py-2 text-[13px] text-[var(--muted)] dark:bg-white/10"><CircleDot size={16} /> View-once {kind.toLowerCase()} · {opened}</div>
+    </div>
+  );
+}
+
+export function MessageList({ messages: all, side, onRetry, wallpaper = true, viewer = "team" }: {
   messages: Message[];
   side: (m: Message) => "left" | "right";
   onRetry?: (m: Message) => void;
@@ -31,6 +91,24 @@ export function MessageList({ messages, side, onRetry, wallpaper = true, viewer 
   viewer?: "team" | "reseller";
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const { act } = useStore();
+  const [viewing, setViewing] = useState<Attachment[] | null>(null);
+  // disappearing messages leave the screen when their time is up (the server stops sending them too)
+  const [tick, setTick] = useState(() => Date.now());
+  const nextExpiry = useMemo(() => Math.min(...all.filter((m) => m.expiresAt && !m.disappeared && m.expiresAt > tick).map((m) => m.expiresAt!)), [all, tick]);
+  useEffect(() => {
+    if (!Number.isFinite(nextExpiry)) return;
+    const t = setTimeout(() => setTick(Date.now()), Math.min(Math.max(nextExpiry - Date.now(), 0) + 50, 2 ** 31 - 1));
+    return () => clearTimeout(t);
+  }, [nextExpiry]);
+  const messages = useMemo(() => all.filter((m) => m.disappeared || !m.expiresAt || m.expiresAt > tick), [all, tick]);
+  const openViewOnce = async (m: Message) => {
+    try {
+      const r = (await act("message.open", { messageId: m.id })) as { attachments?: Attachment[] } | null;
+      const media = (r?.attachments ?? []).filter(isMedia);
+      if (media.length) setViewing(media);
+    } catch { /* the error was shown as a toast */ }
+  };
   const last = messages.at(-1)?.id;
   useEffect(() => {
     ref.current?.scrollTo({ top: ref.current.scrollHeight });
@@ -38,6 +116,7 @@ export function MessageList({ messages, side, onRetry, wallpaper = true, viewer 
 
   return (
     <div ref={ref} className={`scroll-thin flex-1 overflow-y-auto py-3 ${wallpaper ? "chat-wallpaper" : "bg-[var(--panel-2)]"}`}>
+      {viewing && <ViewOnceViewer items={viewing} onClose={() => setViewing(null)} />}
       {messages.length === 0 && <div className="py-16 text-center text-sm text-[var(--muted)]">No messages yet</div>}
       {messages.map((m, i) => {
         const prev = messages[i - 1];
@@ -63,17 +142,21 @@ export function MessageList({ messages, side, onRetry, wallpaper = true, viewer 
         }
         const mine = s === "right";
         const isReseller = m.audience === "reseller";
-        const bare = !m.attachments.length && isBare(m.text); // sticker or big emoji: no bubble
+        const bare = !m.attachments.length && !m.viewOnce && isBare(m.text); // sticker or big emoji: no bubble
         const bg = bare ? "bg-transparent !shadow-none" : isReseller && viewer === "team" && !mine ? "bg-[var(--reseller-bubble)]" : mine ? "bg-[var(--bubble-out)]" : "bg-[var(--bubble-in)]";
         return (
           <Fragment key={m.id}>
             {newDay && <DayDivider ts={m.createdAt} />}
             <div className={`flex ${mine ? "justify-end" : "justify-start"} ${tail ? "mt-2" : "mt-0.5"} px-[4%] animate-pop`}>
-              <div className={`relative max-w-[85%] rounded-lg px-2.5 pt-1.5 pb-1 text-[14px] leading-[19px] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] md:max-w-[70%] ${bg} ${m.status === "failed" ? "ring-1 ring-rose-400" : ""}`}>
+              <div className={`relative max-w-[85%] rounded-lg px-2.5 pt-1.5 pb-1 text-[14px] leading-[19px] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] md:max-w-[70%] ${bg} ${m.status === "failed" ? "ring-1 ring-rose-400" : ""} ${m.disappeared ? "opacity-60" : ""}`}>
+                {m.disappeared && <div className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-300"><EyeOff size={12} /> Disappeared for everyone else · admins only (audit)</div>}
                 {tail && <div className={`mb-0.5 text-[12px] font-semibold ${mine ? "text-[var(--accent-strong)]" : isReseller ? "text-sky-600 dark:text-sky-300" : "text-[var(--accent-strong)]"}`}>{m.authorName}</div>}
                 {m.text && <RichText text={m.text} />}
-                {m.attachments.map((a) => <AttachmentChip key={a.id} a={a} />)}
+                {m.viewOnce
+                  ? <ViewOnceBody m={m} mine={mine} onOpen={() => openViewOnce(m)} />
+                  : m.attachments.map((a) => <AttachmentChip key={a.id} a={a} />)}
                 <div className="mt-0.5 flex items-center justify-end gap-1 text-[11px] text-[var(--muted)]">
+                  {m.expiresAt && <span title={`Disappears ${new Date(m.expiresAt).toLocaleString()}`}><Timer size={11} /></span>}
                   {time(m.createdAt)} {mine && m.audience === "customer" && <Ticks m={m} />}
                 </div>
                 {m.status === "failed" && (
@@ -108,11 +191,13 @@ const MODE_STYLE = {
 };
 
 /** Composer that makes the recipient explicit BEFORE sending (brief: communication clarity). */
-export function Composer({ modes, onSend, savedReplies = [], disabled }: {
+export function Composer({ modes, onSend, savedReplies = [], disabled, allowViewOnce }: {
   modes: ComposerMode[];
-  onSend: (modeId: string, text: string, attachments: Attachment[]) => Promise<unknown>;
+  onSend: (modeId: string, text: string, attachments: Attachment[], opts?: { viewOnce?: boolean }) => Promise<unknown>;
   savedReplies?: SavedReply[];
   disabled?: string;
+  /** show the "view once" switch for photos / videos (customer chats) */
+  allowViewOnce?: boolean;
 }) {
   const { upload } = useStore();
   const [modeId, setModeId] = useState(modes[0].id);
@@ -120,6 +205,7 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
   const [files, setFiles] = useState<Attachment[]>([]);
   const [busy, setBusy] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
+  const [viewOnce, setViewOnce] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
   const [emoji, setEmoji] = useState(false); // emoji / sticker panel
@@ -137,12 +223,14 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
     try { const a = await upload(f); setFiles((x) => [...x, a]); } catch {} finally { setUploading(false); }
   };
   const canSend = !!text.trim() || files.length > 0;
+  // view once: only photos / videos, only in customer chats
+  const viewOnceOk = !!allowViewOnce && mode.kind === "customer" && files.length > 0 && files.every(isMedia);
   const send = async () => {
     if (!canSend || busy || uploading) return;
     setBusy(true);
     try {
-      await onSend(mode.id, text.trim(), files);
-      setText(""); setFiles([]); setShowSaved(false);
+      await onSend(mode.id, text.trim(), files, viewOnceOk && viewOnce ? { viewOnce: true } : undefined);
+      setText(""); setFiles([]); setShowSaved(false); setViewOnce(false);
     } catch {} finally { setBusy(false); }
   };
 
@@ -211,6 +299,13 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
               <button onClick={() => setFiles((x) => x.filter((y) => y.id !== f.id))}><X size={12} /></button>
             </span>
           ))}
+          {viewOnceOk && (
+            <button type="button" onClick={() => setViewOnce((v) => !v)} aria-pressed={viewOnce}
+              title="View once: they can open it one time, then it's gone from the chat (admins keep it for the audit log)"
+              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium ${viewOnce ? "bg-[var(--accent)] text-white" : "bg-[var(--panel)] text-[var(--muted)] hover:text-[var(--text)]"}`}>
+              <CircleDot size={13} /> View once{viewOnce ? ": on" : ""}
+            </button>
+          )}
         </div>
       )}
 
@@ -228,6 +323,7 @@ export function Composer({ modes, onSend, savedReplies = [], disabled }: {
             ref={box}
             value={text}
             rows={1}
+            maxLength={MAX_MESSAGE}
             onChange={(e) => setText(e.target.value)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}

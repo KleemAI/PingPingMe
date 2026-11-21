@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { EMOJI, STICKERS, parse, stickerText, type Line, type Span, type Sticker } from "@/lib/chatFormat";
+import { EMOJI, FOLD_FIRST, FOLD_STEP, STICKERS, fold, parse, stickerText, type Line, type Span, type Sticker } from "@/lib/chatFormat";
 import { T } from "./ui";
 
 const MONO = Platform.select({ ios: "Menlo", android: "monospace", default: "monospace" });
@@ -10,7 +10,10 @@ const MONO = Platform.select({ ios: "Menlo", android: "monospace", default: "mon
 /** Message text with WhatsApp-style formatting, big emoji and stickers. */
 export function RichText({ text, size = 15 }: { text: string; size?: number }) {
   const { c } = useTheme();
-  const p = useMemo(() => parse(text), [text]);
+  // long messages (up to 68,000 characters) are folded: "Read more" shows the next part
+  const [limit, setLimit] = useState(FOLD_FIRST);
+  const shown = useMemo(() => fold(text, limit), [text, limit]);
+  const p = useMemo(() => parse(shown.text), [shown.text]);
   if (p.sticker) return <StickerView s={p.sticker} />;
   if (p.jumbo) return <Text style={{ fontSize: 46, lineHeight: 56 }}>{text.trim()}</Text>;
   const spans = (l: Line) => l.spans.map((s: Span, i: number) => (
@@ -35,6 +38,11 @@ export function RichText({ text, size = 15 }: { text: string; size?: number }) {
         if (l.kind === "code") return <Text key={i} style={{ ...base, fontFamily: MONO, fontSize: size - 1.5, backgroundColor: "rgba(127,127,127,0.14)", paddingHorizontal: 6 }}>{l.spans[0]?.text || " "}</Text>;
         return <Text key={i} style={base}>{l.spans.length ? spans(l) : " "}</Text>;
       })}
+      {shown.more && (
+        <Pressable onPress={() => setLimit((l) => (l === FOLD_FIRST ? FOLD_STEP : l + FOLD_STEP))} hitSlop={8} accessibilityRole="button">
+          <Text style={{ color: c.accentStrong, fontWeight: "700", fontSize: size, marginTop: 2 }}>Read more</Text>
+        </Pressable>
+      )}
     </View>
   );
 }

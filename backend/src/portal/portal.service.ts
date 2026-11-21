@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { conflict, notFound } from "../common/errors";
-import { Payload, newId, oneOf, optStr, str } from "../common/util";
+import { Payload, newId, oneOf, optStr, str, MAX_MESSAGE } from "../common/util";
 import { AuditService } from "../audit/audit.service";
 import { FilesService } from "../files/files.service";
 import { AssignmentEntity, MessageEntity, RequestEntity } from "../database/entities";
@@ -58,6 +58,6 @@ export class PortalService {
   /** Message body: text, files, or both (a picture or voice note may go without text). */
   private async textAndFiles(tx: Tx, p: Payload) {
     const attachments = await this.files.attachments(tx, p.attachments);
-    return { text: attachments.length ? optStr(p.text) ?? "" : str(p.text, "Message"), attachments };
+    return { text: attachments.length ? optStr(p.text, MAX_MESSAGE) ?? "" : str(p.text, "Message", MAX_MESSAGE), attachments };
   }
 }

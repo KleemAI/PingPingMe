@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BadgeCheck, Search, ShieldAlert, UserCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { BadgeCheck, MessageCircle, Search, ShieldAlert, UserCheck } from "lucide-react";
 import { useTeam } from "@/lib/client/store";
 import { Avatar, Button, Empty, PageHeader, Pill, Tabs, inputCls } from "@/components/ui";
 
@@ -37,6 +38,15 @@ export default function CustomersPage() {
     finally { setBusy(null); }
   };
 
+  const router = useRouter();
+  /** opens (or starts) the customer's app chat in the Customer inbox */
+  const openChat = async (id: string) => {
+    setBusy(id);
+    try {
+      const convId = (await act("customer.chat", { id })) as string;
+      router.push(`/inbox/customer?c=${convId}`);
+    } catch { /* toast shown */ } finally { setBusy(null); }
+  };
   return (
     <div className="mx-auto max-w-5xl space-y-4 p-4 sm:p-6">
       <PageHeader title="Customers" subtitle="People who signed up themselves. Anyone can buy; only customers you verify can sell on the P2P market." />
@@ -59,6 +69,9 @@ export default function CustomersPage() {
             {c.verified
               ? <Pill tone="green"><BadgeCheck size={12} /> Verified · can sell</Pill>
               : <Pill tone="amber"><ShieldAlert size={12} /> Not verified · buy only</Pill>}
+            <Button variant="outline" size="sm" disabled={busy === c.id} onClick={() => openChat(c.id)} title="Chat with this customer in their app">
+              <MessageCircle size={14} /> Message
+            </Button>
             {c.verified
               ? <Button variant="outline" size="sm" disabled={busy === c.id} onClick={() => setVerified(c.id, c.name, false)}>Remove verification</Button>
               : <Button size="sm" disabled={busy === c.id} onClick={() => setVerified(c.id, c.name, true)}><BadgeCheck size={14} /> Verify</Button>}

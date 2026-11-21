@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/commo
 import { In } from "typeorm";
 import type { P2PAd, P2PMerchant, P2POrder, P2PPaymentMethod, P2PState, User } from "../common/contract";
 import { badRequest, conflict, forbidden, notFound } from "../common/errors";
-import { Payload, clean, newId, oneOf, optStr, str } from "../common/util";
+import { Payload, clean, newId, oneOf, optStr, str, MAX_MESSAGE } from "../common/util";
 import { SYSTEM_USER } from "../common/system-user";
 import { isTeam } from "../auth/decorators";
 import { FilesService } from "../files/files.service";
@@ -293,7 +293,7 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
     const role = this.role(o, tx.user);
     if (o.status === "cancelled") throw conflict("This order was cancelled");
     const attachments = await this.files.attachments(tx, p.attachments);
-    const text = optStr(p.text, 1000) ?? "";
+    const text = optStr(p.text, MAX_MESSAGE) ?? "";
     if (!text && !attachments.length) throw badRequest("Type a message or attach a file");
     await tx.em.insert(P2PMessageEntity, { id: newId("pm"), orderId: o.id, from: role, authorId: tx.user.id, text, attachments, at: Date.now() });
   }

@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ArrowLeftRight, BadgeCheck, ClipboardList, Loader2, LogOut, Menu, MessageCircle, MessagesSquare, Moon, ShieldAlert, ShoppingBag, Sun, X } from "lucide-react";
 import { logout, useStore } from "@/lib/client/store";
+import { DevicesButton } from "./LinkedDevices";
+import { usePersonalChats } from "./People";
 import type { CustomerState } from "@/lib/types";
 import { useDark } from "./TeamShell";
 import { Avatar } from "./ui";
@@ -15,6 +17,7 @@ import { StorageMeter } from "./Storage";
 /** Customer area: left side menu (drawer on phones) with Products, Chat, My requests and the P2P market. */
 export default function CustomerShell({ children }: { children: React.ReactNode }) {
   const { state } = useStore();
+  const { unread: pmUnread } = usePersonalChats();
   const path = usePathname();
   const { dark, toggle } = useDark();
   const [drawer, setDrawer] = useState(false);
@@ -28,6 +31,7 @@ export default function CustomerShell({ children }: { children: React.ReactNode 
   const nav = [
     { href: "/c/products", label: "Products & services", icon: ShoppingBag, badge: 0 },
     { href: "/c/chat", label: "Chat with us", icon: MessageCircle, badge: 0 },
+    { href: "/c/people", label: "Chats", icon: MessagesSquare, badge: pmUnread },
     { href: "/c/requests", label: "My requests", icon: ClipboardList, badge: openRequests },
     { href: "/p2p", label: "P2P market", icon: ArrowLeftRight, badge: 0 },
   ];
@@ -65,6 +69,7 @@ export default function CustomerShell({ children }: { children: React.ReactNode 
             <div className="truncate text-[13.5px] font-medium">{cs.me.name}</div>
             <div className="truncate text-[11.5px] text-[var(--muted)]">{cs.me.email}</div>
           </div>
+          <DevicesButton className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]" />
           <button onClick={logout} title="Sign out" aria-label="Sign out" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]"><LogOut size={17} /></button>
         </div>
         <div className="mt-2 flex items-center gap-1 border-t border-[var(--border)] pt-2">

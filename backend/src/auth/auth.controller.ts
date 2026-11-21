@@ -1,13 +1,20 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res } from "@nestjs/common";
+import { Body, Controller, Get, HttpCode, Param, Post, Req, Res } from "@nestjs/common";
 import type { Request, Response } from "express";
 import { AppError, badRequest, unauthorized } from "../common/errors";
 import { clientIp } from "../security/client-ip";
 import { LIMITS } from "../security/limits";
 import { RateLimiter, tooMany } from "../security/rate-limiter.service";
 import type { User } from "../common/contract";
-import { AuthService } from "./auth.service";
-import { AllowCustomer, CurrentUser, Public } from "./decorators";
-import { clearSessionCookie, setSessionCookie } from "./session-cookie";
+import { AuthService, type SignInContext } from "./auth.service";
+import { AllowCustomer, CurrentSession, CurrentUser, Public } from "./decorators";
+import { clearSessionCookie, setSessionCookie, tokenFrom } from "./session-cookie";
+
+/** For "Linked devices": the mobile app sends its model in `X-Device-Name`; browsers are named from the User-Agent. */
+const signInContext = (req: Request): SignInContext => ({
+  ip: clientIp(req),
+  userAgent: String(req.headers["user-agent"] ?? ""),
+  deviceName: typeof req.headers["x-device-name"] === "string" ? req.headers["x-device-name"] : undefined,
+});
 
 @Controller("auth")
 export class AuthController {
@@ -30,7 +37,7 @@ export class AuthController {
     if (locked) throw tooMany("This account is locked for a while after too many wrong passwords", locked);
     let result: Awaited<ReturnType<AuthService["login"]>>;
     try {
-      result = await this.auth.login(body?.email, body?.password);
+      result = await this.auth.login(body?.email, body?.password, signInContext(req));
     } catch (e) {
       if (e instanceof AppError && e.getStatus() === 401) {
         const left = this.limiter.failure(lockKey, LIMITS.wrongPasswords, LIMITS.lockMs);
@@ -65,7 +72,7 @@ export class AuthController {
     this.limiter.take(`signup-h:${ip}`, LIMITS.signupPerIpHour, "Too many new accounts from your network");
     this.limiter.take(`signup-d:${ip}`, LIMITS.signupPerIpDay, "Too many new accounts from your network today");
     this.limiter.take("signup-all", LIMITS.signupGlobalHour, "Sign-ups are busy right now");
-    const result = await this.auth.signup(body?.name, body?.email, body?.password);
+    const result = await this.auth.signup(body?.name, body?.email, body?.password, signInContext(req));
     // signed in at once — or, with EMAIL_VERIFICATION on, `{ needsVerification, email }` and a code is emailed
     if ("accessToken" in result) setSessionCookie(res, result.accessToken);
     return result;
@@ -75,7 +82,7 @@ export class AuthController {
   @Public() @Post("verify-email") @HttpCode(200)
   async verifyEmail(@Body() body: { email?: string; code?: string }, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     this.limiter.take(`verify:${clientIp(req)}`, LIMITS.verifyPerIp, "Too many tries from your network");
-    const result = await this.auth.verifyEmail(body?.email, body?.code);
+    const result = await this.auth.verifyEmail(body?.email, body?.code, signInContext(req));
     setSessionCookie(res, result.accessToken);
     return result;
   }
@@ -90,10 +97,23 @@ export class AuthController {
   @Get("me") @AllowCustomer()
   me(@CurrentUser() user: User) { return user; }
 
-  /** Clears the session cookie (bearer tokens are stateless — the app simply forgets them). */
+  /** Signs this device out: ends its session on the server and clears the session cookie. */
   @Public() @Post("logout") @HttpCode(200)
-  logout(@Res({ passthrough: true }) res: Response) {
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    await this.auth.logout(tokenFrom(req)).catch(() => {});
     clearSessionCookie(res);
     return { ok: true };
+  }
+
+  /** Linked devices: every device signed in to your account (at most 50), the current one marked `current`. */
+  @Get("devices") @AllowCustomer()
+  devices(@CurrentUser() user: User, @CurrentSession() sid: string) {
+    return this.auth.devices(user, sid);
+  }
+
+  /** Sign one device out. `:id` = "others" signs out every device except this one. */
+  @Post("devices/:id/logout") @HttpCode(200) @AllowCustomer()
+  async logoutDevice(@CurrentUser() user: User, @CurrentSession() sid: string, @Param("id") id: string) {
+    return { ok: true, signedOut: await this.auth.revokeDevices(user, sid, String(id)) };
   }
 }

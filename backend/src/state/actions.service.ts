@@ -18,6 +18,8 @@ import { SettingsService } from "../settings/settings.service";
 import { UsersService } from "../users/users.service";
 import { WorkspaceService } from "../workspace/workspace.service";
 import { P2PService } from "../p2p/p2p.service";
+import { PeopleService } from "../people/people.service";
+import { openViewOnce } from "../conversations/disappearing";
 import { CatalogService } from "../catalog/catalog.service";
 import { CustomerService } from "../customer/customer.service";
 import { BroadcastsService } from "../broadcasts/broadcasts.service";
@@ -55,6 +57,7 @@ export class ActionsService {
     customer: CustomerService,
     broadcasts: BroadcastsService,
     tasks: TasksService,
+    people: PeopleService,
   ) {
     // to-do tasks — everyone has their own (sharing with everyone is checked inside: team only)
     const todo: Record<string, Handler> = {
@@ -86,6 +89,12 @@ export class ActionsService {
       "conv.retry": (t, p) => conversations.retry(t, p),
       "conv.update": (t, p) => conversations.update(t, p),
       "conv.read": (t, p) => conversations.markRead(t, p),
+      "conv.disappearing": (t, p) => conversations.disappearing(t, p),
+      "conv.start": (t, p) => conversations.start(t, p),
+      // personal chats
+      "pm.send": (t, p) => people.send(t, p),
+      "pm.read": (t, p) => people.read(t, p),
+      "message.open": (t, p) => openViewOnce(t, p),
       "inbound.simulate": (t, p) => conversations.simulateInbound(t, p),
       "contact.create": (t, p) => contacts.create(t, p),
       "contact.update": (t, p) => contacts.update(t, p),
@@ -122,6 +131,7 @@ export class ActionsService {
       "user.update": (t, p) => users.update(t, p),
       "me.password": (t, p) => users.changeOwnPassword(t, p),
       "customer.verify": (t, p) => users.verifyCustomer(t, p),
+      "customer.chat": (t, p) => customer.openChat(t, p),
       ...market,
       "p2p.resolveAppeal": (t, p) => p2p.resolveAppeal(t, p),
       ...todo,
@@ -146,6 +156,10 @@ export class ActionsService {
     this.customer = {
       "chat.send": (t, p) => customer.sendMessage(t, p),
       "price.request": (t, p) => customer.requestPrice(t, p),
+      "chat.disappearing": (t, p) => customer.disappearing(t, p),
+      "pm.send": (t, p) => people.send(t, p),
+      "pm.read": (t, p) => people.read(t, p),
+      "message.open": (t, p) => openViewOnce(t, p),
       ...todo,
       "me.password": (t, p) => users.changeOwnPassword(t, p),
       ...market,

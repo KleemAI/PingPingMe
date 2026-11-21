@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { In } from "typeorm";
 import type { Attachment, User } from "../common/contract";
 import { AppError, badRequest, forbidden, notFound } from "../common/errors";
+import { VIEW_ONCE_WINDOW } from "../conversations/disappearing";
 import { newId } from "../common/util";
 import { visibleRequestIds } from "../common/reseller-scope";
 import { isTeam } from "../auth/decorators";
@@ -79,10 +80,29 @@ export class FilesService {
    * Reseller: also files attached to the reseller thread of a request they can see.
    */
   async canSee(user: User, fileId: string) {
-    if (isTeam(user)) return true;
     const em = this.uow.manager;
+    // disappearing / view-once chat files: gone after the time runs out; a view-once file opens only for the person
+    // who just tapped "Open" (message.open). Admins keep access for the audit trail.
+    if (user.role !== "admin") {
+      const [g]: { view_once: boolean; viewed_at: Date | null; viewed_by: string | null; expires_at: Date | null }[] = await em.query(
+        `SELECT view_once, viewed_at, viewed_by, expires_at FROM messages
+          WHERE attachments @> $1::jsonb AND (view_once OR expires_at IS NOT NULL) LIMIT 1`,
+        [JSON.stringify([{ id: fileId }])],
+      );
+      const now = Date.now();
+      if (g?.expires_at && new Date(g.expires_at).getTime() <= now) return false;
+      if (g?.view_once) return g.viewed_by === user.id && !!g.viewed_at && now - new Date(g.viewed_at).getTime() < VIEW_ONCE_WINDOW;
+    }
+    if (isTeam(user)) return true;
     const own = await em.count(FileEntity, { where: { id: fileId, uploadedBy: user.id } });
     if (own) return true;
+    // personal chats: the two people in the chat
+    const pm = await em.query(
+      `SELECT 1 FROM personal_messages m JOIN personal_chats c ON c.id = m.chat_id
+        WHERE m.attachments @> $1::jsonb AND (c.user_a = $2 OR c.user_b = $2) LIMIT 1`,
+      [JSON.stringify([{ id: fileId }]), user.id],
+    );
+    if (pm.length) return true;
     const att = JSON.stringify([{ id: fileId }]);
     const shared = await em.query(
       `SELECT 1 FROM p2p_orders WHERE proof @> $1::jsonb AND (buyer_id = $2 OR seller_id = $2)

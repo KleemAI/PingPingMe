@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Loader2, LogOut, MessagesSquare, Moon, Sun, LayoutDashboard, BadgeCheck, ShieldAlert } from "lucide-react";
 import { logout, StoreProvider, useStore } from "@/lib/client/store";
+import { DevicesButton } from "@/components/LinkedDevices";
 import TeamShell, { useDark } from "@/components/TeamShell";
 import CustomerShell from "@/components/CustomerShell";
 import { Avatar } from "@/components/ui";
@@ -36,6 +37,7 @@ function MarketShell({ children }: { children: React.ReactNode }) {
             <TodoButton />
             <RemindersButton />
             <button onClick={toggle} title="Theme" aria-label="Toggle theme" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
+            <DevicesButton />
             <button onClick={logout} title="Sign out" aria-label="Sign out" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><LogOut size={17} /></button>
           </div>
         </div>

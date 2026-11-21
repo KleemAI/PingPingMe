@@ -1,7 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { In, Not } from "typeorm";
 import { badRequest, conflict, notFound } from "../common/errors";
-import { HOUR, PRIORITIES, Payload, need, newId, oneOf, optStr, str } from "../common/util";
+import { HOUR, PRIORITIES, Payload, need, newId, oneOf, optStr, str, MAX_MESSAGE } from "../common/util";
 import { AuditService } from "../audit/audit.service";
 import { FilesService } from "../files/files.service";
 import {
@@ -155,6 +155,6 @@ export class RequestsService {
   /** Message body: text, files, or both (a picture or voice note may go without text). */
   private async textAndFiles(tx: Tx, p: Payload) {
     const attachments = await this.files.attachments(tx, p.attachments);
-    return { text: attachments.length ? optStr(p.text) ?? "" : str(p.text, "Message"), attachments };
+    return { text: attachments.length ? optStr(p.text, MAX_MESSAGE) ?? "" : str(p.text, "Message", MAX_MESSAGE), attachments };
   }
 }

@@ -33,7 +33,7 @@ export function seed(): DB {
     ],
     contacts: [
       { id: "ct1", name: "Priya Sharma", phone: "+919876543210", email: "priya@gmail.com", type: "customer", city: "Mumbai", createdAt: t(3 * D) },
-      { id: "ct2", name: "Rahul Verma", phone: "+919123456789", type: "customer", city: "Pune", createdAt: t(6 * D) },
+      { id: "ct2", name: "Rahul Verma", phone: "+919123456789", email: "rahul@example.in", type: "customer", city: "Pune", createdAt: t(6 * D) },
       { id: "ct3", name: "Aisha Khan", phone: "+919988766554", type: "customer", city: "Pune", createdAt: t(2 * H) },
       { id: "ct4", name: "Vikram Patel", phone: "+919000011122", type: "customer", city: "Ahmedabad", createdAt: t(9 * D) },
       { id: "ct5", name: "Meera Nair", phone: "+919811122233", email: "procurement@sunrisehotels.in", type: "business", companyId: "co1", designation: "Procurement Manager", city: "Mumbai", createdAt: t(4 * D) },

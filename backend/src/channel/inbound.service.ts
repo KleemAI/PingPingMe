@@ -3,6 +3,7 @@ import type { EntityManager } from "typeorm";
 import { badRequest } from "../common/errors";
 import { digits, newId, normPhone } from "../common/util";
 import { ContactEntity, ConversationEntity, MessageEntity } from "../database/entities";
+import { expiryFor } from "../conversations/disappearing";
 
 export type InboundEvent =
   | { eventId: string; type: "message"; channel?: string; from: string; name?: string; text: string; externalId?: string; at?: number }
@@ -60,7 +61,7 @@ export class InboundService {
     const messageId = newId("m");
     await em.insert(MessageEntity, {
       id: messageId, audience: "customer", conversationId: conv.id, direction: "in", authorName: contact.name, text,
-      attachments: [], externalId: ev.externalId ?? null, createdAt: now,
+      attachments: [], externalId: ev.externalId ?? null, createdAt: now, expiresAt: expiryFor(conv, now),
     });
     return { duplicate: false, conversationId: conv.id, messageId };
   }

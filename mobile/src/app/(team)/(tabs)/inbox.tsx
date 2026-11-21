@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { matches, newChatCandidates, searchTerm, type NewChat } from "@/lib/inboxSearch";
 import { Ionicons } from "@expo/vector-icons";
 import { useTeam } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
@@ -14,7 +15,7 @@ type F = "open" | "mine" | "unassigned" | "unread" | "unanswered" | "waiting_cus
 
 export default function Inbox() {
   const { c } = useTheme();
-  const { db, me, now } = useTeam();
+  const { db, me, now, act } = useTeam();
   const params = useLocalSearchParams<{ kind?: ContactType; filter?: F }>();
   const [kind, setKind] = useState<ContactType>(params.kind ?? "customer");
   const [filter, setFilter] = useState<F>(params.filter ?? "open");
@@ -39,11 +40,25 @@ export default function Inbox() {
       default: return cv.status === f;
     }
   };
+  const term = useMemo(() => searchTerm(q), [q]);
   const list = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    return base.filter((cv) => match(cv, filter)).filter((cv) => !t || contact(cv).name.toLowerCase().includes(t) || contact(cv).phone.includes(t) || company(cv)?.name.toLowerCase().includes(t) || db.messages.some((m) => m.conversationId === cv.id && m.text.toLowerCase().includes(t)))
+    // a search looks through every chat of this inbox, like WhatsApp — the filter chips apply only without a search
+    const pool = term.text ? db.conversations.filter((cv) => contact(cv)?.type === kind) : base.filter((cv) => match(cv, filter));
+    return pool.filter((cv) => !term.text || matches(term, { name: contact(cv).name, phone: contact(cv).phone, email: contact(cv).email, company: company(cv)?.name }) || db.messages.some((m) => m.conversationId === cv.id && m.text.toLowerCase().includes(term.text)))
       .sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-  }, [db, kind, filter, q, now]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [db, kind, filter, term, now]); // eslint-disable-line react-hooks/exhaustive-deps
+  // people found by the search who have no chat yet (contacts and app customers)
+  const fresh = useMemo(() => newChatCandidates(db, kind, term), [db, kind, term]);
+  const [starting, setStarting] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const startChat = async (n: NewChat) => {
+    setStarting(n.key);
+    try {
+      const id = (await (n.userId ? act("customer.chat", { id: n.userId }) : act("conv.start", { contactId: n.contactId }))) as string;
+      setQ("");
+      router.push(`/chat/${id}`);
+    } catch { /* toast shown */ } finally { setStarting(null); }
+  };
 
   const kindCount = (k: ContactType) => db.conversations.filter((cv) => contact(cv)?.type === k && cv.unread > 0).length;
   const chips: { id: F; label: string; count?: number }[] = (["open", "mine", "unassigned", "unread", "unanswered", "waiting_customer", "waiting_reseller", "resolved", "failed", "all"] as F[]).map((id) => ({
@@ -67,7 +82,27 @@ export default function Inbox() {
       <FlatList
         data={list}
         keyExtractor={(x) => x.id}
-        ListEmptyComponent={<Empty icon="chatbubbles-outline" title="Nothing here" text="Try another filter." />}
+        ListEmptyComponent={fresh.length ? undefined : term.digits.length >= 8
+          ? <View style={{ padding: 24, gap: 10, alignItems: "center" }}>
+              <T muted>Nobody with this number yet.</T>
+              <Button icon="person-add-outline" title={`Add ${q.trim()} as a new ${kind === "business" ? "contact" : "customer"}`} onPress={() => setAdding(true)} />
+            </View>
+          : <Empty icon="chatbubbles-outline" title="Nothing here" text={term.text ? "No chat or contact matches your search." : "Try another filter."} />}
+        ListFooterComponent={fresh.length ? (
+          <View>
+            <T size={12} weight="700" color={c.accentStrong} style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 }}>START A NEW CHAT</T>
+            {fresh.map((n) => (
+              <Pressable key={n.key} disabled={!!starting} onPress={() => startChat(n)} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 14, backgroundColor: pressed ? c.card2 : c.card, opacity: starting && starting !== n.key ? 0.6 : 1 })}>
+                <View style={{ paddingVertical: 10 }}><Avatar name={n.name} size={50} /></View>
+                <View style={{ flex: 1, paddingVertical: 14, paddingRight: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: c.border, gap: 2 }}>
+                  <T size={16} numberOfLines={1}>{n.name}</T>
+                  <T size={13} muted numberOfLines={1}>{n.sub}</T>
+                </View>
+                <T size={13} weight="600" color={c.accent} style={{ paddingRight: 14 }}>{starting === n.key ? "…" : n.app ? "Chat in app" : "Message"}</T>
+              </Pressable>
+            ))}
+          </View>
+        ) : undefined}
         renderItem={({ item: cv }) => {
           const ct = contact(cv);
           const co = company(cv);
@@ -102,7 +137,28 @@ export default function Inbox() {
         <Ionicons name="download-outline" size={24} color="#fff" />
       </Pressable>
       <SimulateSheet open={sim} onClose={() => setSim(false)} />
+      <NewContactSheet open={adding} onClose={() => setAdding(false)} kind={kind} phone={q.trim()} onCreated={(id) => { setQ(""); router.push(`/chat/${id}`); }} />
     </View>
+  );
+}
+
+/** New contact typed into the search (by phone number) → its chat opens. */
+function NewContactSheet({ open, onClose, kind, phone, onCreated }: { open: boolean; onClose: () => void; kind: ContactType; phone: string; onCreated: (id: string) => void }) {
+  const { act } = useTeam();
+  const [f, setF] = useState({ name: "", phone, email: "", city: "" });
+  useEffect(() => { if (open) setF((x) => ({ ...x, phone })); }, [open, phone]);
+  return (
+    <Sheet open={open} onClose={onClose} title={kind === "business" ? "New business contact" : "New customer"}>
+      <Input label="Name" value={f.name} onChangeText={(v) => setF({ ...f, name: v })} />
+      <Input label="Phone (with country code)" value={f.phone} onChangeText={(v) => setF({ ...f, phone: v })} keyboardType="phone-pad" />
+      <Input label="Email (optional)" value={f.email} onChangeText={(v) => setF({ ...f, email: v })} keyboardType="email-address" autoCapitalize="none" />
+      <Input label="City (optional)" value={f.city} onChangeText={(v) => setF({ ...f, city: v })} />
+      <T muted size={12}>On WhatsApp, the first message to a new contact must use an approved template and the contact's consent.</T>
+      <Button title="Create and open chat" disabled={!f.name.trim() || !f.phone.trim()} onPress={async () => {
+        const id = (await act("contact.create", { ...f, type: kind }, "Contact added").catch(() => null)) as string | null;
+        if (id) { onClose(); onCreated(id); }
+      }} />
+    </Sheet>
   );
 }
 

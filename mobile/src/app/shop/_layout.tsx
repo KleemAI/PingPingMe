@@ -13,6 +13,7 @@ export default function ShopLayout() {
   return (
     <Stack screenOptions={{ headerStyle: { backgroundColor: c.header }, headerTintColor: c.text, contentStyle: { backgroundColor: c.screen }, headerBackButtonDisplayMode: "minimal" }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="support" options={{ title: "Chat" }} />
     </Stack>
   );
 }

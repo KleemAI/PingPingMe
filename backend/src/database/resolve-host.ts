@@ -1,6 +1,6 @@
 import { Logger } from "@nestjs/common";
 import { promises as dns } from "node:dns";
-import { isIP } from "node:net";
+import { isIP, Socket, type LookupFunction } from "node:net";
 
 const log = new Logger("Database");
 
@@ -77,4 +77,70 @@ export async function pgConnection(
       ssl: sslOpt ? { servername: host, rejectUnauthorized: true } : false,
     };
   }
+}
+
+// ------------------------------------------------------------------ every new connection
+
+type Address = { address: string; family: number };
+const DNS_DOWN = new Set(["ENOTFOUND", "EAI_AGAIN"]);
+const WARN_EVERY = 60_000;
+
+/**
+ * DNS lookup for each new database connection that survives the local DNS failing while the API is running
+ * (Wi-Fi switch, ISP DNS hiccup): system DNS first, then public DNS over HTTPS, then the last address that worked.
+ * Without this, a DNS outage after start-up made every new connection fail with "getaddrinfo ENOTFOUND".
+ */
+export function resilientLookup(
+  deps: { lookup?: (h: string, family?: number) => Promise<Address[]>; doh?: (h: string) => Promise<string | null> } = {},
+): LookupFunction {
+  const system = deps.lookup ?? ((h: string, family?: number) => dns.lookup(h, { all: true, family: family ?? 0 }));
+  const doh = deps.doh ?? ((h: string) => resolveViaDoh(h));
+  const lastGood = new Map<string, Address[]>();
+  let warnedAt = 0;
+
+  const resolve = async (host: string, family?: number): Promise<Address[]> => {
+    try {
+      const found = await system(host, family);
+      if (found.length) lastGood.set(host, found);
+      return found;
+    } catch (e) {
+      if (!DNS_DOWN.has((e as NodeJS.ErrnoException).code ?? "")) throw e;
+      const ip = await doh(host);
+      const fallback = ip ? [{ address: ip, family: 4 }] : lastGood.get(host);
+      if (!fallback?.length) throw e;
+      if (ip) lastGood.set(host, fallback);
+      if (Date.now() - warnedAt > WARN_EVERY) {
+        warnedAt = Date.now();
+        log.warn(`This network's DNS can't resolve ${host} right now; using ${fallback[0].address} (${ip ? "public DNS" : "last known address"}).`);
+      }
+      return fallback;
+    }
+  };
+
+  return ((hostname: string, options: { all?: boolean; family?: number | string } | number, callback: (...a: unknown[]) => void) => {
+    const opts = typeof options === "object" && options ? options : { family: typeof options === "number" ? options : undefined };
+    const family = opts.family === "IPv4" ? 4 : opts.family === "IPv6" ? 6 : Number(opts.family) || undefined;
+    resolve(hostname, family).then(
+      (list) => (opts.all ? callback(null, list) : callback(null, list[0].address, list[0].family)),
+      (err) => callback(err),
+    );
+  }) as unknown as LookupFunction;
+}
+
+/**
+ * Socket factory for node-postgres (`extra.stream`): a plain TCP socket whose connect() uses resilientLookup.
+ * The hostname is kept, so TLS still checks the certificate against the real database host.
+ */
+export function resilientStream(lookup: LookupFunction = resilientLookup()) {
+  return () => {
+    const socket = new Socket();
+    const connect = socket.connect.bind(socket) as (...a: unknown[]) => Socket;
+    (socket as unknown as { connect: (...a: unknown[]) => Socket }).connect = (...args: unknown[]) => {
+      const [port, host] = args;
+      // pg calls connect(port, host); leave unix sockets, IPs and localhost alone
+      if (typeof host !== "string" || host.startsWith("/") || isIP(host) || host === "localhost") return connect(...args);
+      return connect({ port: Number(port), host, lookup });
+    };
+    return socket;
+  };
 }

@@ -3,7 +3,7 @@
 import { Clock, Mail, Phone } from "lucide-react";
 import { useStore } from "@/lib/client/store";
 import type { CustomerState } from "@/lib/types";
-import { Composer, MessageList } from "@/components/Thread";
+import { Composer, DisappearingPicker, MessageList, disappearLabel } from "@/components/Thread";
 import { Avatar } from "@/components/ui";
 
 /** The customer's chat with our team (text, photos, videos, documents, voice notes). It lands in the team's Customer inbox. */
@@ -23,12 +23,14 @@ export default function CustomerChat() {
             {b.email && <a href={`mailto:${b.email}`} className="hidden items-center gap-1 hover:underline sm:flex"><Mail size={12} /> {b.email}</a>}
           </p>
         </div>
+        <DisappearingPicker value={cs.disappearSeconds} onChange={(v) => act("chat.disappearing", { seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />
       </header>
       {/* "in" = from the customer to us → their own messages on the right */}
       <MessageList messages={cs.messages} side={(m) => (m.direction === "in" ? "right" : "left")} />
       <Composer
         modes={[{ id: "customer", kind: "customer", label: "Message", hint: "Text, photos, videos, documents or a voice note" }]}
-        onSend={(_m, text, attachments) => act("chat.send", { text, attachments: attachments.map((a) => a.id) })}
+        allowViewOnce
+        onSend={(_m, text, attachments, opts) => act("chat.send", { text, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce })}
       />
     </div>
   );

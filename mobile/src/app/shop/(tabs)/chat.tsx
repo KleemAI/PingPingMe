@@ -1,20 +1,19 @@
-import { KeyboardAvoidingView, Platform } from "react-native";
-import { useHeaderHeight } from "expo-router/react-navigation";
+import { router } from "expo-router";
 import { useCustomer } from "@/lib/store";
-import { Composer, MessageList } from "@/components/Thread";
+import { plain } from "@/lib/chatFormat";
+import { useTeamChatSeen } from "@/lib/seen";
+import { PeopleList } from "@/components/PeopleList";
 
-/** Chat with our team: text, photos, videos, documents and voice notes. It lands in the team's Customer inbox. */
-export default function CustomerChat() {
-  const { cs, act } = useCustomer();
-  const headerHeight = useHeaderHeight();
-  return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? headerHeight : 0}>
-      {/* "in" = from the customer to us → their own messages on the right */}
-      <MessageList messages={cs.messages} side={(m) => (m.direction === "in" ? "right" : "left")} />
-      <Composer
-        modes={[{ id: "customer", kind: "customer", label: "Message", hint: "Text, photos, videos, documents or a voice note" }]}
-        onSend={(_m, text, attachments) => act("chat.send", { text, attachments: attachments.map((a) => a.id) })}
-      />
-    </KeyboardAvoidingView>
-  );
+/** Chats tab (like WhatsApp): search people, our team's chat pinned on top, then your personal chats. */
+export default function CustomerChats() {
+  const { cs } = useCustomer();
+  const { seen } = useTeamChatSeen();
+  const now = Date.now();
+  const visible = cs.messages.filter((m) => !m.expiresAt || m.expiresAt > now || m.disappeared);
+  const last = visible.at(-1);
+  const unread = visible.filter((m) => m.direction === "out" && m.createdAt > seen).length;
+  const sub = last
+    ? `${last.direction === "in" ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}`
+    : "Ask us anything — products, prices, orders";
+  return <PeopleList pinned={{ name: cs.business.name, sub, time: last?.createdAt, unread: seen ? unread : 0, onPress: () => router.push("/shop/support") }} />;
 }

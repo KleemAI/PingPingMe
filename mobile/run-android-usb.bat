@@ -1,4 +1,9 @@
 @echo off
+rem keep this window open whatever happens (double-click used to close it before you could read an error)
+if /i not "%~1"=="__keep" (
+  cmd /k ""%~f0" __keep"
+  exit /b
+)
 title Business Messaging - Android phone (USB developer mode)
 cd /d "%~dp0"
 echo.

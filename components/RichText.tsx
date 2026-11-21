@@ -2,11 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { Code2 } from "lucide-react";
-import { EMOJI, STICKERS, parse, stickerText, type Sticker } from "@/lib/chatFormat";
+import { EMOJI, FOLD_FIRST, FOLD_STEP, STICKERS, fold, parse, stickerText, type Sticker } from "@/lib/chatFormat";
 
 /** Message text with WhatsApp-style formatting, big emoji and stickers. */
 export function RichText({ text }: { text: string }) {
-  const p = useMemo(() => parse(text), [text]);
+  // long messages (up to 68,000 characters) are folded: "Read more" shows the next part
+  const [limit, setLimit] = useState(FOLD_FIRST);
+  const shown = useMemo(() => fold(text, limit), [text, limit]);
+  const p = useMemo(() => parse(shown.text), [shown.text]);
   if (p.sticker) return <StickerView s={p.sticker} />;
   if (p.jumbo) return <span className="block text-[46px] leading-[56px]">{text.trim()}</span>;
   return (
@@ -23,6 +26,10 @@ export function RichText({ text }: { text: string }) {
         if (l.kind === "code") return <span key={i} className="block bg-black/10 px-1.5 font-mono text-[0.92em] whitespace-pre-wrap dark:bg-white/10">{l.spans[0]?.text || " "}</span>;
         return <span key={i} className="block min-h-[1em] whitespace-pre-wrap">{spans}</span>;
       })}
+      {shown.more && (
+        <button type="button" onClick={() => setLimit((l) => (l === FOLD_FIRST ? FOLD_STEP : l + FOLD_STEP))}
+          className="mt-0.5 font-semibold text-[var(--accent)] hover:underline">Read more</button>
+      )}
     </span>
   );
 }

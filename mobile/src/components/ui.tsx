@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, type Tone } from "@/lib/theme";
 import { colorFor, initials } from "@/lib/format";
 import { useStore } from "@/lib/store";
+import { usePersonalChats } from "@/lib/people";
 
 export type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -183,12 +184,12 @@ export function Empty({ icon, title, text }: { icon: IconName; title: string; te
   );
 }
 
-export function SearchBar({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+export function SearchBar({ value, onChange, placeholder, autoFocus }: { value: string; onChange: (v: string) => void; placeholder: string; autoFocus?: boolean }) {
   const { c } = useTheme();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: c.card2, borderRadius: 10, marginHorizontal: 14, marginTop: 10, paddingHorizontal: 12, height: 40 }}>
       <Ionicons name="search" size={17} color={c.muted} />
-      <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={c.muted} style={{ flex: 1, color: c.text, fontSize: 15 }} />
+      <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor={c.muted} autoFocus={autoFocus} style={{ flex: 1, color: c.text, fontSize: 15 }} />
     </View>
   );
 }
@@ -280,10 +281,18 @@ export function TodoButton() {
   return <HeaderIcon icon="checkbox-outline" n={n} onPress={() => router.push("/todo")} label={n ? `To-Do, ${n} due` : "To-Do"} />;
 }
 
-/** Header buttons on every main tab: to-do, reminders, light/dark. */
+/** 💬 Personal chats — badge: unread messages. Not shown to resellers. */
+export function PeopleButton() {
+  const { unread, enabled } = usePersonalChats();
+  if (!enabled) return null;
+  return <HeaderIcon icon="chatbubble-ellipses-outline" n={unread} onPress={() => router.push("/people")} label={unread ? `Chats, ${unread} unread` : "Chats"} />;
+}
+
+/** Header buttons on every main tab: chats, to-do, reminders, light/dark. */
 export function HeaderActions() {
   return (
     <View style={{ flexDirection: "row", alignItems: "center", paddingRight: 2 }}>
+      <PeopleButton />
       <TodoButton />
       <RemindersButton />
       <ThemeToggle />

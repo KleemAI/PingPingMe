@@ -12,6 +12,7 @@ export type User = {
   createdAt?: number; // customers only
   active: boolean;
   passwordHash?: string; // never sent to the browser
+  contactId?: string; // customers only: their contact in the team's inbox
 };
 
 export type ContactType = "customer" | "business";
@@ -55,6 +56,7 @@ export type Conversation = {
   firstResponseAt?: number;
   createdAt: number;
   resolvedAt?: number;
+  disappearSeconds?: number; // disappearing messages timer (0/absent = off)
 };
 
 export type Attachment = { id: string; name: string; size: number; mime: string };
@@ -81,6 +83,11 @@ export type Message = {
   retries?: number;
   externalId?: string; // provider message id (dedupe)
   createdAt: number;
+  expiresAt?: number; // disappearing message: leaves the chat at this time
+  disappeared?: boolean; // admins only: gone for everyone else, kept for the audit log
+  viewOnce?: boolean; // view-once photo / video
+  viewedAt?: number;
+  viewedBy?: string;
 };
 
 export type ResellerStatus = "pending" | "active" | "suspended";
@@ -373,6 +380,7 @@ export type CustomerState = {
   me: User;
   profile: Contact;
   conversationId?: string;
+  disappearSeconds?: number; // disappearing messages timer of that chat
   messages: Message[];
   products: CustomerProduct[];
   categories: string[];
@@ -388,3 +396,11 @@ export type CustomerState = {
 };
 
 export type AppState = TeamState | ResellerState | CustomerState;
+
+/** A signed-in device of the current account (Linked devices). At most 50 at a time. */
+export type LinkedDevice = { id: string; name: string; kind: "web" | "mobile" | "api"; ip: string; createdAt: number; lastSeenAt: number; current: boolean };
+
+/** Personal chats (customers and the team): someone you can chat with. `hint` = masked phone / email, to tell people apart. */
+export type Person = { id: string; name: string; role: "customer" | "team"; hint?: string };
+export type PersonalMessage = { id: string; chatId: string; authorId: string; text: string; attachments: Attachment[]; createdAt: number };
+export type PersonalChat = { id: string; with: Person; lastMessageAt: number; unread: number; theirReadAt?: number; messages: PersonalMessage[] };

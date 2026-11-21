@@ -28,6 +28,20 @@ export function normalizeServer(input: string) {
 
 type Toast = { id: number; text: string; kind: "ok" | "error" };
 
+/** This phone's name for "Linked devices", e.g. "Samsung SM-A546E (Android 14)". The web build is named by the browser. */
+export function deviceName(): string | undefined {
+  const k = (Platform.constants ?? {}) as { Brand?: string; Manufacturer?: string; Model?: string; Release?: string; systemName?: string; osVersion?: string };
+  if (Platform.OS === "android") {
+    const brand = (k.Brand ?? k.Manufacturer ?? "").trim();
+    const model = (k.Model ?? "Android phone").trim();
+    const name = brand && !model.toLowerCase().startsWith(brand.toLowerCase()) ? `${brand[0].toUpperCase()}${brand.slice(1)} ${model}` : model;
+    return `${name} (Android ${k.Release ?? Platform.Version})`;
+  }
+  if (Platform.OS === "ios") return `${Platform.isPad ? "iPad" : "iPhone"} (iOS ${k.osVersion ?? Platform.Version})`;
+  return undefined;
+}
+const DEVICE_HEADER: Record<string, string> = deviceName() ? { "x-device-name": deviceName()! } : {};
+
 type Ctx = {
   ready: boolean;
   server: string;
@@ -89,7 +103,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     if (!tokenRef.current) return;
     try {
-      const res = await call(`${API}/state?v=${version.current}`);
+      // give up after 10 s: on Android a request to an address that can't be reached (old Wi-Fi IP, backend off)
+      // otherwise hangs for minutes, and the app sat on its loading spinner the whole time
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 10_000);
+      const res = await call(`${API}/state?v=${version.current}`, { signal: ctl.signal }).finally(() => clearTimeout(timer));
       if (res.status === 401 || res.status === 403) {
         const d = await res.json().catch(() => ({}));
         toast(d.error ?? "Session expired — please sign in again", "error");
@@ -150,7 +168,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const authPost = useCallback(async (base: string, path: string, body: object) => {
     let res: Response;
     try {
-      res = await fetch(`${base}${API}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      res = await fetch(`${base}${API}${path}`, { method: "POST", headers: { "content-type": "application/json", ...DEVICE_HEADER }, body: JSON.stringify(body) });
     } catch {
       throw new Error(`Can't reach ${base || "the server"}. Is it running and on the same Wi-Fi?`);
     }
@@ -219,7 +237,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   }, [authPost]);
 
   const logout = useCallback(async () => {
-    await call(`${API}/auth/logout`, { method: "POST" }).catch(() => {});
+    call(`${API}/auth/logout`, { method: "POST" }).catch(() => {}); // don't wait: the server may be unreachable
     await clearSession();
   }, [call, clearSession]);
 

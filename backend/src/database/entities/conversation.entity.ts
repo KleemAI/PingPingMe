@@ -19,6 +19,8 @@ export class ConversationEntity {
   @Column({ name: "first_response_at", ...TS_NULL }) firstResponseAt: number | null;
   @Column({ name: "created_at", ...TS }) createdAt: number;
   @Column({ name: "resolved_at", ...TS_NULL }) resolvedAt: number | null;
+  /** Disappearing messages: new chat messages vanish from the chat this many seconds after sending (0 = off). */
+  @Column({ name: "disappear_seconds", type: "int", default: 0 }) disappearSeconds: number;
 }
 
 /**
@@ -44,4 +46,10 @@ export class MessageEntity {
   /** provider message id — unique so a repeated webhook can't create a duplicate */
   @Index({ unique: true, where: "external_id IS NOT NULL" }) @Column({ name: "external_id", type: "varchar", length: 200, nullable: true }) externalId: string | null;
   @Index() @Column({ name: "created_at", ...TS }) createdAt: number;
+  /** Disappearing messages: hidden from everyone but admins (audit) after this time. */
+  @Column({ name: "expires_at", ...TS_NULL }) expiresAt: number | null;
+  /** View once: the photo / video can be opened one time by the other side, then only admins (audit) can see it. */
+  @Column({ name: "view_once", default: false }) viewOnce: boolean;
+  @Column({ name: "viewed_at", ...TS_NULL }) viewedAt: number | null;
+  @Column({ name: "viewed_by", type: "varchar", length: 40, nullable: true }) viewedBy: string | null;
 }

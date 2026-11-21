@@ -14,7 +14,7 @@ import type {
 export const toUser = (u: UserEntity): User =>
   clean({
     id: u.id, name: u.name, email: u.email, role: u.role as User["role"], resellerId: u.resellerId, active: u.active,
-    ...(u.role === "customer" ? { verified: !!u.verified, createdAt: u.createdAt ? new Date(u.createdAt).getTime() : undefined } : {}),
+    ...(u.role === "customer" ? { verified: !!u.verified, createdAt: u.createdAt ? new Date(u.createdAt).getTime() : undefined, contactId: u.contactId ?? undefined } : {}),
   }) as User;
 
 export const toCompany = (c: CompanyEntity): Company => clean({ ...c }) as Company;
@@ -30,9 +30,36 @@ export const toConversation = (c: ConversationEntity): Conversation => {
 };
 
 export const toMessage = (m: MessageEntity): Message => {
-  const { seq, ...rest } = m; // eslint-disable-line @typescript-eslint/no-unused-vars
-  return clean(rest) as Message;
+  const { seq, viewOnce, ...rest } = m; // eslint-disable-line @typescript-eslint/no-unused-vars
+  return clean({ ...rest, viewOnce: viewOnce || undefined }) as Message;
 };
+
+/** Timer choices for disappearing messages (seconds): off, 24 hours, 7 days, 90 days — like WhatsApp. */
+export const DISAPPEAR_CHOICES = [0, 86_400, 604_800, 7_776_000];
+
+/** True when `viewer` is on the side that sent the message (the team for "out", the customer / reseller for "in"). */
+export const isSender = (m: Pick<MessageEntity, "direction" | "authorId">, viewer: User) =>
+  m.authorId === viewer.id || (m.direction === "out" ? viewer.role === "admin" || viewer.role === "agent" : viewer.role === "customer" || viewer.role === "reseller");
+
+/**
+ * Messages as `viewer` may see them.
+ * - Disappeared (past expiresAt): left out — except for admins, who get them marked `disappeared` (audit trail).
+ * - View once: the sender never gets the file back; after the other side opened it, nobody but admins does.
+ *   The file itself is guarded the same way in FilesService.canSee.
+ */
+export function messagesFor(list: MessageEntity[], viewer: User, now = Date.now()): Message[] {
+  const admin = viewer.role === "admin";
+  const out: Message[] = [];
+  for (const m of list) {
+    const gone = m.expiresAt !== null && m.expiresAt !== undefined && m.expiresAt <= now;
+    if (gone && !admin) continue;
+    const msg = toMessage(m);
+    if (gone) msg.disappeared = true;
+    if (m.viewOnce && !admin && (m.viewedAt || isSender(m, viewer))) msg.attachments = [];
+    out.push(msg);
+  }
+  return out;
+}
 
 export const toReseller = (r: ResellerEntity): Reseller => clean({ ...r }) as Reseller;
 

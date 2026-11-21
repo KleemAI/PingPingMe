@@ -16,6 +16,9 @@ export function need<T>(v: T | null | undefined, what: string): T {
   return v;
 }
 
+/** Longest chat message, in characters (like WhatsApp). Long messages are folded behind "Read more" in the apps. */
+export const MAX_MESSAGE = 68_000;
+
 /** Required, trimmed, length-limited string. */
 export function str(v: unknown, field: string, max = 4000): string {
   if (typeof v !== "string" || !v.trim()) throw badRequest(`${field} is required`);
