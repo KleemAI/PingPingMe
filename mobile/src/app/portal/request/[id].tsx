@@ -9,7 +9,7 @@ import type { ResellerState } from "@/lib/types";
 import { ORDER_STATUS, REQ_STATUS, dateTime, relative, rupees } from "@/lib/format";
 import { Button, Card, Empty, Input, Pill, StatusPill, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
-import { Composer, MessageList } from "@/components/Thread";
+import { Composer, MessageList, DisappearingButton, disappearLabel } from "@/components/Thread";
 import { ReasonSheet } from "@/components/forms";
 
 export default function PortalRequest() {
@@ -44,9 +44,11 @@ export default function PortalRequest() {
 
       {tab === "chat" ? (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={headerHeight + 48}>
+          {mine && <DisappearingButton row value={r.resellerDisappearSeconds}
+            onChange={(v) => act("portal.disappearing", { requestId: r.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />}
           <MessageList viewer="reseller" wallpaper={false} messages={msgs} side={(m) => (m.direction === "in" ? "right" : "left")} />
-          <Composer disabled={!mine ? "No longer assigned to you" : undefined} modes={[{ id: "team", kind: "reseller", label: "Message our team", hint: "your coordinator replies here" }]}
-            onSend={(_m, text, att) => act("portal.message", { requestId: r.id, text, attachments: att.map((a) => a.id) })} />
+          <Composer allowViewOnce disabled={!mine ? "No longer assigned to you" : undefined} modes={[{ id: "team", kind: "reseller", label: "Message our team", hint: "your coordinator replies here" }]}
+            onSend={(_m, text, att, opts) => act("portal.message", { requestId: r.id, text, attachments: att.map((a) => a.id), viewOnce: opts?.viewOnce })} />
         </KeyboardAvoidingView>
       ) : (
         <ScrollPad>

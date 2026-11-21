@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { PushService, preview } from "../push/push.service";
 import { In } from "typeorm";
 import type { CustomerProduct, CustomerRequest, CustomerState, RequestStatus, User } from "../common/contract";
 import { badRequest, conflict, notFound } from "../common/errors";
@@ -21,7 +22,7 @@ const MAX_OPEN_REQUESTS = 20;
  */
 @Injectable()
 export class CustomerService {
-  constructor(private readonly uow: UnitOfWork, private readonly audit: AuditService, private readonly files: FilesService) {}
+  constructor(private readonly uow: UnitOfWork, private readonly audit: AuditService, private readonly files: FilesService, private readonly push: PushService) {}
 
   /** The customer's contact (linked at sign-up; created here for older accounts). */
   private async contactIdFor(user: User): Promise<string> {
@@ -80,6 +81,8 @@ export class CustomerService {
       id, audience: "customer", conversationId: conv.id, direction: "in", authorId: tx.user.id, authorName: contact.name, text, attachments, createdAt: now,
       expiresAt: expiryFor(conv, now), viewOnce,
     });
+    // the agent who owns the chat — or the whole team while nobody does
+    this.push.notify(tx, await this.push.teamIds(tx, conv.assigneeId), { title: contact.name, body: preview(text, attachments, viewOnce), data: { type: "conv", id: conv.id } });
     return { id, conv, contact };
   }
 

@@ -144,6 +144,7 @@ export type Request = {
   createdAt: number;
   updatedAt: number;
   closedAt?: number;
+  resellerDisappearSeconds?: number; // disappearing messages on the reseller thread (0/absent = off)
 };
 
 export type QuoteItem = { name: string; qty: number; unitPrice: number };
@@ -402,5 +403,8 @@ export type LinkedDevice = { id: string; name: string; kind: "web" | "mobile" | 
 
 /** Personal chats (customers and the team): someone you can chat with. `hint` = masked phone / email, to tell people apart. */
 export type Person = { id: string; name: string; role: "customer" | "team"; hint?: string };
-export type PersonalMessage = { id: string; chatId: string; authorId: string; text: string; attachments: Attachment[]; createdAt: number };
-export type PersonalChat = { id: string; with: Person; lastMessageAt: number; unread: number; theirReadAt?: number; messages: PersonalMessage[] };
+export type PersonalMessage = {
+  id: string; chatId: string; authorId: string; text: string; attachments: Attachment[]; createdAt: number;
+  expiresAt?: number; viewOnce?: boolean; viewedAt?: number;
+};
+export type PersonalChat = { id: string; with: Person; lastMessageAt: number; unread: number; theirReadAt?: number; disappearSeconds?: number; messages: PersonalMessage[] };

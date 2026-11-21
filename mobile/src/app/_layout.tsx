@@ -5,6 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StoreProvider, useStore } from "@/lib/store";
 import { useReminderNotifications } from "@/lib/reminders";
 import { useTaskEvents } from "@/lib/taskEvents";
+import { usePushNotifications } from "@/lib/push";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { Toasts } from "@/components/ui";
 
@@ -15,6 +16,8 @@ function Root() {
   useReminderNotifications(state?.broadcasts, !!token, state?.tasks);
   // to-dos given to / by you: new, accepted, declined, finished
   useTaskEvents(token ? state?.me.id : undefined, state?.tasks, state?.assignedTasks);
+  // new messages → push notifications (installed app only, not Expo Go)
+  usePushNotifications();
   return (
     <View style={{ flex: 1, backgroundColor: c.screen }}>
       <StatusBar style={dark ? "light" : "dark"} />

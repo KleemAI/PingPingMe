@@ -6,7 +6,7 @@ import { ArrowLeft, Check, X, HelpCircle, Plus, Trash2, Send, Truck, MapPin, Tag
 import { useReseller } from "@/lib/client/store";
 import { ORDER_STATUS, REQ_STATUS, dateTime, rupees, relative } from "@/lib/format";
 import { Button, Card, Empty, Field, Modal, Pill, StatusPill, inputCls } from "@/components/ui";
-import { Composer, MessageList } from "@/components/Thread";
+import { Composer, DisappearingPicker, MessageList, disappearLabel } from "@/components/Thread";
 
 export default function PortalRequest({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -78,11 +78,14 @@ export default function PortalRequest({ params }: { params: Promise<{ id: string
         </div>
 
         <Card className="flex h-[560px] flex-col overflow-hidden">
-          <div className="border-b border-[var(--border)] px-4 py-3 text-[14px] font-semibold">Messages with our team</div>
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2 text-[14px] font-semibold">
+            Messages with our team
+            {mine && <DisappearingPicker value={r.resellerDisappearSeconds} onChange={(v) => act("portal.disappearing", { requestId: r.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />}
+          </div>
           <MessageList viewer="reseller" messages={msgs} side={(m) => (m.direction === "in" ? "right" : "left")} wallpaper={false} />
-          <Composer disabled={!mine ? "This request is no longer assigned to you" : undefined}
+          <Composer allowViewOnce disabled={!mine ? "This request is no longer assigned to you" : undefined}
             modes={[{ id: "team", kind: "reseller", label: "Message our team", hint: "Your coordinator will reply here" }]}
-            onSend={(_m, text, att) => act("portal.message", { requestId: r.id, text, attachments: att.map((a) => a.id) })} />
+            onSend={(_m, text, att, opts) => act("portal.message", { requestId: r.id, text, attachments: att.map((a) => a.id), viewOnce: opts?.viewOnce })} />
         </Card>
       </div>
 

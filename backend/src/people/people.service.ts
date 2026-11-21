@@ -1,7 +1,10 @@
 import { Injectable } from "@nestjs/common";
+import { PushService, preview } from "../push/push.service";
 import { In } from "typeorm";
 import type { Person, PersonalChat, User } from "../common/contract";
-import { badRequest, forbidden, notFound } from "../common/errors";
+import { badRequest, conflict, forbidden, notFound } from "../common/errors";
+import { DISAPPEAR_CHOICES } from "../database/mappers";
+import { disappearLabel, expiryFor, viewOnceFlag } from "../conversations/disappearing";
 import { MAX_MESSAGE, newId, optStr, str, type Payload } from "../common/util";
 import { PersonalChatEntity, PersonalMessageEntity, UserEntity } from "../database/entities";
 import { UnitOfWork, type Tx } from "../database/unit-of-work.service";
@@ -31,7 +34,7 @@ const pair = (a: string, b: string) => (a < b ? { userA: a, userB: b } : { userA
  */
 @Injectable()
 export class PeopleService {
-  constructor(private readonly uow: UnitOfWork, private readonly files: FilesService, private readonly limiter: RateLimiter) {}
+  constructor(private readonly uow: UnitOfWork, private readonly files: FilesService, private readonly limiter: RateLimiter, private readonly push: PushService) {}
 
   private get em() { return this.uow.manager; }
 
@@ -72,12 +75,20 @@ export class PeopleService {
         const mine = c.userA === user.id;
         const other = mine ? c.userB : c.userA;
         const myRead = (mine ? c.readA : c.readB) ?? 0;
-        const msgs = messages.filter((m) => m.chatId === c.id);
+        const now = Date.now();
+        // disappeared messages leave the chat for both people (the rows stay on the server)
+        const msgs = messages.filter((m) => m.chatId === c.id && (!m.expiresAt || m.expiresAt > now));
         return {
           id: c.id, with: byId.get(other) ?? { id: other, name: "Deleted account", role: "customer" }, lastMessageAt: c.lastMessageAt,
           unread: msgs.filter((m) => m.authorId !== user.id && m.createdAt > myRead).length,
           theirReadAt: (mine ? c.readB : c.readA) ?? undefined,
-          messages: msgs.map((m) => ({ id: m.id, chatId: m.chatId, authorId: m.authorId, text: m.text, attachments: m.attachments, createdAt: m.createdAt })),
+          disappearSeconds: c.disappearSeconds || undefined,
+          messages: msgs.map((m) => ({
+            id: m.id, chatId: m.chatId, authorId: m.authorId, text: m.text, createdAt: m.createdAt,
+            // view once: the sender never gets the file back, and after the other person opened it nobody does
+            attachments: m.viewOnce && (m.viewedAt || m.authorId === user.id) ? [] : m.attachments,
+            expiresAt: m.expiresAt ?? undefined, viewOnce: m.viewOnce || undefined, viewedAt: m.viewedAt ?? undefined,
+          })),
         };
       }),
     };
@@ -107,11 +118,55 @@ export class PeopleService {
     const text = optStr(p.text, MAX_MESSAGE) ?? "";
     if (!text && !attachments.length) throw badRequest("Type a message or attach a file");
     const now = Date.now();
-    await tx.em.insert(PersonalMessageEntity, { id: newId("pm"), chatId: chat.id, authorId: me.id, text, attachments, createdAt: now });
+    await tx.em.insert(PersonalMessageEntity, {
+      id: newId("pm"), chatId: chat.id, authorId: me.id, text, attachments, createdAt: now,
+      expiresAt: expiryFor(chat, now), viewOnce: viewOnceFlag(p.viewOnce, attachments),
+    });
     chat.lastMessageAt = now;
     if (chat.userA === me.id) chat.readA = now; else chat.readB = now;
     await tx.em.save(chat);
+    this.push.notify(tx, [other.id], { title: me.name, body: preview(text, attachments, !!p.viewOnce && attachments.length > 0), data: { type: "pm", id: chat.id } });
     return chat.id;
+  }
+
+  private async myChat(tx: Tx, chatId: unknown) {
+    const chat = await tx.em.findOne(PersonalChatEntity, { where: { id: str(chatId, "chatId", 40) } });
+    if (!chat || (chat.userA !== tx.user.id && chat.userB !== tx.user.id)) throw notFound("Chat");
+    return chat;
+  }
+
+  /** pm.disappearing { chatId, seconds } — either person turns disappearing messages on/off; both see a notice. */
+  async disappearing(tx: Tx, p: Payload) {
+    const chat = await this.myChat(tx, p.chatId);
+    const s = Number(p.seconds);
+    if (!DISAPPEAR_CHOICES.includes(s)) throw badRequest("Pick off, 24 hours, 7 days or 90 days");
+    if (chat.disappearSeconds === s) return s;
+    chat.disappearSeconds = s;
+    const now = Date.now();
+    chat.lastMessageAt = now;
+    if (chat.userA === tx.user.id) chat.readA = now; else chat.readB = now;
+    await tx.em.save(chat);
+    await tx.em.insert(PersonalMessageEntity, {
+      id: newId("pm"), chatId: chat.id, authorId: tx.user.id, attachments: [], createdAt: now, expiresAt: null, viewOnce: false,
+      text: s
+        ? `⏱️ ${tx.user.name} turned on disappearing messages. New messages will disappear from this chat ${disappearLabel(s)} after they're sent.`
+        : `⏱️ ${tx.user.name} turned off disappearing messages.`,
+    });
+    return s;
+  }
+
+  /** pm.open { messageId } — the other person opens a view-once photo / video (one time). Returns its attachments. */
+  async open(tx: Tx, p: Payload) {
+    const m = await tx.em.findOne(PersonalMessageEntity, { where: { id: str(p.messageId, "messageId", 40) } });
+    if (!m || !m.viewOnce) throw notFound("Message");
+    await this.myChat(tx, m.chatId);
+    if (m.expiresAt && m.expiresAt <= Date.now()) throw notFound("Message");
+    if (m.authorId === tx.user.id) throw forbidden("You sent this view-once message — it can't be opened again");
+    if (m.viewedAt) throw conflict("This view-once message was already opened");
+    m.viewedAt = Date.now();
+    m.viewedBy = tx.user.id;
+    await tx.em.save(m);
+    return { attachments: m.attachments, viewedAt: m.viewedAt };
   }
 
   /** pm.read { chatId } — mark a chat as read. */

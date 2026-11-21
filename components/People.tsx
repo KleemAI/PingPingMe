@@ -8,7 +8,7 @@ import type { Message, Person, PersonalChat } from "@/lib/types";
 import { listTime } from "@/lib/format";
 import { plain } from "@/lib/chatFormat";
 import { Avatar, Empty } from "./ui";
-import { Composer, MessageList } from "./Thread";
+import { Composer, DisappearingPicker, MessageList, disappearLabel } from "./Thread";
 
 const versionOf = (s: unknown) => (s as { db?: { version?: number }; version?: number } | null)?.db?.version ?? (s as { version?: number } | null)?.version ?? 0;
 
@@ -66,13 +66,14 @@ export default function People() {
     return {
       id: m.id, audience: "customer", direction: mine ? "out" : "in", authorId: m.authorId, authorName: mine ? me?.name ?? "You" : chat!.with.name,
       text: m.text, attachments: m.attachments, createdAt: m.createdAt,
+      expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
       status: mine ? (chat!.theirReadAt && chat!.theirReadAt >= m.createdAt ? "read" : "delivered") : undefined,
     } as Message;
   }), [chat, me?.id, me?.name]);
 
-  const send = async (text: string, attachments: { id: string }[]) => {
+  const send = async (text: string, attachments: { id: string }[], viewOnce?: boolean) => {
     const target = chat ? { chatId: chat.id } : { userId: open!.person.id };
-    const id = (await act("pm.send", { ...target, text, attachments: attachments.map((a) => a.id) })) as string;
+    const id = (await act("pm.send", { ...target, text, attachments: attachments.map((a) => a.id), viewOnce })) as string;
     setOpen((o) => (o ? { ...o, chatId: id } : o));
     await reload();
   };
@@ -114,7 +115,7 @@ export default function People() {
             const last = c.messages.at(-1);
             return row(c.id, c.with,
               <span className="flex items-center gap-1">
-                <span className="flex-1 truncate">{last ? `${last.authorId === me?.id ? "You: " : ""}${last.text ? plain(last.text) : "📎 Attachment"}` : ""}</span>
+                <span className="flex-1 truncate">{last ? `${last.authorId === me?.id ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}` : ""}</span>
                 {c.unread > 0 && <span className="min-w-[19px] shrink-0 rounded-full bg-[var(--accent)] px-1.5 text-center text-[11px] font-semibold leading-[19px] text-white">{c.unread}</span>}
               </span>,
               <span className={`shrink-0 text-[11.5px] ${c.unread ? "font-semibold text-[var(--accent)]" : "text-[var(--muted)]"}`}>{listTime(c.lastMessageAt)}</span>,
@@ -142,11 +143,13 @@ export default function People() {
                 <div className="truncate text-[15px] font-medium">{open.person.name}</div>
                 <div className="truncate text-[12px] text-[var(--muted)]">{open.person.role === "team" ? "Our team" : "Customer"}{open.person.hint ? ` · ${open.person.hint}` : ""}</div>
               </div>
+              {chat && <DisappearingPicker value={chat.disappearSeconds} onChange={(v) => act("pm.disappearing", { chatId: chat.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />}
             </header>
-            <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} />
+            <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="pm.open" />
             <Composer
+              allowViewOnce
               modes={[{ id: "pm", kind: "customer", label: "Message", hint: `Only ${open.person.name.split(" ")[0]} and you can see this chat` }]}
-              onSend={(_m, text, attachments) => send(text, attachments)}
+              onSend={(_m, text, attachments, opts) => send(text, attachments, opts?.viewOnce)}
             />
           </>
         )}

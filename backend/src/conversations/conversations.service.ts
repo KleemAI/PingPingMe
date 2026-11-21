@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { PushService, preview } from "../push/push.service";
 import type { Attachment } from "../common/contract";
 import { badRequest, conflict, AppError } from "../common/errors";
 import { PRIORITIES, Payload, need, newId, oneOf, optStr, str, MAX_MESSAGE } from "../common/util";
@@ -20,6 +21,7 @@ export class ConversationsService {
     private readonly files: FilesService,
     private readonly inbound: InboundService,
     private readonly outbox: OutboxService,
+    private readonly push: PushService,
   ) {}
 
   /**
@@ -41,6 +43,9 @@ export class ConversationsService {
     conv.unread = 0;
     await tx.em.save(conv);
     tx.afterCommit(() => this.outbox.dispatch([id]));
+    // the customer's phone, if they have the app (their account is linked to this contact)
+    const app = await tx.em.findOne(UserEntity, { where: { contactId: conv.contactId, role: "customer", active: true } });
+    if (app) this.push.notify(tx, [app.id], { title: await this.push.businessName(tx), body: preview(text, attachments, !!chat?.viewOnce), data: { type: "support" } });
     return id;
   }
 

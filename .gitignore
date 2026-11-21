@@ -18,3 +18,7 @@ data/
 .DS_Store
 Thumbs.db
 *.log
+
+# Firebase service-account keys (upload them to EAS, never commit them)
+*service-account*.json
+*firebase-adminsdk*.json

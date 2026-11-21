@@ -9,7 +9,7 @@ import { useTeam } from "@/lib/client/store";
 import type { Order, OrderStatus, Quote, Request } from "@/lib/types";
 import { PRIORITY, REQ_STATUS, ORDER_STATUS, CASE_STATUS, dateTime, duration, relative, rupees, resellerOverdue } from "@/lib/format";
 import { Avatar, Button, Card, Empty, Field, Modal, Pill, StatusPill, inputCls } from "@/components/ui";
-import { Composer, MessageList } from "@/components/Thread";
+import { Composer, DisappearingPicker, MessageList, disappearLabel } from "@/components/Thread";
 import { OrderPanel } from "@/components/OrderPanel";
 import { OpenCaseModal, ReminderModal } from "@/components/forms";
 
@@ -146,15 +146,21 @@ export default function RequestWorkspace({ params }: { params: Promise<{ id: str
           </div>
           {tab === "reseller" ? (
             <>
+              {res && (
+                <div className="flex justify-end border-b border-[var(--border)] px-2 py-1">
+                  <DisappearingPicker value={r.resellerDisappearSeconds} onChange={(v) => act("request.disappearing", { id: r.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />
+                </div>
+              )}
               <MessageList messages={resMsgs} side={(m) => (m.direction === "out" ? "right" : "left")} wallpaper={false} />
               <Composer
+                allowViewOnce
                 disabled={closed ? "Request is closed" : undefined}
                 savedReplies={db.savedReplies}
                 modes={[
                   ...(res ? [{ id: "reseller", kind: "reseller" as const, label: `Message ${res.name}`, hint: "Visible to the reseller only — never to the customer" }] : []),
                   { id: "internal", kind: "internal", label: "Internal note", hint: "Team only" },
                 ]}
-                onSend={(mode, text, att) => act("request.send", { id: r.id, audience: mode, text, attachments: att.map((a) => a.id) })}
+                onSend={(mode, text, att, opts) => act("request.send", { id: r.id, audience: mode, text, attachments: att.map((a) => a.id), viewOnce: opts?.viewOnce })}
               />
             </>
           ) : conv ? (

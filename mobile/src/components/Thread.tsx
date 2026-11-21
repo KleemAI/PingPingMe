@@ -107,15 +107,17 @@ function ViewOnceBody({ m, mine, onOpen }: { m: Message; mine: boolean; onOpen: 
 }
 
 /** Customer, reseller and internal messages each get a distinct look. */
-export function MessageList({ messages: all, side, onRetry, viewer = "team", wallpaper = true }: {
+export function MessageList({ messages: all, side, onRetry, viewer = "team", wallpaper = true, openAction = "message.open" }: {
   messages: Message[];
   side: (m: Message) => "left" | "right";
   onRetry?: (m: Message) => void;
   viewer?: "team" | "reseller";
   wallpaper?: boolean;
+  /** action that opens a view-once message ("pm.open" in personal chats) */
+  openAction?: string;
 }) {
   const { c } = useTheme();
-  const { act, openFile } = useStore();
+  const { act, openFile } = useStore(); // openAction: "pm.open" in personal chats
   const ref = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [viewing, setViewing] = useState<Attachment[] | null>(null);
   // disappearing messages leave the screen when their time is up (the server stops sending them too)
@@ -129,7 +131,7 @@ export function MessageList({ messages: all, side, onRetry, viewer = "team", wal
   const messages = useMemo(() => all.filter((m) => m.disappeared || !m.expiresAt || m.expiresAt > tick), [all, tick]);
   const openViewOnce = async (m: Message) => {
     try {
-      const r = (await act("message.open", { messageId: m.id })) as { attachments?: Attachment[] } | null;
+      const r = (await act(openAction, { messageId: m.id })) as { attachments?: Attachment[] } | null;
       const media = (r?.attachments ?? []).filter(isMedia);
       const photos = media.filter((a) => a.mime.startsWith("image/"));
       if (photos.length) setViewing(photos);
@@ -248,8 +250,8 @@ export function Composer({ modes, onSend, savedReplies = [], disabled, allowView
   if (disabled || !mode) return <View style={{ padding: 14, backgroundColor: c.header, borderTopWidth: StyleSheet.hairlineWidth, borderColor: c.border }}><T muted size={13} style={{ textAlign: "center" }}>{disabled}</T></View>;
 
   const canSend = !!text.trim() || files.length > 0;
-  // view once: only photos / videos, only in customer chats
-  const viewOnceOk = !!allowViewOnce && mode?.kind === "customer" && files.length > 0 && files.every(isMedia);
+  // view once: only photos / videos, never on internal notes
+  const viewOnceOk = !!allowViewOnce && !!mode && mode.kind !== "internal" && files.length > 0 && files.every(isMedia);
   const addFile = async (f: PickedFile) => {
     setBusy(true);
     try { const up = await upload(f); setFiles((x) => [...x, up]); } catch {} finally { setBusy(false); }

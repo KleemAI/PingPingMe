@@ -94,6 +94,9 @@ export class ActionsService {
       // personal chats
       "pm.send": (t, p) => people.send(t, p),
       "pm.read": (t, p) => people.read(t, p),
+      "pm.disappearing": (t, p) => people.disappearing(t, p),
+      "pm.open": (t, p) => people.open(t, p),
+      "request.disappearing": (t, p) => requests.disappearing(t, p),
       "message.open": (t, p) => openViewOnce(t, p),
       "inbound.simulate": (t, p) => conversations.simulateInbound(t, p),
       "contact.create": (t, p) => contacts.create(t, p),
@@ -145,6 +148,8 @@ export class ActionsService {
     this.reseller = {
       "portal.respond": (t, p) => portal.respond(t, p),
       "portal.message": (t, p) => portal.message(t, p),
+      "portal.disappearing": (t, p) => portal.disappearing(t, p),
+      "message.open": (t, p) => openViewOnce(t, p),
       "portal.quote": async (t, p) => quotes.submitByReseller(t, await portal.ownRequest(t, p.requestId), p),
       "portal.fulfil": (t, p) => orders.fulfilByReseller(t, p),
       "portal.availability": (t, p) => resellers.setOwnAvailability(t, p),
@@ -159,6 +164,8 @@ export class ActionsService {
       "chat.disappearing": (t, p) => customer.disappearing(t, p),
       "pm.send": (t, p) => people.send(t, p),
       "pm.read": (t, p) => people.read(t, p),
+      "pm.disappearing": (t, p) => people.disappearing(t, p),
+      "pm.open": (t, p) => people.open(t, p),
       "message.open": (t, p) => openViewOnce(t, p),
       ...todo,
       "me.password": (t, p) => users.changeOwnPassword(t, p),

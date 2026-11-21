@@ -51,7 +51,7 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
     ...(chats ?? []).filter((ch) => !t || ch.with.name.toLowerCase().includes(t)).map((ch) => {
       const last = ch.messages.at(-1);
       return { key: ch.id, name: ch.with.name, unread: ch.unread, right: listTime(ch.lastMessageAt), onPress: () => openPerson(ch.with, ch.id),
-        sub: last ? `${last.authorId === me?.id ? "You: " : ""}${last.text ? plain(last.text) : "📎 Attachment"}` : "" };
+        sub: last ? `${last.authorId === me?.id ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}` : "" };
     }),
     ...(found ?? []).filter((p) => !(chats ?? []).some((ch) => ch.with.id === p.id))
       .map((p, i) => ({ key: `p-${p.id}`, name: p.name, sub: `${p.role === "team" ? "Our team" : "Customer"}${p.hint ? ` · ${p.hint}` : ""}`, right: "Message",

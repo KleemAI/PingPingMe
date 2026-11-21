@@ -6,7 +6,7 @@ import { useStore } from "@/lib/store";
 import { usePersonalChats } from "@/lib/people";
 import type { Message, Person } from "@/lib/types";
 import { Avatar, T } from "@/components/ui";
-import { Composer, MessageList } from "@/components/Thread";
+import { Composer, DisappearingButton, MessageList, disappearLabel } from "@/components/Thread";
 
 /** One personal chat (`id` = chat id, or "new" with the person found by search). */
 export default function PersonalChatScreen() {
@@ -28,6 +28,7 @@ export default function PersonalChatScreen() {
     return {
       id: m.id, audience: "customer", direction: mine ? "out" : "in", authorId: m.authorId, authorName: mine ? me?.name ?? "You" : chat!.with.name,
       text: m.text, attachments: m.attachments, createdAt: m.createdAt,
+      expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
       status: mine ? (chat!.theirReadAt && chat!.theirReadAt >= m.createdAt ? "read" : "delivered") : undefined,
     } as Message;
   }), [chat, me?.id, me?.name]);
@@ -46,12 +47,15 @@ export default function PersonalChatScreen() {
         ) : null,
       }} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={headerHeight}>
-        <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} />
+        {chat && <DisappearingButton row value={chat.disappearSeconds}
+          onChange={(v) => act("pm.disappearing", { chatId: chat.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />}
+        <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="pm.open" />
         {person && (
           <Composer
+            allowViewOnce
             modes={[{ id: "pm", kind: "customer", label: "Message", hint: `Only ${person.name.split(" ")[0]} and you see this chat` }]}
-            onSend={async (_m, text, attachments) => {
-              const id = (await act("pm.send", { ...(chat ? { chatId: chat.id } : { userId: person.id }), text, attachments: attachments.map((a) => a.id) })) as string;
+            onSend={async (_m, text, attachments, opts) => {
+              const id = (await act("pm.send", { ...(chat ? { chatId: chat.id } : { userId: person.id }), text, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce })) as string;
               setChatId(id);
               await reload();
             }}

@@ -1,15 +1,17 @@
 import { Injectable } from "@nestjs/common";
+import { PushService, preview } from "../push/push.service";
 import { conflict, notFound } from "../common/errors";
 import { Payload, newId, oneOf, optStr, str, MAX_MESSAGE } from "../common/util";
 import { AuditService } from "../audit/audit.service";
 import { FilesService } from "../files/files.service";
 import { AssignmentEntity, MessageEntity, RequestEntity } from "../database/entities";
+import { resellerExpiry, setResellerDisappearing, viewOnceFlag } from "../conversations/disappearing";
 import type { Tx } from "../database/unit-of-work.service";
 
 /** Reseller portal actions — always limited to requests currently assigned to the signed-in reseller. */
 @Injectable()
 export class PortalService {
-  constructor(private readonly audit: AuditService, private readonly files: FilesService) {}
+  constructor(private readonly audit: AuditService, private readonly files: FilesService, private readonly push: PushService) {}
 
   /** A reseller may only act on requests currently assigned to them (anything else looks like "not found"). */
   async ownRequest(tx: Tx, requestId: unknown) {
@@ -47,12 +49,21 @@ export class PortalService {
   /** portal.message — message our team on the request's reseller thread. */
   async message(tx: Tx, p: Payload) {
     const r = await this.ownRequest(tx, p.requestId);
+    const body = await this.textAndFiles(tx, p);
+    const now = Date.now();
     await tx.em.insert(MessageEntity, {
       id: newId("m"), audience: "reseller", requestId: r.id, direction: "in", authorId: tx.user.id, authorName: tx.user.name,
-      ...(await this.textAndFiles(tx, p)), createdAt: Date.now(),
+      ...body, createdAt: now, expiresAt: resellerExpiry(r, now), viewOnce: viewOnceFlag(p.viewOnce, body.attachments),
     });
+    // the request's agent — or the whole team while nobody owns it
+    this.push.notify(tx, await this.push.teamIds(tx, r.agentId), { title: `${r.ref} · ${tx.user.name}`, body: preview(body.text, body.attachments, !!p.viewOnce && body.attachments.length > 0), data: { type: "request", id: r.id } });
     r.updatedAt = Date.now();
     await tx.em.save(r);
+  }
+
+  /** portal.disappearing { requestId, seconds } — disappearing messages on this request's thread with our team. */
+  async disappearing(tx: Tx, p: Payload) {
+    return setResellerDisappearing(tx, await this.ownRequest(tx, p.requestId), p.seconds);
   }
 
   /** Message body: text, files, or both (a picture or voice note may go without text). */

@@ -17,6 +17,8 @@ export class PersonalChatEntity {
   /** when each side last read the chat (unread = the other's messages after this) */
   @Column({ name: "read_a", ...TS_NULL }) readA: number | null;
   @Column({ name: "read_b", ...TS_NULL }) readB: number | null;
+  /** Disappearing messages: new messages leave the chat this many seconds after sending (0 = off). Rows stay. */
+  @Column({ name: "disappear_seconds", type: "int", default: 0 }) disappearSeconds: number;
 }
 
 @Entity("personal_messages")
@@ -28,4 +30,9 @@ export class PersonalMessageEntity {
   @Column({ type: "text" }) text: string;
   @Column({ type: "jsonb", default: () => "'[]'" }) attachments: Attachment[];
   @Index() @Column({ name: "created_at", ...TS }) createdAt: number;
+  @Column({ name: "expires_at", ...TS_NULL }) expiresAt: number | null;
+  /** View once: the other person can open the photo / video one time. */
+  @Column({ name: "view_once", default: false }) viewOnce: boolean;
+  @Column({ name: "viewed_at", ...TS_NULL }) viewedAt: number | null;
+  @Column({ name: "viewed_by", type: "varchar", length: 40, nullable: true }) viewedBy: string | null;
 }

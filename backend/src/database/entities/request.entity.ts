@@ -27,6 +27,8 @@ export class RequestEntity {
   @Column({ name: "feedback_comment", type: "text", nullable: true }) feedbackComment: string | null;
   @Column({ name: "created_at", ...TS }) createdAt: number;
   @Column({ name: "updated_at", ...TS }) updatedAt: number;
+  /** Disappearing messages on the reseller thread (seconds, 0 = off) — set by our team or the reseller. */
+  @Column({ name: "reseller_disappear_seconds", type: "int", default: 0 }) resellerDisappearSeconds: number;
   @Column({ name: "closed_at", ...TS_NULL }) closedAt: number | null;
 }
 

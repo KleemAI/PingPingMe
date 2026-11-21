@@ -92,6 +92,14 @@ export class FilesService {
       const now = Date.now();
       if (g?.expires_at && new Date(g.expires_at).getTime() <= now) return false;
       if (g?.view_once) return g.viewed_by === user.id && !!g.viewed_at && now - new Date(g.viewed_at).getTime() < VIEW_ONCE_WINDOW;
+      // the same rules in personal chats
+      const [pg]: typeof g[] = await em.query(
+        `SELECT view_once, viewed_at, viewed_by, expires_at FROM personal_messages
+          WHERE attachments @> $1::jsonb AND (view_once OR expires_at IS NOT NULL) LIMIT 1`,
+        [JSON.stringify([{ id: fileId }])],
+      );
+      if (pg?.expires_at && new Date(pg.expires_at).getTime() <= now) return false;
+      if (pg?.view_once) return pg.viewed_by === user.id && !!pg.viewed_at && now - new Date(pg.viewed_at).getTime() < VIEW_ONCE_WINDOW;
     }
     if (isTeam(user)) return true;
     const own = await em.count(FileEntity, { where: { id: fileId, uploadedBy: user.id } });

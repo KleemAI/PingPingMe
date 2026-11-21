@@ -88,3 +88,45 @@ test("photos in a personal chat open only for the two people", async () => {
   const other = client((await r.json()).accessToken);
   assert.equal((await other.call(`/files/${file.id}`)).status, 404);
 });
+
+test("personal chats: disappearing messages (either person) and view-once photos", async () => {
+  // a fresh pair, so the timer doesn't affect the other tests
+  const r = await fetch(`${API}/auth/signup`, { method: "POST", headers: J, body: JSON.stringify({ name: "Timer Friend", email: `timer.${Date.now()}@example.in`, password: "secret123" }) });
+  const fb = await r.json();
+  const friend = client(fb.accessToken);
+  const cid = ok(await rahul.act("pm.send", { userId: fb.user.id, text: "hello" }));
+  assert.equal((await friend.act("pm.disappearing", { chatId: cid, seconds: 5 })).status, 400, "only the listed timers");
+  ok(await friend.act("pm.disappearing", { chatId: cid, seconds: 86_400 }));
+  let chat = (await rahul.get("/people")).chats.find((c) => c.id === cid);
+  assert.equal(chat.disappearSeconds, 86_400, "both see the timer");
+  assert.ok(chat.messages.some((m) => m.text.includes("turned on disappearing messages")), "notice in the chat");
+  ok(await rahul.act("pm.send", { chatId: cid, text: "vanishes" }));
+  chat = (await friend.get("/people")).chats.find((c) => c.id === cid);
+  const m = chat.messages.find((x) => x.text === "vanishes");
+  assert.ok(m.expiresAt > Date.now() + 86_000_000);
+  assert.equal((await nisha.act("pm.disappearing", { chatId: cid, seconds: 0 })).status, 404, "only the two people");
+
+  // view once
+  const fd = new FormData();
+  fd.append("file", new Blob([PNG], { type: "image/png" }), "once.png");
+  const file = await (await rahul.call("/files", { method: "POST", body: fd })).json();
+  const txt = new FormData();
+  txt.append("file", new Blob(["x"], { type: "text/plain" }), "a.txt");
+  const doc = await (await rahul.call("/files", { method: "POST", body: txt })).json();
+  assert.equal((await rahul.act("pm.send", { chatId: cid, attachments: [doc.id], viewOnce: true })).status, 400, "photos / videos only");
+  ok(await rahul.act("pm.send", { chatId: cid, attachments: [file.id], viewOnce: true }));
+  const mine = (await rahul.get("/people")).chats.find((c) => c.id === cid).messages.find((x) => x.viewOnce);
+  assert.equal(mine.attachments.length, 0, "the sender doesn't get it back");
+  assert.equal((await rahul.call(`/files/${file.id}`)).status, 404, "not even the uploader");
+  const theirs = (await friend.get("/people")).chats.find((c) => c.id === cid).messages.find((x) => x.viewOnce);
+  assert.equal(theirs.attachments.length, 1);
+  assert.equal((await friend.call(`/files/${file.id}`)).status, 404, "opens only through pm.open");
+  assert.equal((await rahul.act("pm.open", { messageId: theirs.id })).status, 403);
+  assert.equal(ok(await friend.act("pm.open", { messageId: theirs.id })).attachments[0].id, file.id);
+  assert.equal((await friend.call(`/files/${file.id}`)).status, 200);
+  assert.equal((await friend.act("pm.open", { messageId: theirs.id })).status, 409, "one time only");
+  const after = (await friend.get("/people")).chats.find((c) => c.id === cid).messages.find((x) => x.id === theirs.id);
+  assert.equal(after.attachments.length, 0);
+  assert.ok(after.viewedAt);
+  assert.ok((await rahul.get("/people")).chats.find((c) => c.id === cid).messages.find((x) => x.id === theirs.id).viewedAt, "the sender sees it was opened");
+});

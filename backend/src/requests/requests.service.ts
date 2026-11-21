@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { PushService, preview } from "../push/push.service";
 import { In, Not } from "typeorm";
 import { badRequest, conflict, notFound } from "../common/errors";
 import { HOUR, PRIORITIES, Payload, need, newId, oneOf, optStr, str, MAX_MESSAGE } from "../common/util";
@@ -9,10 +10,11 @@ import {
   RequestEntity, ResellerEntity, SettingsEntity, UserEntity,
 } from "../database/entities";
 import { nextRef, type Tx } from "../database/unit-of-work.service";
+import { resellerExpiry, setResellerDisappearing, viewOnceFlag } from "../conversations/disappearing";
 
 @Injectable()
 export class RequestsService {
-  constructor(private readonly audit: AuditService, private readonly files: FilesService) {}
+  constructor(private readonly audit: AuditService, private readonly files: FilesService, private readonly push: PushService) {}
 
   private async settings(tx: Tx) {
     return need(await tx.em.findOne(SettingsEntity, { where: { id: 1 } }), "Settings");
@@ -108,12 +110,25 @@ export class RequestsService {
     const r = await this.get(tx, p.id);
     const audience = oneOf(p.audience, ["reseller", "internal"] as const, "audience");
     if (audience === "reseller" && !r.resellerId) throw conflict("Assign a reseller first");
+    const body = await this.textAndFiles(tx, p);
+    const now = Date.now();
     await tx.em.insert(MessageEntity, {
       id: newId("m"), audience, requestId: r.id, conversationId: audience === "internal" ? r.conversationId : null, direction: "out",
-      authorId: tx.user.id, authorName: tx.user.name, ...(await this.textAndFiles(tx, p)), createdAt: Date.now(),
+      authorId: tx.user.id, authorName: tx.user.name, ...body, createdAt: now,
+      // the reseller thread follows its disappearing timer; internal notes never disappear
+      ...(audience === "reseller" ? { expiresAt: resellerExpiry(r, now), viewOnce: viewOnceFlag(p.viewOnce, body.attachments) } : {}),
     });
     r.updatedAt = Date.now();
     await tx.em.save(r);
+    if (audience === "reseller" && r.resellerId) {
+      const users = await tx.em.find(UserEntity, { where: { resellerId: r.resellerId, role: "reseller", active: true }, select: { id: true } });
+      this.push.notify(tx, users.map((u) => u.id), { title: `${r.ref} · ${tx.user.name}`, body: preview(body.text, body.attachments, !!p.viewOnce && body.attachments.length > 0), data: { type: "request", id: r.id } });
+    }
+  }
+
+  /** request.disappearing { id, seconds } — disappearing messages on the reseller thread. */
+  async disappearing(tx: Tx, p: Payload) {
+    return setResellerDisappearing(tx, await this.get(tx, p.id), p.seconds);
   }
 
   /** request.setStatus — complete (only after delivery), cancel, or reopen ("new"). */

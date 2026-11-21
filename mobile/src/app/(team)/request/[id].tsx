@@ -9,7 +9,7 @@ import type { Priority, Quote, Request } from "@/lib/types";
 import { CASE_STATUS, PRIORITY, REQ_STATUS, dateTime, duration, relative, rupees, resellerOverdue } from "@/lib/format";
 import { Avatar, Button, Card, Empty, Input, Pill, Row, Select, Sheet, StatusPill, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
-import { Composer, MessageList } from "@/components/Thread";
+import { Composer, MessageList, DisappearingButton, disappearLabel } from "@/components/Thread";
 import { OrderCard } from "@/components/OrderCard";
 import { OpenCaseSheet, PRIOS, ReasonSheet, ReminderSheet } from "@/components/forms";
 
@@ -68,10 +68,12 @@ export default function RequestWorkspace() {
 
       {tab === "reseller" && (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={headerHeight + 56}>
+          {res && <DisappearingButton row value={r.resellerDisappearSeconds}
+            onChange={(v) => act("request.disappearing", { id: r.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />}
           <MessageList messages={resMsgs} side={(m) => (m.direction === "out" ? "right" : "left")} wallpaper={false} />
-          <Composer disabled={closed ? "Request is closed" : undefined} savedReplies={db.savedReplies}
+          <Composer allowViewOnce disabled={closed ? "Request is closed" : undefined} savedReplies={db.savedReplies}
             modes={[...(res ? [{ id: "reseller", kind: "reseller" as const, label: `Message ${res.name}`, hint: "reseller only" }] : []), { id: "internal", kind: "internal", label: "Internal note", hint: "team only" }]}
-            onSend={(mode, text, att) => act("request.send", { id: r.id, audience: mode, text, attachments: att.map((a) => a.id) })} />
+            onSend={(mode, text, att, opts) => act("request.send", { id: r.id, audience: mode, text, attachments: att.map((a) => a.id), viewOnce: opts?.viewOnce })} />
         </KeyboardAvoidingView>
       )}
 
