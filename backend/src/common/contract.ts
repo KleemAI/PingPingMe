@@ -525,4 +525,11 @@ export type GroupMessage = {
 };
 export type GroupChat = {
   id: string; name: string; members: GroupMember[]; admin: boolean; lastMessageAt: number; unread: number; disappearSeconds?: number; messages: GroupMessage[];
+  communityId?: string; communityName?: string; announcement?: boolean; // announcement group of a community
+  canSend: boolean; // false in an announcement group unless you're a community admin
+};
+/** A community: groups under one roof + an announcement group. `groups` lists all of them (member = you're in it). */
+export type Community = {
+  id: string; name: string; description?: string; admin: boolean; announcementGroupId: string; memberCount: number;
+  groups: { id: string; name: string; member: boolean; announcement: boolean; memberCount: number }[];
 };

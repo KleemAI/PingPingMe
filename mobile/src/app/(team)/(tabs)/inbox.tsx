@@ -11,6 +11,8 @@ import { CONV_STATUS, PRIORITY, isUnanswered, listTime } from "@/lib/format";
 import { Avatar, Chips, Empty, Input, Button, SearchBar, Sheet, StatusPill, T } from "@/components/ui";
 import { Ticks } from "@/components/Thread";
 import { plain } from "@/lib/chatFormat";
+import { fuzzyScore } from "@/lib/fuzzy";
+import { HitRowView, SEARCH_FILTERS, SearchEmpty, hitRows, useGlobalSearch, type SearchType } from "@/components/GlobalSearch";
 
 type F = "open" | "mine" | "unassigned" | "unread" | "unanswered" | "waiting_customer" | "waiting_reseller" | "resolved" | "failed" | "all";
 
@@ -52,8 +54,14 @@ export default function Inbox() {
   const fresh = useMemo(() => newChatCandidates(db, kind, term), [db, kind, term]);
   // group chats live in the Customer inbox too (customers and the team together)
   const { groups } = usePersonalChats();
-  const shownGroups = kind !== "customer" ? [] : groups.filter((g) => term.text
-    ? g.name.toLowerCase().includes(term.text) || g.members.some((m) => m.name.toLowerCase().includes(term.text))
+  // search filter chips: All · Business · Personal · Groups · Community · P2P
+  const [stype, setStype] = useState<SearchType>("all");
+  const searchingNow = term.text.replace(/\s/g, "").length >= 2;
+  const { hits, searching } = useGlobalSearch(stype === "business" ? "" : q, stype);
+  const serverOnly = searchingNow && stype !== "all" && stype !== "business";
+  const extra = searchingNow && stype === "all" ? (hits ?? []).filter((h) => h.type === "personal" || h.type === "community" || h.type === "p2p" || (h.type === "group" && h.id.startsWith("m:"))) : [];
+  const shownGroups = kind !== "customer" || (searchingNow && stype === "business") ? [] : groups.filter((g) => term.text
+    ? fuzzyScore(term.text, g.name) >= 0.55 || g.members.some((m) => fuzzyScore(term.text, m.name) >= 0.6)
     : filter === "open" || filter === "all" || (filter === "unread" && g.unread > 0));
   type Item = { id: string; at: number; cv?: Conversation; g?: GroupChat };
   const rows: Item[] = [...list.map((cv) => ({ id: cv.id, at: cv.lastMessageAt, cv })), ...shownGroups.map((g) => ({ id: g.id, at: g.lastMessageAt, g }))].sort((a, b) => b.at - a.at);
@@ -92,18 +100,31 @@ export default function Inbox() {
           <T weight="600" color={c.accentStrong}>New group</T>
         </Pressable>
       )}
-      <Chips items={chips} value={filter} onChange={setFilter} />
+      {kind === "customer" && (
+        <Pressable onPress={() => router.push("/people/new-community")} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 14, marginTop: 6, paddingVertical: 4, opacity: pressed ? 0.6 : 1 })}>
+          <View style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: c.accent, alignItems: "center", justifyContent: "center" }}><Ionicons name="megaphone" size={16} color="#fff" /></View>
+          <T weight="600" color={c.accentStrong}>New community</T>
+        </Pressable>
+      )}
+      {searchingNow ? <Chips items={SEARCH_FILTERS} value={stype} onChange={setStype} /> : <Chips items={chips} value={filter} onChange={setFilter} />}
+      {serverOnly ? (
+        <FlatList data={hitRows(hits ?? [])} keyExtractor={(r) => r.key} keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={<SearchEmpty searching={searching || !hits} />} renderItem={({ item }) => <HitRowView row={item} />} />
+      ) : (
       <FlatList
         data={rows}
         keyExtractor={(x) => x.id}
-        ListEmptyComponent={fresh.length ? undefined : term.digits.length >= 8
+        ListEmptyComponent={fresh.length || extra.length ? undefined : term.digits.length >= 8
           ? <View style={{ padding: 24, gap: 10, alignItems: "center" }}>
               <T muted>Nobody with this number yet.</T>
               <Button icon="person-add-outline" title={`Add ${q.trim()} as a new ${kind === "business" ? "contact" : "customer"}`} onPress={() => setAdding(true)} />
             </View>
           : <Empty icon="chatbubbles-outline" title="Nothing here" text={term.text ? "No chat or contact matches your search." : "Try another filter."} />}
-        ListFooterComponent={fresh.length ? (
+        ListFooterComponent={fresh.length || extra.length ? (
           <View>
+            {extra.length > 0 && <T size={12} weight="700" color={c.accentStrong} style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 }}>PERSONAL, GROUPS, COMMUNITIES & P2P</T>}
+            {hitRows(extra).filter((x) => x.hit).map((x) => <HitRowView key={x.key} row={x} />)}
+            {fresh.length > 0 && <>
             <T size={12} weight="700" color={c.accentStrong} style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 }}>START A NEW CHAT</T>
             {fresh.map((n) => (
               <Pressable key={n.key} disabled={!!starting} onPress={() => startChat(n)} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 14, backgroundColor: pressed ? c.card2 : c.card, opacity: starting && starting !== n.key ? 0.6 : 1 })}>
@@ -115,6 +136,7 @@ export default function Inbox() {
                 <T size={13} weight="600" color={c.accent} style={{ paddingRight: 14 }}>{starting === n.key ? "…" : n.app ? "Chat in app" : "Message"}</T>
               </Pressable>
             ))}
+            </>}
           </View>
         ) : undefined}
         renderItem={({ item }) => {
@@ -123,7 +145,7 @@ export default function Inbox() {
             const last = g.messages.at(-1);
             return (
               <Pressable onPress={() => router.push({ pathname: "/people/group/[id]", params: { id: g.id } })} style={({ pressed }) => ({ flexDirection: "row", gap: 12, paddingLeft: 14, backgroundColor: pressed ? c.card2 : c.card })}>
-                <View style={{ paddingVertical: 10 }}><Avatar name={g.name} size={50} icon="people" /></View>
+                <View style={{ paddingVertical: 10 }}><Avatar name={g.name} size={50} icon={g.announcement ? "megaphone" : "people"} /></View>
                 <View style={{ flex: 1, paddingVertical: 10, paddingRight: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: c.border, gap: 2 }}>
                   <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
                     <T size={16} numberOfLines={1} style={{ flex: 1 }}>{g.name}</T>
@@ -168,6 +190,7 @@ export default function Inbox() {
           );
         }}
       />
+      )}
       <Pressable onPress={() => setSim(true)} style={{ position: "absolute", right: 18, bottom: 18, width: 56, height: 56, borderRadius: 16, backgroundColor: c.accent, alignItems: "center", justifyContent: "center", elevation: 4, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 3 } }}>
         <Ionicons name="download-outline" size={24} color="#fff" />
       </Pressable>

@@ -20,6 +20,7 @@ import { WorkspaceService } from "../workspace/workspace.service";
 import { P2PService } from "../p2p/p2p.service";
 import { PeopleService } from "../people/people.service";
 import { GroupsService } from "../people/groups.service";
+import { CommunitiesService } from "../people/communities.service";
 import { openViewOnce } from "../conversations/disappearing";
 import { CatalogService } from "../catalog/catalog.service";
 import { CustomerService } from "../customer/customer.service";
@@ -60,6 +61,7 @@ export class ActionsService {
     tasks: TasksService,
     people: PeopleService,
     groups: GroupsService,
+    communities: CommunitiesService,
   ) {
     // to-do tasks — everyone has their own (sharing with everyone is checked inside: team only)
     const todo: Record<string, Handler> = {
@@ -108,6 +110,12 @@ export class ActionsService {
       "group.leave": (t, p) => groups.leave(t, p),
       "group.disappearing": (t, p) => groups.disappearing(t, p),
       "group.open": (t, p) => groups.open(t, p),
+      "community.create": (t, p) => communities.create(t, p),
+      "community.update": (t, p) => communities.update(t, p),
+      "community.addGroup": (t, p) => communities.addGroup(t, p),
+      "community.removeGroup": (t, p) => communities.removeGroup(t, p),
+      "community.setAdmin": (t, p) => communities.setAdmin(t, p),
+      "community.leave": (t, p) => communities.leave(t, p),
       "request.disappearing": (t, p) => requests.disappearing(t, p),
       "message.open": (t, p) => openViewOnce(t, p),
       "inbound.simulate": (t, p) => conversations.simulateInbound(t, p),
@@ -188,6 +196,12 @@ export class ActionsService {
       "group.leave": (t, p) => groups.leave(t, p),
       "group.disappearing": (t, p) => groups.disappearing(t, p),
       "group.open": (t, p) => groups.open(t, p),
+      "community.create": (t, p) => communities.create(t, p),
+      "community.update": (t, p) => communities.update(t, p),
+      "community.addGroup": (t, p) => communities.addGroup(t, p),
+      "community.removeGroup": (t, p) => communities.removeGroup(t, p),
+      "community.setAdmin": (t, p) => communities.setAdmin(t, p),
+      "community.leave": (t, p) => communities.leave(t, p),
       "message.open": (t, p) => openViewOnce(t, p),
       ...todo,
       "me.password": (t, p) => users.changeOwnPassword(t, p),

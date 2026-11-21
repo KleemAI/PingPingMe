@@ -31,27 +31,31 @@ export default function GroupChatScreen() {
   } as Message)), [group, me?.id]);
 
   if (!group) return chats ? <Empty icon="people-outline" title="Group not found" text="You may have left it or been removed." /> : null;
-  const info = () => router.push({ pathname: "/people/group/info", params: { id: group.id } });
+  // the announcements of a community open the community; other groups open group info
+  const info = () => group.announcement && group.communityId
+    ? router.push({ pathname: "/people/community/[id]", params: { id: group.communityId } })
+    : router.push({ pathname: "/people/group/info", params: { id: group.id } });
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{
         headerTitle: () => (
           <Pressable onPress={info} style={{ flexDirection: "row", alignItems: "center", gap: 10, maxWidth: 240 }}>
-            <Avatar name={group.name} size={36} icon="people" />
+            <Avatar name={group.name} size={36} icon={group.announcement ? "megaphone" : "people"} />
             <View style={{ flexShrink: 1 }}>
               <T weight="600" numberOfLines={1}>{group.name}</T>
-              <T size={12} muted numberOfLines={1}>{group.members.map((m) => (m.id === me?.id ? "You" : m.name.split(" ")[0])).join(", ")}</T>
+              <T size={12} muted numberOfLines={1}>{group.communityName ? `${group.communityName} · ` : ""}{group.announcement ? `${group.members.length} members` : group.members.map((m) => (m.id === me?.id ? "You" : m.name.split(" ")[0])).join(", ")}</T>
             </View>
           </Pressable>
         ),
         headerRight: () => <Pressable onPress={info} hitSlop={10} accessibilityLabel="Group info"><Ionicons name="information-circle-outline" size={25} color={c.text} /></Pressable>,
       }} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={headerHeight}>
-        <DisappearingButton row value={group.disappearSeconds}
-          onChange={(v) => act("group.disappearing", { groupId: group.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />
+        {group.canSend !== false && <DisappearingButton row value={group.disappearSeconds}
+          onChange={(v) => act("group.disappearing", { groupId: group.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />}
         <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="group.open" />
         <Composer
           allowViewOnce
+          disabled={group.canSend === false ? "Only community admins can send messages" : undefined}
           modes={[{ id: "group", kind: "customer", label: "Message", hint: `Everyone in ${group.name} sees this` }]}
           onSend={async (_m, text, attachments, opts) => {
             await act("group.send", { groupId: group.id, text, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce });

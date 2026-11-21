@@ -40,6 +40,9 @@ import { P2PController } from "./p2p/p2p.controller";
 import { PeopleController } from "./people/people.controller";
 import { PeopleService } from "./people/people.service";
 import { GroupsService } from "./people/groups.service";
+import { CommunitiesService } from "./people/communities.service";
+import { SearchController } from "./search/search.controller";
+import { SearchService } from "./search/search.service";
 import { PushController } from "./push/push.controller";
 import { PushService } from "./push/push.service";
 import { QueryService } from "./state/query.service";
@@ -63,13 +66,13 @@ import { OpsController } from "./ops/ops.controller";
   controllers: [
     StateController, ConversationsController, MessagesController, ContactsController, RequestsController, ResellersController,
     QuotesController, OrdersController, ExportController, CasesController, WorkspaceController, SettingsController,
-    UsersController, CustomersController, PortalController, OpsController, P2PController, PeopleController, PushController,
+    UsersController, CustomersController, PortalController, OpsController, P2PController, PeopleController, PushController, SearchController,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     RealtimeGateway,
     ConversationsService, ContactsService, RequestsService, ResellersService, QuotesService, OrdersService, ExportService,
-    CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService, PeopleService, PushService, GroupsService, CatalogService, CustomerService, BroadcastsService, TasksService,
+    CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService, PeopleService, PushService, GroupsService, CommunitiesService, SearchService, CatalogService, CustomerService, BroadcastsService, TasksService,
   ],
 })
 export class AppModule {}

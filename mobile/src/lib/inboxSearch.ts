@@ -1,4 +1,5 @@
 import type { Contact, ContactType, Conversation, User } from "./types";
+import { fuzzyScore } from "./fuzzy";
 
 /** Inbox search: names, emails and companies by text; phone numbers by digits ("98765 43210" finds "+919876543210"). */
 export function searchTerm(q: string) {
@@ -10,7 +11,9 @@ export type Term = ReturnType<typeof searchTerm>;
 
 export function matches(t: Term, f: { name?: string; phone?: string; email?: string | null; company?: string }) {
   if (!t.text) return true;
-  if (f.name?.toLowerCase().includes(t.text) || f.email?.toLowerCase().includes(t.text) || f.company?.toLowerCase().includes(t.text)) return true;
+  if (f.email?.toLowerCase().includes(t.text)) return true;
+  // names and companies forgive small typos ("rixt" → Rixit)
+  if (t.text.replace(/[\d\s+()-]/g, "").length >= 2 && Math.max(fuzzyScore(t.text, f.name), fuzzyScore(t.text, f.company)) >= 0.55) return true;
   return !!t.digits && !!f.phone && f.phone.replace(/\D/g, "").includes(t.digits);
 }
 

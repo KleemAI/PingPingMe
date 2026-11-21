@@ -3,7 +3,7 @@ import { In } from "typeorm";
 import type { GroupChat, GroupMember, User } from "../common/contract";
 import { badRequest, conflict, forbidden, notFound } from "../common/errors";
 import { MAX_MESSAGE, newId, optStr, str, type Payload } from "../common/util";
-import { GroupChatEntity, GroupMemberEntity, GroupMessageEntity, UserEntity } from "../database/entities";
+import { CommunityEntity, GroupChatEntity, GroupMemberEntity, GroupMessageEntity, UserEntity } from "../database/entities";
 import { DISAPPEAR_CHOICES } from "../database/mappers";
 import { UnitOfWork, type Tx } from "../database/unit-of-work.service";
 import { disappearLabel, expiryFor, viewOnceFlag } from "../conversations/disappearing";
@@ -41,13 +41,18 @@ export class GroupsService {
     const people: { id: string; name: string; role: string; email: string | null; phone: string | null }[] = await em.query(
       `SELECT u.id, u.name, u.role, u.email, c.phone FROM users u LEFT JOIN contacts c ON c.id = u.contact_id WHERE u.id = ANY($1)`, [authorIds]);
     const who = new Map(people.map((p) => [p.id, p]));
+    const communityIds = [...new Set(groups.map((g) => g.communityId).filter((x): x is string => !!x))];
+    const communities = communityIds.length ? await em.find(CommunityEntity, { where: { id: In(communityIds) } }) : [];
     const now = Date.now();
     return groups.map((g) => {
+      const community = communities.find((c) => c.id === g.communityId);
       const me = mine.find((m) => m.groupId === g.id)!;
       const list = messages.filter((m) => m.groupId === g.id && m.createdAt >= me.joinedAt && (!m.expiresAt || m.expiresAt > now));
       const read = me.readAt ?? me.joinedAt;
       return {
         id: g.id, name: g.name, admin: me.role === "admin", lastMessageAt: g.lastMessageAt, disappearSeconds: g.disappearSeconds || undefined,
+        communityId: g.communityId ?? undefined, communityName: community?.name, announcement: g.announcement || undefined,
+        canSend: !g.announcement || !!community?.admins.includes(user.id),
         unread: list.filter((m) => !m.system && m.authorId !== user.id && m.createdAt > read).length,
         members: members.filter((m) => m.groupId === g.id).map((m): GroupMember => {
           const p = who.get(m.userId);
@@ -80,7 +85,31 @@ export class GroupsService {
   private async adminOf(tx: Tx, groupId: unknown) {
     const m = await this.membership(tx, groupId);
     if (m.me.role !== "admin") throw forbidden("Only group admins can do that");
+    if (m.g.announcement) throw badRequest("The announcement group follows the community — manage its groups instead");
     return m;
+  }
+
+  /**
+   * A community's announcement group = everyone in its groups + the community admins (admins post).
+   * Run after any change to who is in the community's groups.
+   */
+  async syncCommunity(tx: Tx, communityId: string) {
+    const c = await tx.em.findOne(CommunityEntity, { where: { id: communityId } });
+    if (!c) return;
+    const groups = await tx.em.find(GroupChatEntity, { where: { communityId: c.id } });
+    const linked = groups.filter((g) => !g.announcement).map((g) => g.id);
+    const members = linked.length ? await tx.em.find(GroupMemberEntity, { where: { groupId: In(linked) } }) : [];
+    const want = new Set([...members.map((m) => m.userId), ...c.admins]);
+    const current = await tx.em.find(GroupMemberEntity, { where: { groupId: c.announcementGroupId } });
+    const now = Date.now();
+    const add = [...want].filter((id) => !current.some((m) => m.userId === id));
+    if (add.length) await tx.em.insert(GroupMemberEntity, add.map((userId) => ({ id: newId("gmb"), groupId: c.announcementGroupId, userId, role: c.admins.includes(userId) ? "admin" : "member", joinedAt: now, readAt: null })));
+    const gone = current.filter((m) => !want.has(m.userId)).map((m) => m.id);
+    if (gone.length) await tx.em.delete(GroupMemberEntity, { id: In(gone) });
+    for (const m of current) {
+      const role = c.admins.includes(m.userId) ? "admin" : "member";
+      if (want.has(m.userId) && m.role !== role) await tx.em.update(GroupMemberEntity, { id: m.id }, { role });
+    }
   }
 
   /** "Rahul added Rixit" style line in the chat. */
@@ -113,8 +142,11 @@ export class GroupsService {
     const people = (await this.addable(tx, p.memberIds)).filter((u) => u.id !== tx.user.id);
     if (!people.length) throw badRequest("Add at least one person");
     if (people.length + 1 > MAX_GROUP_MEMBERS) throw badRequest(`A group can have up to ${MAX_GROUP_MEMBERS} members`);
+    // a new group inside a community: only its admins
+    const community = p.communityId ? await tx.em.findOne(CommunityEntity, { where: { id: str(p.communityId, "communityId", 40) } }) : null;
+    if (p.communityId && (!community || !community.admins.includes(tx.user.id))) throw forbidden("Only community admins can add groups");
     const now = Date.now();
-    const g = tx.em.create(GroupChatEntity, { id: newId("gc"), name, createdBy: tx.user.id, createdAt: now, lastMessageAt: now, disappearSeconds: 0 });
+    const g = tx.em.create(GroupChatEntity, { id: newId("gc"), name, createdBy: tx.user.id, createdAt: now, lastMessageAt: now, disappearSeconds: 0, communityId: community?.id ?? null, announcement: false });
     await tx.em.save(g);
     await tx.em.insert(GroupMemberEntity, [
       { id: newId("gmb"), groupId: g.id, userId: tx.user.id, role: "admin", joinedAt: now, readAt: now },
@@ -122,12 +154,17 @@ export class GroupsService {
     ]);
     await this.notice(tx, g, `${tx.user.name} created the group "${name}" and added ${this.names(people)}`);
     this.push.notify(tx, people.map((u) => u.id), { title: name, body: `${tx.user.name} added you to the group`, data: { type: "group", id: g.id } });
+    if (community) await this.syncCommunity(tx, community.id);
     return g.id;
   }
 
   /** group.send { groupId, text?, attachments?, viewOnce? } */
   async send(tx: Tx, p: Payload) {
     const { g, me } = await this.membership(tx, p.groupId);
+    if (g.announcement) {
+      const c = await tx.em.findOne(CommunityEntity, { where: { id: g.communityId ?? "" } });
+      if (!c?.admins.includes(tx.user.id)) throw forbidden("Only community admins can post announcements");
+    }
     const attachments = await this.files.attachments(tx, p.attachments);
     const text = optStr(p.text, MAX_MESSAGE) ?? "";
     if (!text && !attachments.length) throw badRequest("Type a message or attach a file");
@@ -173,6 +210,7 @@ export class GroupsService {
     await tx.em.insert(GroupMemberEntity, people.map((u) => ({ id: newId("gmb"), groupId: g.id, userId: u.id, role: "member", joinedAt: now, readAt: null })));
     await this.notice(tx, g, `${tx.user.name} added ${this.names(people)}`);
     this.push.notify(tx, people.map((u) => u.id), { title: g.name, body: `${tx.user.name} added you to the group`, data: { type: "group", id: g.id } });
+    if (g.communityId && !g.announcement) await this.syncCommunity(tx, g.communityId);
   }
 
   /** group.removeMember { groupId, userId } — admins. */
@@ -184,6 +222,7 @@ export class GroupsService {
     const u = await tx.em.findOne(UserEntity, { where: { id: m.userId } });
     await tx.em.delete(GroupMemberEntity, { id: m.id });
     await this.notice(tx, g, `${tx.user.name} removed ${u?.name ?? "a member"}`);
+    if (g.communityId && !g.announcement) await this.syncCommunity(tx, g.communityId);
   }
 
   /** group.setAdmin { groupId, userId, admin } — admins. */
@@ -203,6 +242,7 @@ export class GroupsService {
   /** group.leave { groupId } — when the last admin leaves, the longest-standing member becomes admin. */
   async leave(tx: Tx, p: Payload) {
     const { g, me } = await this.membership(tx, p.groupId);
+    if (g.announcement) throw badRequest("To leave the announcements, leave the community");
     await tx.em.delete(GroupMemberEntity, { id: me.id });
     const rest = await tx.em.find(GroupMemberEntity, { where: { groupId: g.id }, order: { joinedAt: "ASC" } });
     if (me.role === "admin" && rest.length && !rest.some((m) => m.role === "admin")) {
@@ -210,11 +250,16 @@ export class GroupsService {
       await tx.em.save(rest[0]);
     }
     await this.notice(tx, g, `${tx.user.name} left`);
+    if (g.communityId && !g.announcement) await this.syncCommunity(tx, g.communityId);
   }
 
   /** group.disappearing { groupId, seconds } — any member, like WhatsApp's default. */
   async disappearing(tx: Tx, p: Payload) {
     const { g } = await this.membership(tx, p.groupId);
+    if (g.announcement) {
+      const c = await tx.em.findOne(CommunityEntity, { where: { id: g.communityId ?? "" } });
+      if (!c?.admins.includes(tx.user.id)) throw forbidden("Only community admins can change this");
+    }
     const s = Number(p.seconds);
     if (!DISAPPEAR_CHOICES.includes(s)) throw badRequest("Pick off, 24 hours, 7 days or 90 days");
     if (g.disappearSeconds === s) return s;

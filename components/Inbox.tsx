@@ -5,9 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { matches, newChatCandidates, searchTerm, type NewChat } from "@/lib/inboxSearch";
 import { GroupView, NewGroup, usePersonalChats } from "./People";
+import { NewCommunity } from "./Community";
+import { SearchChips, SearchResults, useGlobalSearch, type SearchHit, type SearchType } from "./GlobalSearch";
+import { fuzzyScore } from "@/lib/fuzzy";
 import {
   Loader2, Search, ArrowLeft, PanelRightOpen, PanelRightClose, Tag, Plus, ClipboardList, Bell, Scale, Building2, User as UserIcon, Pencil, RefreshCw,
-  Phone, Mail, MapPin, MessageSquarePlus, Inbox as InboxIcon, AlertCircle, Users, Package, Download,
+  Phone, Mail, MapPin, MessageSquarePlus, Inbox as InboxIcon, AlertCircle, Users, Megaphone, X, Package, Download,
 } from "lucide-react";
 import { useTeam } from "@/lib/client/store";
 import type { Contact, Conversation, ContactType } from "@/lib/types";
@@ -77,11 +80,28 @@ export default function Inbox({ kind }: { kind: ContactType }) {
 
   const active = convs.find((c) => c.id === activeId) ?? null;
   // group chats live in the Customer inbox too (customers and the team together)
-  const { groups, reload: reloadGroups } = usePersonalChats();
+  const { groups, communities, reload: reloadGroups } = usePersonalChats();
   const [newGroup, setNewGroup] = useState(false);
+  const [newCommunity, setNewCommunity] = useState(false);
+  // search filter chips: All · Business · Personal · Groups · Community · P2P
+  const [stype, setStype] = useState<SearchType>("all");
+  const serverType: SearchType = stype === "business" ? "all" : stype; // business results come from this inbox, below
+  const { hits, searching, unavailable } = useGlobalSearch(stype === "business" ? "" : q, serverType);
+  const extraHits = (hits ?? []).filter((h) => stype === "all"
+    ? h.type === "personal" || h.type === "community" || h.type === "p2p" || (h.type === "group" && h.id.startsWith("m:"))
+    : true);
+  const localOnly = !term.text || stype === "all" || stype === "business" || unavailable;
+  const openHit = (h: SearchHit) => {
+    const t = h.target;
+    if (t.kind === "pm" || t.kind === "person") router.push(`/people?u=${t.userId}&name=${encodeURIComponent(t.name ?? h.title)}&role=${t.role ?? "customer"}`);
+    else if (t.kind === "community") router.push(`/people?cm=${t.communityId}`);
+    else if (t.kind === "group") { if (kind === "customer") { setQ(""); selectGroup(t.groupId); } else router.push(`/inbox/customer?g=${t.groupId}`); }
+    else if (t.kind === "conv") { if (t.inbox === kind) { setQ(""); select(t.conversationId); } else router.push(`/inbox/${t.inbox}?c=${t.conversationId}`); }
+    else if (t.kind === "p2p") router.push(`/p2p/order/${t.orderId}`);
+  };
   const activeGroup = kind === "customer" ? groups.find((g) => g.id === params.get("g")) ?? null : null;
-  const shownGroups = kind !== "customer" ? [] : groups.filter((g) => term.text
-    ? g.name.toLowerCase().includes(term.text) || g.members.some((m) => m.name.toLowerCase().includes(term.text))
+  const shownGroups = kind !== "customer" || (term.text && stype === "business") ? [] : groups.filter((g) => term.text
+    ? fuzzyScore(term.text, g.name) >= 0.55 || g.members.some((m) => fuzzyScore(term.text, m.name) >= 0.6)
     : filter === "open" || filter === "all" || (filter === "unread" && g.unread > 0));
   const rows = [
     ...list.map((c) => ({ kind: "conv" as const, c, at: c.lastMessageAt })),
@@ -136,17 +156,22 @@ export default function Inbox({ kind }: { kind: ContactType }) {
             <button onClick={() => setSimulate(true)} title="Simulate incoming message" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><Download size={18} /></button>
             <button onClick={() => setNewChat(true)} title="New chat" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><MessageSquarePlus size={19} /></button>
             {kind === "customer" && <button onClick={() => setNewGroup(true)} title="New group" aria-label="New group" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><Users size={19} /></button>}
+            {kind === "customer" && <button onClick={() => setNewCommunity(true)} title="New community" aria-label="New community" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><Megaphone size={19} /></button>}
           </div>
         </div>
         <div className="px-3 pb-2">
           <label className="flex items-center gap-2.5 rounded-lg bg-[var(--panel-2)] px-3 py-[7px]">
             <Search size={16} className="text-[var(--muted)]" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={kind === "business" ? "Search company, contact or message" : "Search name, phone or message"} className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--muted)]" />
+            {q && <button onClick={() => setQ("")} aria-label="Clear search" className="text-[var(--muted)]"><X size={15} /></button>}
           </label>
         </div>
-        <div className="px-3 pb-2"><Tabs tabs={tabs} value={filter} onChange={setFilter} /></div>
+        {term.text && !unavailable ? <SearchChips value={stype} onChange={setStype} /> : <div className="px-3 pb-2"><Tabs tabs={tabs} value={filter} onChange={setFilter} /></div>}
+        {!localOnly ? (
+          <ul className="scroll-thin flex-1 overflow-y-auto"><SearchResults hits={hits} searching={searching} onOpen={openHit} /></ul>
+        ) : (
         <ul className="scroll-thin flex-1 overflow-y-auto">
-          {rows.length === 0 && !fresh.length && (
+          {rows.length === 0 && !fresh.length && !(term.text && extraHits.length) && (
             term.digits.length >= 8
               ? <li className="p-4 text-center text-[13.5px]">
                   <p className="mb-2 text-[var(--muted)]">Nobody with this number yet.</p>
@@ -161,7 +186,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
               return (
                 <li key={g.id}>
                   <button onClick={() => selectGroup(g.id)} className={`flex w-full items-center gap-3 px-3 text-left transition ${g.id === activeGroup?.id ? "bg-[var(--active)]" : "hover:bg-[var(--hover)]"}`}>
-                    <Avatar name={g.name} size={46} group />
+                    <Avatar name={g.name} size={46} group announcement={g.announcement} />
                     <div className="min-w-0 flex-1 border-b border-[var(--border)] py-2.5">
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="truncate text-[15px]">{g.name}</span>
@@ -226,13 +251,20 @@ export default function Inbox({ kind }: { kind: ContactType }) {
               ))}
             </>
           )}
+          {term.text && stype === "all" && extraHits.length > 0 && (
+            <>
+              <li className="px-4 pt-3 pb-1 text-[12px] font-semibold uppercase tracking-wide text-[var(--accent-strong)]">Personal, groups, communities & P2P</li>
+              <SearchResults hits={extraHits} searching={searching} onOpen={openHit} />
+            </>
+          )}
         </ul>
+        )}
       </section>
 
       {/* chat */}
       {activeGroup ? (
         <section className="flex min-w-0 flex-1 flex-col">
-          <GroupView key={activeGroup.id} group={activeGroup} meId={me.id} onBack={() => selectGroup(null)} reload={reloadGroups} />
+          <GroupView key={activeGroup.id} group={activeGroup} meId={me.id} onBack={() => selectGroup(null)} reload={reloadGroups} communities={communities} groups={groups} onOpenGroup={selectGroup} />
         </section>
       ) : active ? (
         <Chat key={active.id} conv={active} onBack={() => select(null)} details={details} setDetails={setDetails} />
@@ -253,6 +285,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
         </div>
       )}
 
+      {newCommunity && <NewCommunity groups={groups} onClose={() => setNewCommunity(false)} onCreated={async () => { setNewCommunity(false); await reloadGroups(); }} />}
       {newGroup && <NewGroup onClose={() => setNewGroup(false)} onCreated={async (id) => { setNewGroup(false); await reloadGroups(); selectGroup(id); }} />}
       <NewChatModal open={newChat} onClose={() => setNewChat(false)} kind={kind} phone={term.digits.length >= 8 ? q.trim() : ""} onCreated={(id) => { setQ(""); select(id); }} />
       <SimulateModal open={simulate} onClose={() => setSimulate(false)} />

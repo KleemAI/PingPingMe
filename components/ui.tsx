@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { X, Paperclip, Users } from "lucide-react";
+import { Megaphone, X, Paperclip, Users } from "lucide-react";
 import Link from "next/link";
 import type { Attachment } from "@/lib/types";
 import { colorFor, initials } from "@/lib/format";
@@ -25,10 +25,11 @@ export function StatusPill({ meta }: { meta: { label: string; tone: Tone } }) {
   return <Pill tone={meta.tone}>{meta.label}</Pill>;
 }
 
-export function Avatar({ name, size = 40, group }: { name: string; size?: number; group?: boolean }) {
+/** `community` = rounded square with a megaphone (like WhatsApp); `announcement` = a community's announcements group. */
+export function Avatar({ name, size = 40, group, community, announcement }: { name: string; size?: number; group?: boolean; community?: boolean; announcement?: boolean }) {
   return (
-    <div className="flex shrink-0 select-none items-center justify-center rounded-full font-semibold text-white" style={{ width: size, height: size, background: colorFor(name), fontSize: size * 0.36 }}>
-      {group ? <Users size={size * 0.48} /> : initials(name)}
+    <div className={`flex shrink-0 select-none items-center justify-center font-semibold text-white ${community ? "" : "rounded-full"}`} style={{ width: size, height: size, borderRadius: community ? size * 0.28 : undefined, background: colorFor(name), fontSize: size * 0.36 }}>
+      {community || announcement ? <Megaphone size={size * 0.46} /> : group ? <Users size={size * 0.48} /> : initials(name)}
     </div>
   );
 }

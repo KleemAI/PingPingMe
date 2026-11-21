@@ -46,6 +46,23 @@ export class GroupChatEntity {
   @Column({ name: "created_at", ...TS }) createdAt: number;
   @Index() @Column({ name: "last_message_at", ...TS }) lastMessageAt: number;
   @Column({ name: "disappear_seconds", type: "int", default: 0 }) disappearSeconds: number;
+  /** the community this group belongs to (if any) */
+  @Index() @Column({ name: "community_id", type: "varchar", length: 40, nullable: true }) communityId: string | null;
+  /** a community's announcement group: everyone in the community, only community admins post */
+  @Column({ default: false }) announcement: boolean;
+}
+
+/** Communities (like WhatsApp): groups under one roof, with an announcement group for everyone in them. */
+@Entity("communities")
+export class CommunityEntity {
+  @PrimaryColumn({ type: "varchar", length: 40 }) id: string;
+  @Column({ type: "varchar", length: 80 }) name: string;
+  @Column({ type: "text", nullable: true }) description: string | null;
+  @Column({ name: "created_by", type: "varchar", length: 40 }) createdBy: string;
+  @Column({ name: "created_at", ...TS }) createdAt: number;
+  /** community admins (user ids): manage groups, post announcements */
+  @Column({ type: "text", array: true, default: () => "'{}'" }) admins: string[];
+  @Column({ name: "announcement_group_id", type: "varchar", length: 40 }) announcementGroupId: string;
 }
 
 @Entity("group_members")

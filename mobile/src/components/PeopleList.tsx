@@ -7,10 +7,12 @@ import { useTheme } from "@/lib/theme";
 import { listTime } from "@/lib/format";
 import { plain } from "@/lib/chatFormat";
 import { usePersonalChats } from "@/lib/people";
+import { fuzzyScore } from "@/lib/fuzzy";
 import type { Person } from "@/lib/types";
-import { Avatar, Empty, SearchBar, T } from "./ui";
+import { Avatar, Chips, Empty, SearchBar, T } from "./ui";
+import { HitRowView, SEARCH_FILTERS, SearchEmpty, hitRows, useGlobalSearch, type SearchType } from "./GlobalSearch";
 
-type Row = { key: string; name: string; sub: string; right?: string; unread?: number; header?: string; accent?: boolean; group?: boolean; at?: number; onPress: () => void };
+type Row = { key: string; name: string; sub: string; right?: string; unread?: number; header?: string; accent?: boolean; group?: boolean; community?: boolean; announcement?: boolean; at?: number; onPress: () => void };
 /** A chat pinned at the top (the customer's chat with our team). */
 export type Pinned = { name: string; sub: string; time?: number; unread?: number; onPress: () => void };
 
@@ -22,8 +24,11 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
   const { c } = useTheme();
   const { api, state } = useStore();
   const me = (state as { me?: { id: string } } | null)?.me;
-  const { chats, groups } = usePersonalChats();
+  const { chats, groups, communities } = usePersonalChats();
   const [q, setQ] = useState("");
+  const [type, setType] = useState<SearchType>("all");
+  const { hits, searching: searchingAll } = useGlobalSearch(q, type);
+  const serverSearch = q.trim().replace(/\s/g, "").length >= 2;
   const [found, setFound] = useState<Person[] | null>(null);
   const [searching, setSearching] = useState(false);
 
@@ -49,15 +54,18 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
     ...(pinned && (!t || pinned.name.toLowerCase().includes(t))
       ? [{ key: "pinned", name: pinned.name, sub: pinned.sub, right: pinned.time ? listTime(pinned.time) : undefined, unread: pinned.unread, accent: true, onPress: pinned.onPress }]
       : []),
+    ...(!t ? communities.map((cm): Row => ({ key: `cm-${cm.id}`, name: cm.name, community: true, right: "Community",
+      sub: `📢 ${cm.groups.length - 1} group${cm.groups.length === 2 ? "" : "s"} · ${cm.memberCount} members`,
+      onPress: () => router.push({ pathname: "/people/community/[id]", params: { id: cm.id } }) })) : []),
     ...[
-      ...(chats ?? []).filter((ch) => !t || ch.with.name.toLowerCase().includes(t)).map((ch): Row => {
+      ...(chats ?? []).filter((ch) => !t || fuzzyScore(t, ch.with.name) >= 0.55).map((ch): Row => {
         const last = ch.messages.at(-1);
         return { key: ch.id, name: ch.with.name, unread: ch.unread, right: listTime(ch.lastMessageAt), at: ch.lastMessageAt, onPress: () => openPerson(ch.with, ch.id),
           sub: last ? `${last.authorId === me?.id ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}` : "" };
       }),
-      ...groups.filter((g) => !t || g.name.toLowerCase().includes(t)).map((g): Row => {
+      ...groups.filter((g) => !t || fuzzyScore(t, g.name) >= 0.55).map((g): Row => {
         const last = g.messages.at(-1);
-        return { key: g.id, name: g.name, group: true, unread: g.unread, right: listTime(g.lastMessageAt), at: g.lastMessageAt,
+        return { key: g.id, name: g.name, group: true, announcement: !!g.announcement, unread: g.unread, right: listTime(g.lastMessageAt), at: g.lastMessageAt,
           onPress: () => router.push({ pathname: "/people/group/[id]", params: { id: g.id } }),
           sub: !last ? `${g.members.length} members` : last.system ? last.text
             : `${last.authorId === me?.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}` };
@@ -70,11 +78,27 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
 
   return (
     <View style={{ flex: 1, backgroundColor: c.card }}>
-      <SearchBar value={q} onChange={setQ} placeholder="Search name or phone number" autoFocus={autoFocus} />
-      <Pressable onPress={() => router.push("/people/new-group")} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: pressed ? c.card2 : c.card })}>
-        <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: c.accent, alignItems: "center", justifyContent: "center" }}><Ionicons name="people" size={24} color="#fff" /></View>
-        <T size={16} weight="600">New group</T>
-      </Pressable>
+      <SearchBar value={q} onChange={setQ} placeholder="Search chats, people, messages" autoFocus={autoFocus} />
+      {serverSearch ? (
+        <>
+          <Chips items={SEARCH_FILTERS} value={type} onChange={setType} />
+          <FlatList
+            data={hitRows(hits ?? [])}
+            keyExtractor={(r) => r.key}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={<SearchEmpty searching={searchingAll || !hits} />}
+            renderItem={({ item }) => <HitRowView row={item} />}
+          />
+        </>
+      ) : (<>
+      <View style={{ flexDirection: "row" }}>
+        {([["people", "New group", "/people/new-group"], ["megaphone", "New community", "/people/new-community"]] as const).map(([icon, label, href]) => (
+          <Pressable key={href} onPress={() => router.push(href)} style={({ pressed }) => ({ flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: pressed ? c.card2 : c.card })}>
+            <View style={{ width: 42, height: 42, borderRadius: icon === "megaphone" ? 12 : 21, backgroundColor: c.accent, alignItems: "center", justifyContent: "center" }}><Ionicons name={icon} size={20} color="#fff" /></View>
+            <T size={15} weight="600">{label}</T>
+          </Pressable>
+        ))}
+      </View>
       {!chats && !pinned ? <ActivityIndicator style={{ marginTop: 40 }} color={c.accent} /> : (
         <FlatList
           data={rows}
@@ -88,7 +112,7 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
             <View>
               {r.header && <T size={12} weight="700" color={c.accentStrong} style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 }}>{r.header}</T>}
               <Pressable onPress={r.onPress} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 14, backgroundColor: pressed ? c.card2 : c.card })}>
-                <View style={{ paddingVertical: 10 }}><Avatar name={r.name} size={50} icon={r.group ? "people" : undefined} /></View>
+                <View style={{ paddingVertical: 10 }}><Avatar name={r.name} size={50} square={r.community} icon={r.community || r.announcement ? "megaphone" : r.group ? "people" : undefined} /></View>
                 <View style={{ flex: 1, paddingVertical: 12, paddingRight: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: c.border, gap: 3 }}>
                   <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
                     <T size={16} numberOfLines={1} weight={r.accent ? "600" : "400"} style={{ flex: 1 }}>{r.name}</T>
@@ -104,6 +128,7 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
           )}
         />
       )}
+      </>)}
     </View>
   );
 }

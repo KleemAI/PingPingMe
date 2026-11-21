@@ -55,9 +55,10 @@ export function Pill({ tone = "gray", label, icon }: { tone?: Tone; label: strin
 }
 export const StatusPill = ({ meta }: { meta: { label: string; tone: Tone } }) => <Pill tone={meta.tone} label={meta.label} />;
 
-export function Avatar({ name, size = 44, icon }: { name: string; size?: number; icon?: IconName }) {
+/** `square` = a community (rounded square, like WhatsApp), circles are people and groups. */
+export function Avatar({ name, size = 44, icon, square }: { name: string; size?: number; icon?: IconName; square?: boolean }) {
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colorFor(name), alignItems: "center", justifyContent: "center" }}>
+    <View style={{ width: size, height: size, borderRadius: square ? size * 0.28 : size / 2, backgroundColor: colorFor(name), alignItems: "center", justifyContent: "center" }}>
       {icon ? <Ionicons name={icon} size={size * 0.48} color="#fff" /> : <Text style={{ color: "#fff", fontWeight: "700", fontSize: size * 0.36 }}>{initials(name)}</Text>}
     </View>
   );
@@ -143,7 +144,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
 export function Chips<V extends string>({ items, value, onChange }: { items: { id: V; label: string; count?: number }[]; value: V; onChange: (v: V) => void }) {
   const { c } = useTheme();
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 14, paddingVertical: 8 }} style={{ flexGrow: 0 }}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 14, paddingVertical: 8 }} style={{ flexGrow: 0, flexShrink: 0 }}>
       {items.map((it) => {
         const on = it.id === value;
         return (

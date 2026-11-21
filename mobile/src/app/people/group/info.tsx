@@ -51,6 +51,15 @@ export default function GroupInfo() {
           <T muted>Group · {group.members.length} members</T>
         </View>
 
+        {!!group.communityId && (
+          <Pressable onPress={() => router.push({ pathname: "/people/community/[id]", params: { id: group.communityId! } })}
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, backgroundColor: c.card }}>
+            <Ionicons name="megaphone-outline" size={19} color={c.accentStrong} />
+            <T style={{ flex: 1 }}>Part of the community <T weight="700">{group.communityName}</T></T>
+            <Ionicons name="chevron-forward" size={18} color={c.muted} />
+          </Pressable>
+        )}
+
         <Card title={`${group.members.length} members`} icon="people-outline">
           {group.admin && (
             <Pressable onPress={() => setAdding(true)} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 10 }}>

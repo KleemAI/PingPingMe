@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { fuzzyScore } from "../common/fuzzy";
 import { PushService, preview } from "../push/push.service";
 import { In } from "typeorm";
 import type { Person, PersonalChat, User } from "../common/contract";
@@ -46,17 +47,23 @@ export class PeopleService {
     const digits = text.replace(/\D/g, "");
     const words = text.replace(/[\d+\s()-]/g, "");
     if (words.length < 2 && digits.length < 6) return { people: [] as Person[] };
-    const like = `%${text.toLowerCase().replace(/[\\%_]/g, "\\$&")}%`;
-    const rows: { id: string; name: string; role: string; email: string | null; phone: string | null }[] = await this.em.query(
-      `SELECT u.id, u.name, u.role, u.email, c.phone
+    // fuzzy on names ("rixt" finds Rixit), plain match on email, digits on phone numbers
+    const rows: { id: string; name: string; role: string; email: string | null; phone: string | null; phone_digits: string | null }[] = await this.em.query(
+      `SELECT u.id, u.name, u.role, u.email, c.phone, c.phone_digits
          FROM users u LEFT JOIN contacts c ON c.id = u.contact_id
-        WHERE u.active AND u.id <> $1 AND u.role = ANY($2)
-          AND (($3 <> '' AND (lower(u.name) LIKE $4 OR lower(u.email) LIKE $4))
-               OR ($5 <> '' AND c.phone_digits LIKE '%' || $5 || '%'))
-        ORDER BY u.name LIMIT 20`,
-      [user.id, ROLES, words.length >= 2 ? "y" : "", like, digits.length >= 6 ? digits : ""],
+        WHERE u.active AND u.id <> $1 AND u.role = ANY($2)`,
+      [user.id, ROLES],
     );
-    return { people: rows.map(person) };
+    const lower = text.toLowerCase();
+    const scored = rows.map((r) => ({
+      r,
+      score: Math.max(
+        words.length >= 2 ? fuzzyScore(text, r.name) : 0,
+        words.length >= 2 && r.email?.toLowerCase().includes(lower) ? 0.9 : 0,
+        digits.length >= 6 && r.phone_digits?.includes(digits) ? 1 : 0,
+      ),
+    })).filter((x) => x.score > 0).sort((a, b) => b.score - a.score || a.r.name.localeCompare(b.r.name));
+    return { people: scored.slice(0, 20).map((x) => person(x.r)) };
   }
 
   /** GET /people — your chats with their messages, newest chat first. */

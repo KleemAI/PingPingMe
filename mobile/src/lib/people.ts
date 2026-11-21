@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useStore } from "./store";
-import type { GroupChat, PersonalChat } from "./types";
+import type { Community, GroupChat, PersonalChat } from "./types";
 
 const versionOf = (s: unknown) => (s as { db?: { version?: number }; version?: number } | null)?.db?.version ?? (s as { version?: number } | null)?.version ?? 0;
 
@@ -14,15 +14,16 @@ export function usePersonalChats() {
   const role = (state as { me?: { role?: string } } | null)?.me?.role;
   const [chats, setChats] = useState<PersonalChat[] | null>(null);
   const [groups, setGroups] = useState<GroupChat[]>([]);
+  const [communities, setCommunities] = useState<Community[]>([]);
   const version = versionOf(state);
   const load = useCallback(async () => {
-    if (!token || !canUsePeople(role)) { setChats([]); setGroups([]); return; }
+    if (!token || !canUsePeople(role)) { setChats([]); setGroups([]); setCommunities([]); return; }
     try {
       const r = await api("/api/v1/people");
-      if (r.ok) { const d = await r.json(); setChats(d.chats); setGroups(d.groups ?? []); }
+      if (r.ok) { const d = await r.json(); setChats(d.chats); setGroups(d.groups ?? []); setCommunities(d.communities ?? []); }
     } catch { /* offline: keep what we have */ }
   }, [api, token, role]);
   useEffect(() => { load(); }, [load, version]);
   const unread = (chats ?? []).reduce((n, c) => n + c.unread, 0) + groups.reduce((n, g) => n + g.unread, 0);
-  return { chats, groups, reload: load, unread, enabled: canUsePeople(role) };
+  return { chats, groups, communities, reload: load, unread, enabled: canUsePeople(role) };
 }
