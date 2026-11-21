@@ -88,6 +88,8 @@ export type Message = {
   viewOnce?: boolean; // view-once photo / video
   viewedAt?: number;
   viewedBy?: string;
+  system?: boolean; // group notices ("… added …", "… left") — shown as a small centred line
+  opened?: number; // groups: how many members opened a view-once message
 };
 
 export type ResellerStatus = "pending" | "active" | "suspended";
@@ -408,3 +410,13 @@ export type PersonalMessage = {
   expiresAt?: number; viewOnce?: boolean; viewedAt?: number;
 };
 export type PersonalChat = { id: string; with: Person; lastMessageAt: number; unread: number; theirReadAt?: number; disappearSeconds?: number; messages: PersonalMessage[] };
+
+/** Group chats. `messages` start from when you joined; view-once files show only until you opened them. */
+export type GroupMember = Person & { admin: boolean };
+export type GroupMessage = {
+  id: string; authorId: string; authorName: string; text: string; attachments: Attachment[]; createdAt: number; system?: boolean;
+  expiresAt?: number; viewOnce?: boolean; viewedAt?: number; opened?: number; // opened = how many members opened a view-once message
+};
+export type GroupChat = {
+  id: string; name: string; members: GroupMember[]; admin: boolean; lastMessageAt: number; unread: number; disappearSeconds?: number; messages: GroupMessage[];
+};

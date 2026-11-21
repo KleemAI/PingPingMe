@@ -39,6 +39,7 @@ import { CustomerService } from "./customer/customer.service";
 import { P2PController } from "./p2p/p2p.controller";
 import { PeopleController } from "./people/people.controller";
 import { PeopleService } from "./people/people.service";
+import { GroupsService } from "./people/groups.service";
 import { PushController } from "./push/push.controller";
 import { PushService } from "./push/push.service";
 import { QueryService } from "./state/query.service";
@@ -68,7 +69,7 @@ import { OpsController } from "./ops/ops.controller";
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     RealtimeGateway,
     ConversationsService, ContactsService, RequestsService, ResellersService, QuotesService, OrdersService, ExportService,
-    CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService, PeopleService, PushService, CatalogService, CustomerService, BroadcastsService, TasksService,
+    CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService, PeopleService, PushService, GroupsService, CatalogService, CustomerService, BroadcastsService, TasksService,
   ],
 })
 export class AppModule {}

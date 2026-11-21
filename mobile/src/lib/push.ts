@@ -20,6 +20,7 @@ type Data = { type?: string; id?: string };
 function open(d: Data, role?: string) {
   if (d.type === "support") return router.push("/shop/support");
   if (d.type === "pm" && d.id) return router.push({ pathname: "/people/[id]", params: { id: d.id } });
+  if (d.type === "group" && d.id) return router.push({ pathname: "/people/group/[id]", params: { id: d.id } });
   if (d.type === "conv" && d.id) return router.push(`/chat/${d.id}`);
   if (d.type === "request" && d.id) return router.push(role === "reseller" ? `/portal/request/${d.id}` : `/request/${d.id}`);
 }

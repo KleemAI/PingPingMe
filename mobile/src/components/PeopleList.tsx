@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { listTime } from "@/lib/format";
@@ -9,7 +10,7 @@ import { usePersonalChats } from "@/lib/people";
 import type { Person } from "@/lib/types";
 import { Avatar, Empty, SearchBar, T } from "./ui";
 
-type Row = { key: string; name: string; sub: string; right?: string; unread?: number; header?: string; accent?: boolean; onPress: () => void };
+type Row = { key: string; name: string; sub: string; right?: string; unread?: number; header?: string; accent?: boolean; group?: boolean; at?: number; onPress: () => void };
 /** A chat pinned at the top (the customer's chat with our team). */
 export type Pinned = { name: string; sub: string; time?: number; unread?: number; onPress: () => void };
 
@@ -21,7 +22,7 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
   const { c } = useTheme();
   const { api, state } = useStore();
   const me = (state as { me?: { id: string } } | null)?.me;
-  const { chats } = usePersonalChats();
+  const { chats, groups } = usePersonalChats();
   const [q, setQ] = useState("");
   const [found, setFound] = useState<Person[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -48,11 +49,20 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
     ...(pinned && (!t || pinned.name.toLowerCase().includes(t))
       ? [{ key: "pinned", name: pinned.name, sub: pinned.sub, right: pinned.time ? listTime(pinned.time) : undefined, unread: pinned.unread, accent: true, onPress: pinned.onPress }]
       : []),
-    ...(chats ?? []).filter((ch) => !t || ch.with.name.toLowerCase().includes(t)).map((ch) => {
-      const last = ch.messages.at(-1);
-      return { key: ch.id, name: ch.with.name, unread: ch.unread, right: listTime(ch.lastMessageAt), onPress: () => openPerson(ch.with, ch.id),
-        sub: last ? `${last.authorId === me?.id ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}` : "" };
-    }),
+    ...[
+      ...(chats ?? []).filter((ch) => !t || ch.with.name.toLowerCase().includes(t)).map((ch): Row => {
+        const last = ch.messages.at(-1);
+        return { key: ch.id, name: ch.with.name, unread: ch.unread, right: listTime(ch.lastMessageAt), at: ch.lastMessageAt, onPress: () => openPerson(ch.with, ch.id),
+          sub: last ? `${last.authorId === me?.id ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}` : "" };
+      }),
+      ...groups.filter((g) => !t || g.name.toLowerCase().includes(t)).map((g): Row => {
+        const last = g.messages.at(-1);
+        return { key: g.id, name: g.name, group: true, unread: g.unread, right: listTime(g.lastMessageAt), at: g.lastMessageAt,
+          onPress: () => router.push({ pathname: "/people/group/[id]", params: { id: g.id } }),
+          sub: !last ? `${g.members.length} members` : last.system ? last.text
+            : `${last.authorId === me?.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}` };
+      }),
+    ].sort((a, b) => (b.at ?? 0) - (a.at ?? 0)),
     ...(found ?? []).filter((p) => !(chats ?? []).some((ch) => ch.with.id === p.id))
       .map((p, i) => ({ key: `p-${p.id}`, name: p.name, sub: `${p.role === "team" ? "Our team" : "Customer"}${p.hint ? ` · ${p.hint}` : ""}`, right: "Message",
         header: i === 0 ? "START A NEW CHAT" : undefined, onPress: () => openPerson(p) })),
@@ -61,6 +71,10 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
   return (
     <View style={{ flex: 1, backgroundColor: c.card }}>
       <SearchBar value={q} onChange={setQ} placeholder="Search name or phone number" autoFocus={autoFocus} />
+      <Pressable onPress={() => router.push("/people/new-group")} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: pressed ? c.card2 : c.card })}>
+        <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: c.accent, alignItems: "center", justifyContent: "center" }}><Ionicons name="people" size={24} color="#fff" /></View>
+        <T size={16} weight="600">New group</T>
+      </Pressable>
       {!chats && !pinned ? <ActivityIndicator style={{ marginTop: 40 }} color={c.accent} /> : (
         <FlatList
           data={rows}
@@ -74,7 +88,7 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
             <View>
               {r.header && <T size={12} weight="700" color={c.accentStrong} style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 }}>{r.header}</T>}
               <Pressable onPress={r.onPress} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, paddingLeft: 14, backgroundColor: pressed ? c.card2 : c.card })}>
-                <View style={{ paddingVertical: 10 }}><Avatar name={r.name} size={50} /></View>
+                <View style={{ paddingVertical: 10 }}><Avatar name={r.name} size={50} icon={r.group ? "people" : undefined} /></View>
                 <View style={{ flex: 1, paddingVertical: 12, paddingRight: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: c.border, gap: 3 }}>
                   <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
                     <T size={16} numberOfLines={1} weight={r.accent ? "600" : "400"} style={{ flex: 1 }}>{r.name}</T>

@@ -36,3 +36,44 @@ export class PersonalMessageEntity {
   @Column({ name: "viewed_at", ...TS_NULL }) viewedAt: number | null;
   @Column({ name: "viewed_by", type: "varchar", length: 40, nullable: true }) viewedBy: string | null;
 }
+
+/** Group chats (customers and the team). Up to MAX_GROUP_MEMBERS members; admins manage members and the name. */
+@Entity("group_chats")
+export class GroupChatEntity {
+  @PrimaryColumn({ type: "varchar", length: 40 }) id: string;
+  @Column({ type: "varchar", length: 80 }) name: string;
+  @Column({ name: "created_by", type: "varchar", length: 40 }) createdBy: string;
+  @Column({ name: "created_at", ...TS }) createdAt: number;
+  @Index() @Column({ name: "last_message_at", ...TS }) lastMessageAt: number;
+  @Column({ name: "disappear_seconds", type: "int", default: 0 }) disappearSeconds: number;
+}
+
+@Entity("group_members")
+@Index(["groupId", "userId"], { unique: true })
+export class GroupMemberEntity {
+  @PrimaryColumn({ type: "varchar", length: 40 }) id: string;
+  @Index() @Column({ name: "group_id", type: "varchar", length: 40 }) groupId: string;
+  @Index() @Column({ name: "user_id", type: "varchar", length: 40 }) userId: string;
+  /** admin | member */
+  @Column({ type: "varchar", length: 10, default: "member" }) role: string;
+  /** members see the messages from when they joined */
+  @Column({ name: "joined_at", ...TS }) joinedAt: number;
+  @Column({ name: "read_at", ...TS_NULL }) readAt: number | null;
+}
+
+@Entity("group_messages")
+export class GroupMessageEntity {
+  @PrimaryColumn({ type: "varchar", length: 40 }) id: string;
+  @Column({ type: "bigint" }) @Generated("increment") seq: string;
+  @Index() @Column({ name: "group_id", type: "varchar", length: 40 }) groupId: string;
+  @Column({ name: "author_id", type: "varchar", length: 40 }) authorId: string;
+  @Column({ type: "text" }) text: string;
+  @Column({ type: "jsonb", default: () => "'[]'" }) attachments: Attachment[];
+  /** "created the group", "added …", "left" … */
+  @Column({ default: false }) system: boolean;
+  @Index() @Column({ name: "created_at", ...TS }) createdAt: number;
+  @Column({ name: "expires_at", ...TS_NULL }) expiresAt: number | null;
+  @Column({ name: "view_once", default: false }) viewOnce: boolean;
+  /** view once in a group: each member may open it one time → { userId: openedAt } */
+  @Column({ type: "jsonb", default: () => "'{}'" }) views: Record<string, number>;
+}

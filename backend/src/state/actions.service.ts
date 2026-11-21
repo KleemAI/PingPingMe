@@ -19,6 +19,7 @@ import { UsersService } from "../users/users.service";
 import { WorkspaceService } from "../workspace/workspace.service";
 import { P2PService } from "../p2p/p2p.service";
 import { PeopleService } from "../people/people.service";
+import { GroupsService } from "../people/groups.service";
 import { openViewOnce } from "../conversations/disappearing";
 import { CatalogService } from "../catalog/catalog.service";
 import { CustomerService } from "../customer/customer.service";
@@ -58,6 +59,7 @@ export class ActionsService {
     broadcasts: BroadcastsService,
     tasks: TasksService,
     people: PeopleService,
+    groups: GroupsService,
   ) {
     // to-do tasks — everyone has their own (sharing with everyone is checked inside: team only)
     const todo: Record<string, Handler> = {
@@ -96,6 +98,16 @@ export class ActionsService {
       "pm.read": (t, p) => people.read(t, p),
       "pm.disappearing": (t, p) => people.disappearing(t, p),
       "pm.open": (t, p) => people.open(t, p),
+      "group.create": (t, p) => groups.create(t, p),
+      "group.send": (t, p) => groups.send(t, p),
+      "group.read": (t, p) => groups.read(t, p),
+      "group.rename": (t, p) => groups.rename(t, p),
+      "group.addMembers": (t, p) => groups.addMembers(t, p),
+      "group.removeMember": (t, p) => groups.removeMember(t, p),
+      "group.setAdmin": (t, p) => groups.setAdmin(t, p),
+      "group.leave": (t, p) => groups.leave(t, p),
+      "group.disappearing": (t, p) => groups.disappearing(t, p),
+      "group.open": (t, p) => groups.open(t, p),
       "request.disappearing": (t, p) => requests.disappearing(t, p),
       "message.open": (t, p) => openViewOnce(t, p),
       "inbound.simulate": (t, p) => conversations.simulateInbound(t, p),
@@ -166,6 +178,16 @@ export class ActionsService {
       "pm.read": (t, p) => people.read(t, p),
       "pm.disappearing": (t, p) => people.disappearing(t, p),
       "pm.open": (t, p) => people.open(t, p),
+      "group.create": (t, p) => groups.create(t, p),
+      "group.send": (t, p) => groups.send(t, p),
+      "group.read": (t, p) => groups.read(t, p),
+      "group.rename": (t, p) => groups.rename(t, p),
+      "group.addMembers": (t, p) => groups.addMembers(t, p),
+      "group.removeMember": (t, p) => groups.removeMember(t, p),
+      "group.setAdmin": (t, p) => groups.setAdmin(t, p),
+      "group.leave": (t, p) => groups.leave(t, p),
+      "group.disappearing": (t, p) => groups.disappearing(t, p),
+      "group.open": (t, p) => groups.open(t, p),
       "message.open": (t, p) => openViewOnce(t, p),
       ...todo,
       "me.password": (t, p) => users.changeOwnPassword(t, p),

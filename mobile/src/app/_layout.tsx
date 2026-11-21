@@ -40,6 +40,9 @@ function Root() {
         <Stack.Screen name="devices" options={{ title: "Linked devices" }} />
         <Stack.Screen name="people/index" options={{ title: "Chats" }} />
         <Stack.Screen name="people/[id]" options={{ title: "Chat" }} />
+        <Stack.Screen name="people/new-group" options={{ title: "New group" }} />
+        <Stack.Screen name="people/group/[id]" options={{ title: "Group" }} />
+        <Stack.Screen name="people/group/info" options={{ title: "Group info" }} />
         <Stack.Screen name="task/[id]" options={{ title: "New Task" }} />
         <Stack.Screen name="task/batch" options={{ title: "Add in Batch Mode" }} />
       </Stack>

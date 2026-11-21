@@ -73,7 +73,8 @@ function ViewOnceBody({ m, mine, onOpen }: { m: Message; mine: boolean; onOpen: 
       </button>
     );
   }
-  const opened = m.viewedAt ? `Opened ${time(m.viewedAt)}` : mine ? "Not opened yet" : "Opened";
+  const opened = mine && m.opened !== undefined ? (m.opened ? `Opened by ${m.opened}` : "Not opened yet")
+    : m.viewedAt ? `Opened ${time(m.viewedAt)}` : mine ? "Not opened yet" : "Opened";
   return (
     <div className="mt-1">
       {m.attachments.length > 0 && <div className="mb-1 text-[11.5px] font-semibold text-amber-600 dark:text-amber-300">View once · kept for admins (audit)</div>}
@@ -125,6 +126,14 @@ export function MessageList({ messages: all, side, onRetry, wallpaper = true, vi
         const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
         const s = side(m);
         const tail = newDay || !prev || side(prev) !== s || prev.audience !== m.audience;
+        if (m.system) {
+          return (
+            <Fragment key={m.id}>
+              {newDay && <DayDivider ts={m.createdAt} />}
+              <div className="my-1.5 flex justify-center px-6"><span className="rounded-lg bg-[var(--bubble-in)] px-3 py-1 text-center text-[12px] text-[var(--muted)] shadow-sm">{m.text}</span></div>
+            </Fragment>
+          );
+        }
         if (m.audience === "internal") {
           return (
             <Fragment key={m.id}>

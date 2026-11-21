@@ -96,7 +96,8 @@ function ViewOnceBody({ m, mine, onOpen }: { m: Message; mine: boolean; onOpen: 
       </Pressable>
     );
   }
-  const opened = m.viewedAt ? `Opened ${time(m.viewedAt)}` : mine ? "Not opened yet" : "Opened";
+  const opened = mine && m.opened !== undefined ? (m.opened ? `Opened by ${m.opened}` : "Not opened yet")
+    : m.viewedAt ? `Opened ${time(m.viewedAt)}` : mine ? "Not opened yet" : "Opened";
   return (
     <View>
       {m.attachments.length > 0 && <Text style={{ fontSize: 11.5, fontWeight: "700", color: "#d97706", marginTop: 4 }}>View once · kept for admins (audit)</Text>}
@@ -155,6 +156,16 @@ export function MessageList({ messages: all, side, onRetry, viewer = "team", wal
             <View style={{ backgroundColor: c.bubbleIn, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}><T size={12} muted>{dayDivider(m.createdAt)}</T></View>
           </View>
         );
+        if (m.system) {
+          return (
+            <Fragment key={m.id}>
+              {divider}
+              <View style={{ alignItems: "center", marginVertical: 5, paddingHorizontal: 24 }}>
+                <View style={{ backgroundColor: c.bubbleIn, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}><T size={12} muted style={{ textAlign: "center" }}>{m.text}</T></View>
+              </View>
+            </Fragment>
+          );
+        }
         if (m.audience === "internal") {
           return (
             <Fragment key={m.id}>

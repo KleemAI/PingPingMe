@@ -100,6 +100,14 @@ export class FilesService {
       );
       if (pg?.expires_at && new Date(pg.expires_at).getTime() <= now) return false;
       if (pg?.view_once) return pg.viewed_by === user.id && !!pg.viewed_at && now - new Date(pg.viewed_at).getTime() < VIEW_ONCE_WINDOW;
+      // and in groups (each member opens a view-once file one time)
+      const [gg]: { view_once: boolean; views: Record<string, number> | null; expires_at: Date | null }[] = await em.query(
+        `SELECT view_once, views, expires_at FROM group_messages
+          WHERE attachments @> $1::jsonb AND (view_once OR expires_at IS NOT NULL) LIMIT 1`,
+        [JSON.stringify([{ id: fileId }])],
+      );
+      if (gg?.expires_at && new Date(gg.expires_at).getTime() <= now) return false;
+      if (gg?.view_once) { const at = gg.views?.[user.id]; return !!at && now - Number(at) < VIEW_ONCE_WINDOW; }
     }
     if (isTeam(user)) return true;
     const own = await em.count(FileEntity, { where: { id: fileId, uploadedBy: user.id } });
@@ -111,6 +119,13 @@ export class FilesService {
       [JSON.stringify([{ id: fileId }]), user.id],
     );
     if (pm.length) return true;
+    // groups: current members who joined before the message
+    const gm = await em.query(
+      `SELECT 1 FROM group_messages m JOIN group_members g ON g.group_id = m.group_id
+        WHERE m.attachments @> $1::jsonb AND g.user_id = $2 AND m.created_at >= g.joined_at LIMIT 1`,
+      [JSON.stringify([{ id: fileId }]), user.id],
+    );
+    if (gm.length) return true;
     const att = JSON.stringify([{ id: fileId }]);
     const shared = await em.query(
       `SELECT 1 FROM p2p_orders WHERE proof @> $1::jsonb AND (buyer_id = $2 OR seller_id = $2)
