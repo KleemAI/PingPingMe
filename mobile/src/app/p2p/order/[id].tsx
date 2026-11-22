@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Platform, ScrollView, View } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
@@ -12,10 +12,10 @@ import { MerchantLine } from "@/components/P2P";
 import { MediaAttachment } from "@/components/Media";
 import { Composer } from "@/components/Thread";
 import { RichText, isBare } from "@/components/RichText";
+import { confirm } from "@/components/Confirm";
 
-const confirm = (title: string, msg: string, ok: string, fn: () => unknown, destructive = false) => {
-  if (Platform.OS === "web") { if (globalThis.confirm?.(`${title}\n\n${msg}`)) fn(); return; }
-  Alert.alert(title, msg, [{ text: "Back", style: "cancel" }, { text: ok, style: destructive ? "destructive" : "default", onPress: () => { Promise.resolve(fn()).catch(() => {}); } }]);
+const ask = (title: string, msg: string, ok: string, fn: () => unknown, destructive = false) => {
+  confirm({ title, message: msg, ok, cancel: "Back", danger: destructive }).then((yes) => { if (yes) Promise.resolve(fn()).catch(() => {}); });
 };
 
 /** One P2P order: timer, payment details, proof, release, cancel, appeal, rating and the chat with the other person. */
@@ -104,8 +104,8 @@ export default function OrderScreen() {
                 <T muted size={11.5}>Press and hold to copy.</T>
               </View>
               <Button variant="outline" icon="attach-outline" title={proof ? `Proof: ${proof.name}` : "Attach payment screenshot (optional)"} onPress={pickProof} />
-              <Button title="I have paid — notify seller" onPress={() => confirm("Have you paid?", `Only continue if ${inr(o.amount)} has left your account.`, "Yes, I paid", markPaid)} />
-              <Button variant="ghost" title="Cancel order" onPress={() => confirm("Cancel this order?", "Don't cancel if you already paid. The stock goes back to the seller.", "Cancel order", () => run("p2p.cancel", { id: o.id }, "Order cancelled"), true)} />
+              <Button title="I have paid — notify seller" onPress={() => ask("Have you paid?", `Only continue if ${inr(o.amount)} has left your account.`, "Yes, I paid", markPaid)} />
+              <Button variant="ghost" title="Cancel order" onPress={() => ask("Cancel this order?", "Don't cancel if you already paid. The stock goes back to the seller.", "Cancel order", () => run("p2p.cancel", { id: o.id }, "Order cancelled"), true)} />
               <T size={12} color={c.noteText}>False payment claims can get your account suspended.</T>
             </View>
           </Card>
@@ -131,7 +131,7 @@ export default function OrderScreen() {
                 ? <Button variant="outline" icon="image-outline" title={`View proof: ${o.proof.name}`} onPress={() => openFile(o.proof!)} />
                 : <T muted size={13}>No proof attached.</T>}
               <T size={13.5}>• Open your own bank / UPI app — not just a screenshot.{"\n"}• <T weight="700" size={13.5}>{inr(o.amount)}</T> has arrived in {payTo ?? "your account"}.{"\n"}• The sender&apos;s name matches {other?.name}.</T>
-              <Button title={`Release ${o.qty} units`} onPress={() => confirm("Release the goods?", `Only if ${inr(o.amount)} is in your account. This can't be undone.`, "Release", () => run("p2p.release", { id: o.id }, "Released — order completed"))} />
+              <Button title={`Release ${o.qty} units`} onPress={() => ask("Release the goods?", `Only if ${inr(o.amount)} is in your account. This can't be undone.`, "Release", () => run("p2p.release", { id: o.id }, "Released — order completed"))} />
               {o.status === "paid" && <Button variant="outline" title="Payment not received — appeal" onPress={() => setAppealOpen(true)} />}
             </View>
           </Card>

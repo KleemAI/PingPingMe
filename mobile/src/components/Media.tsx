@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Image, Platform, Pressable, View } from "react-native";
+import { Image, Platform, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState,
@@ -8,6 +8,7 @@ import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import type { Attachment } from "@/lib/types";
 import { T } from "./ui";
+import { notice } from "./Confirm";
 
 const MAX_MS = 5 * 60_000;
 const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
@@ -83,12 +84,12 @@ export function VoiceRecordButton({ onRecorded, disabled }: { onRecorded: (f: Pi
     setStarting(true);
     try {
       const perm = await requestRecordingPermissionsAsync();
-      if (!perm.granted) { Alert.alert("Microphone", "Allow microphone access in your phone settings to send voice notes."); return; }
+      if (!perm.granted) { notice("Microphone", "Allow microphone access in your phone settings to send voice notes.", "mic-off-outline"); return; }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await recorder.prepareToRecordAsync();
       recorder.record();
     } catch {
-      Alert.alert("Voice note", "Couldn't start recording on this phone.");
+      notice("Voice note", "Couldn't start recording on this phone.", "mic-off-outline");
     } finally {
       setStarting(false);
     }

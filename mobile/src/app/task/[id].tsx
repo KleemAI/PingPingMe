@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
-import { router, Stack, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { Platform, Pressable, ScrollView, View } from "react-native";
+import { router, Stack, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
@@ -10,6 +10,8 @@ import { Button, Input, SearchBar, Select, Sheet, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
 import type { TaskPerson } from "@/lib/types";
 import { DateTimeField } from "@/components/DateTimeField";
+import { htmlToText, noteDraft, noteWithTitle, plainToHtml, titleOf } from "@/lib/noteDraft";
+import { confirm, notice } from "@/components/Confirm";
 
 const Label = ({ children }: { children: React.ReactNode }) => { const { c } = useTheme(); return <T weight="700" size={15} color={c.accentStrong}>{children}</T>; };
 
@@ -21,8 +23,9 @@ export default function TaskEdit() {
   const existing = id !== "new" ? state?.tasks?.find((t) => t.id === id) : undefined;
   const lists = state?.taskLists ?? [];
   const [f, setF] = useState(() => ({
-    title: existing?.title ?? "",
-    note: existing?.note ?? "",
+    // the note is formatted (HTML); an old plain note becomes simple lines
+    // the note is the task: its first line is the title shown in the list (old tasks get their title as first line)
+    noteHtml: noteWithTitle(existing?.title ?? "", existing?.noteHtml ?? plainToHtml(existing?.note ?? "")),
     dueDate: existing ? existing.dueDate ?? null : (list === "today" ? localDate(0) : null) as string | null,
     dueTime: existing?.dueTime ?? null as string | null,
     repeat: (existing?.repeat ?? "none") as Repeat,
@@ -37,7 +40,19 @@ export default function TaskEdit() {
   const [picking, setPicking] = useState(false);
   const [who, setWho] = useState("");
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
-  if (!state) return null;
+  // back from the note editor: take the edited note
+  useFocusEffect(useCallback(() => { const r = noteDraft.take(); if (r !== undefined) setF((x) => ({ ...x, noteHtml: r })); }, []));
+  const [opened, setOpened] = useState(false);
+  useEffect(() => {
+    if (existing || opened) return;
+    setOpened(true);
+    noteDraft.open({ html: "", readOnly: false, title: "New note" });
+    router.push("/task/note");
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // the task was deleted (here or on another device): back to the list
+  const gone = id !== "new" && !!state && !existing;
+  useEffect(() => { if (gone) router.dismissTo("/todo"); }, [gone]);
+  if (!state || gone) return null;
   const me = state.me.id;
   const people = state.taskPeople ?? [];
   const forMe = !existing ? to.includes(me) : true;
@@ -53,12 +68,13 @@ export default function TaskEdit() {
       : "Day summary on the same day at 8:00 am.";
 
   const save = async () => {
-    if (!f.title.trim()) return Alert.alert("What is to be done?", "Write the task first.");
-    if (!existing && !to.length) return Alert.alert("Assign to", "Pick yourself or at least one person.");
+    const title = titleOf(f.noteHtml);
+    if (!title) return notice("Empty note", "Write something in the note first.", "document-text-outline");
+    if (!existing && !to.length) return notice("Assign to", "Pick yourself or at least one person.", "people-outline");
     const giving = !existing && others.length > 0;
     await act("task.save", {
       ...(giving ? { assignees: to } : {}),
-      id: existing?.id, title: f.title.trim(), note: f.note.trim() || undefined, dueDate: f.dueDate ?? undefined, dueTime: f.dueDate ? f.dueTime ?? undefined : undefined,
+      id: existing?.id, title, noteHtml: f.noteHtml, dueDate: f.dueDate ?? undefined, dueTime: f.dueDate ? f.dueTime ?? undefined : undefined,
       repeat: f.dueDate ? f.repeat : "none", repeatEvery: Number(f.repeatEvery) || 1, repeatUnit: f.repeatUnit,
       listId: f.audience === "everyone" ? undefined : f.listId || undefined, audience: f.audience, tzOffset: tz(),
     }, existing ? "Task saved" : giving ? `Sent to ${others.length === 1 ? nameOf(others[0]) : `${others.length} people`} — it starts once they accept` : "Task added");
@@ -66,9 +82,10 @@ export default function TaskEdit() {
   };
   const remove = () => {
     if (!existing) return;
-    const go = async () => { await act("task.delete", { id: existing.id }, "Task deleted"); router.back(); };
-    if (Platform.OS === "web") return go();
-    Alert.alert("Delete this task?", existing.audience === "everyone" ? "It will be removed for everyone." : "", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => { go().catch(() => {}); } }]);
+    // straight back to the to-do list (not to the note or an empty "New Task" form)
+    const go = async () => { await act("task.delete", { id: existing.id }, "Task deleted"); router.dismissTo("/todo"); };
+    confirm({ title: "Delete this task?", message: existing.audience === "everyone" ? "It will be removed for everyone." : "The task and its note will be deleted.", ok: "Delete", danger: true })
+      .then((ok) => { if (ok) go().catch(() => {}); });
   };
   const addList = async () => {
     const name = (newList ?? "").trim();
@@ -90,11 +107,18 @@ export default function TaskEdit() {
       }} />
       <ScrollPad>
         <View style={{ gap: 6 }}>
-          <Label>What is to be done?</Label>
-          <Input value={f.title} onChangeText={(v) => set("title", v)} placeholder="Enter Task Here" maxLength={200} editable={!readOnly} autoFocus={!existing}
-            hint={Platform.OS === "android" && !readOnly ? "Tip: tap the 🎤 on your keyboard to speak the task." : undefined} />
+          <Pressable onPress={() => { noteDraft.open({ html: f.noteHtml, readOnly, title: existing ? "Note" : "New note" }); router.push("/task/note"); }}
+            accessibilityLabel={readOnly ? "Open note" : "Write note"}
+            style={({ pressed }) => ({ minHeight: 110, borderRadius: 12, borderWidth: 1, borderColor: c.border, backgroundColor: pressed ? c.card2 : c.card, padding: 12, flexDirection: "row", gap: 10 })}>
+            <Ionicons name="document-text-outline" size={20} color={c.accentStrong} style={{ marginTop: 1 }} />
+            <View style={{ flex: 1 }}>
+              {htmlToText(f.noteHtml)
+                ? <T numberOfLines={8}>{htmlToText(f.noteHtml)}</T>
+                : <T muted>{readOnly ? "No note" : "Tap to write — bold, colours, checklist, photos…"}</T>}
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={c.muted} />
+          </Pressable>
         </View>
-
         <View style={{ gap: 4 }}>
           <Label>Due date</Label>
           {readOnly
@@ -157,7 +181,6 @@ export default function TaskEdit() {
           </View>
         )}
 
-        <Input label="Note (optional)" multiline value={f.note} onChangeText={(v) => set("note", v)} maxLength={2000} editable={!readOnly} />
         {!readOnly && <Button title={existing ? "Save" : "Add task"} icon="checkmark" onPress={save} />}
         {existing && !readOnly && <Button variant="ghost" icon="trash-outline" title="Delete task" onPress={remove} />}
       </ScrollPad>

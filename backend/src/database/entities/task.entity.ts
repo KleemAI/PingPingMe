@@ -14,6 +14,8 @@ export class TaskEntity {
   @Index() @Column({ type: "varchar", length: 10, default: "me" }) audience: string;
   @Column({ type: "varchar", length: 200 }) title: string;
   @Column({ type: "text", default: "" }) note: string;
+  /** formatted note (safe HTML subset, see common/richtext.ts); `note` is its plain text */
+  @Column({ name: "note_html", type: "text", default: "" }) noteHtml: string;
   @Index() @Column({ name: "list_id", type: "varchar", length: 40, nullable: true }) listId: string | null;
   /** "YYYY-MM-DD" or null (no date) */
   @Column({ name: "due_date", type: "varchar", length: 10, nullable: true }) dueDate: string | null;

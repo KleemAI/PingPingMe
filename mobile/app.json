@@ -53,6 +53,13 @@
             "usesCleartextTraffic": true
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to add your photos to notes.",
+          "cameraPermission": "Allow $(PRODUCT_NAME) to take photos for your notes."
+        }
       ]
     ],
     "scheme": "bizmsg",

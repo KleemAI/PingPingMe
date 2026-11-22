@@ -341,6 +341,7 @@ export type Task = {
   audience: "me" | "everyone";
   title: string;
   note?: string;
+  noteHtml?: string; // formatted note (safe HTML subset); note = its plain text
   listId?: string; // none = "Default"
   dueDate?: string; // "YYYY-MM-DD"
   dueTime?: string; // "HH:MM" — none = all day (day summary at 8:00)

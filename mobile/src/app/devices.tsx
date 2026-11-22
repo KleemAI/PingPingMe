@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Platform, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
@@ -7,14 +7,12 @@ import { relative } from "@/lib/format";
 import type { LinkedDevice } from "@/lib/types";
 import { Button, Card, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
+import { confirm } from "@/components/Confirm";
 
 /** Same limit as the server: signing in on one more device signs out the one used longest ago. */
 const MAX_DEVICES = 50;
 
-const confirmAsk = (title: string, text: string, ok: string) => new Promise<boolean>((resolve) => {
-  if (Platform.OS === "web") return resolve(window.confirm(`${title}\n${text}`));
-  Alert.alert(title, text, [{ text: "Cancel", style: "cancel", onPress: () => resolve(false) }, { text: ok, style: "destructive", onPress: () => resolve(true) }]);
-});
+const confirmAsk = (title: string, text: string, ok: string) => confirm({ title, message: text, ok, danger: true, icon: "log-out-outline" });
 
 /** Every phone and browser signed in to this account, with "Sign out" for each (like WhatsApp's Linked devices). */
 export default function Devices() {

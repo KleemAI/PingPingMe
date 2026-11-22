@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
+import { Platform, Pressable, ScrollView, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useStore } from "@/lib/store";
@@ -8,11 +8,9 @@ import { usePersonalChats } from "@/lib/people";
 import type { GroupMember, Person } from "@/lib/types";
 import { Avatar, Button, Card, Empty, Input, Sheet, T } from "@/components/ui";
 import { PeoplePicker } from "@/components/PeoplePicker";
+import { confirm } from "@/components/Confirm";
 
-const ask = (title: string, ok: string) => new Promise<boolean>((resolve) => {
-  if (Platform.OS === "web") return resolve(window.confirm(title));
-  Alert.alert(title, "", [{ text: "Cancel", style: "cancel", onPress: () => resolve(false) }, { text: ok, style: "destructive", onPress: () => resolve(true) }]);
-});
+const ask = (title: string, ok: string) => confirm({ title, ok, danger: true, icon: ok === "Leave" ? "log-out-outline" : "person-remove-outline" });
 
 /** Group info: name, members (admins can add / remove / make admin, rename), leave group. */
 export default function GroupInfo() {

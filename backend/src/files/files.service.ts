@@ -126,6 +126,12 @@ export class FilesService {
       [JSON.stringify([{ id: fileId }]), user.id],
     );
     if (gm.length) return true;
+    // photos in to-do notes: whoever can see the task (its owner, or everyone for a shared task)
+    const inNote = await em.query(
+      `SELECT 1 FROM tasks WHERE position($1 in note_html) > 0 AND (owner_id = $2 OR audience = 'everyone') LIMIT 1`,
+      [`data-file="${fileId}"`, user.id],
+    );
+    if (inNote.length) return true;
     const att = JSON.stringify([{ id: fileId }]);
     const shared = await em.query(
       `SELECT 1 FROM p2p_orders WHERE proof @> $1::jsonb AND (buyer_id = $2 OR seller_id = $2)

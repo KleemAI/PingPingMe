@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, SectionList, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Linking, Platform, Pressable, SectionList, TextInput, View } from "react-native";
 import { router, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useStore } from "@/lib/store";
@@ -8,8 +8,15 @@ import type { Task } from "@/lib/types";
 import { notificationsAllowed } from "@/lib/reminders";
 import { byDue, dueText, isOverdue, localDate, repeatLabel, SECTION_TITLE, sectionOf, tz, type Section } from "@/lib/tasks";
 import { Button, Sheet, T } from "@/components/ui";
+import { confirm } from "@/components/Confirm";
 
-type Item = { kind: "task" | "pending" | "given"; task: Task };
+type Item = { kind: "task" | "pending" | "given"; task: Task } | { kind: "cards"; tasks: Task[] };
+/** Tasks show as note cards, two side by side (like a notes app). */
+const pairs = (list: Task[]): Item[] => {
+  const out: Item[] = [];
+  for (let i = 0; i < list.length; i += 2) out.push({ kind: "cards", tasks: list.slice(i, i + 2) });
+  return out;
+};
 type ListFilter = "all" | "today" | "default" | "given" | string;
 const ORDER: Section[] = ["overdue", "today", "tomorrow", "later", "nodate"];
 
@@ -63,10 +70,10 @@ export default function Todo() {
     const shown = tasks.filter(match);
     for (const s of ORDER) {
       const data = shown.filter((t) => sectionOf(t, now) === s).sort(byDue);
-      if (data.length) out.push({ key: s, title: SECTION_TITLE[s], data: data.map((task) => ({ kind: "task", task })), count: data.length });
+      if (data.length) out.push({ key: s, title: SECTION_TITLE[s], data: pairs(data), count: data.length });
     }
     const done = shown.filter((t) => t.done).sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
-    if (done.length) out.push({ key: "done", title: SECTION_TITLE.done, data: showDone ? done.map((task) => ({ kind: "task", task })) : [], count: done.length });
+    if (done.length) out.push({ key: "done", title: SECTION_TITLE.done, data: showDone ? pairs(done) : [], count: done.length });
     return out;
   }, [tasks, incoming, given, filter, q, now, showDone]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -97,13 +104,11 @@ export default function Todo() {
   };
   const deleteList = (id: string) => {
     const go = () => act("list.delete", { id }, "List deleted").then(() => setFilter("all")).catch(() => {});
-    if (Platform.OS === "web") return go();
-    Alert.alert(`Delete “${listName(id)}”?`, "Its tasks move to Default.", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: () => { go(); } }]);
+    confirm({ title: `Delete “${listName(id)}”?`, message: "Its tasks move to Default.", ok: "Delete", danger: true, icon: "folder-open-outline" }).then((ok) => { if (ok) go(); });
   };
   const clearDone = () => {
     const go = () => act("task.clearDone", {}, "Completed tasks cleared").catch(() => {});
-    if (Platform.OS === "web") return go();
-    Alert.alert("Clear completed tasks?", "Your finished tasks will be deleted.", [{ text: "Cancel", style: "cancel" }, { text: "Clear", style: "destructive", onPress: () => { go(); } }]);
+    confirm({ title: "Clear completed tasks?", message: "Your finished tasks will be deleted.", ok: "Clear", danger: true, icon: "checkmark-done-outline" }).then((ok) => { if (ok) go(); });
   };
 
   const taskRow = (t: Task) => {
@@ -123,11 +128,34 @@ export default function Todo() {
       </Pressable>
     );
   };
+  // a note card: title (the note's first line), a few lines of the note, the date at the bottom
+  const card = (t: Task) => {
+    const late = isOverdue(t, now);
+    const lines = (t.note ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+    const body = (lines[0] === t.title.trim() ? lines.slice(1) : lines).join("\n");
+    const date = t.dueDate ? dueText(t) : new Date(t.updatedAt ?? t.createdAt).toLocaleDateString();
+    return (
+      <Pressable key={t.id} onPress={() => router.push({ pathname: "/task/[id]", params: { id: t.id } })}
+        accessibilityLabel={t.title}
+        style={({ pressed }) => ({ flex: 1, minHeight: 150, borderRadius: 16, padding: 14, gap: 6, backgroundColor: pressed ? c.border : c.card2, opacity: t.done ? 0.6 : 1 })}>
+        <T size={18} weight="700" numberOfLines={2} style={t.done ? { textDecorationLine: "line-through" } : undefined}>{t.title}</T>
+        {!!body && <T size={14.5} muted numberOfLines={4} style={{ flex: 1 }}>{body}</T>}
+        {!body && <View style={{ flex: 1 }} />}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <T size={12.5} color={late ? c.danger : c.muted} numberOfLines={1} style={{ flex: 1 }}>
+            {repeatLabel(t) ? "🔁 " : ""}{t.assignedBy ? `from ${t.assignedByName} · ` : ""}{date}
+          </T>
+          <Pressable onPress={() => { toggle(t); }} hitSlop={10} accessibilityRole="checkbox" accessibilityState={{ checked: t.done }} accessibilityLabel={`Done: ${t.title}`}>
+            <Ionicons name={t.done ? "checkmark-circle" : "ellipse-outline"} size={22} color={t.done ? c.accentStrong : c.muted} />
+          </Pressable>
+        </View>
+      </Pressable>
+    );
+  };
   const respond = (t: Task, accept: boolean) => act("task.respond", { id: t.id, accept }, accept ? "Accepted — it's in your to-do" : "Declined").catch(() => {});
   const takeBack = (t: Task) => {
     const go = () => act("task.delete", { id: t.id }, "Taken back").catch(() => {});
-    if (Platform.OS === "web") return go();
-    Alert.alert("Take this to-do back?", `It will be removed from ${t.ownerName}'s list.`, [{ text: "Cancel", style: "cancel" }, { text: "Take back", style: "destructive", onPress: () => { go(); } }]);
+    confirm({ title: "Take this to-do back?", message: `It will be removed from ${t.ownerName}'s list.`, ok: "Take back", danger: true, icon: "arrow-undo-outline" }).then((ok) => { if (ok) go(); });
   };
   const pendingRow = (t: Task) => (
     <View style={{ paddingHorizontal: 14, paddingVertical: 12, gap: 8, backgroundColor: c.accentSoft, borderBottomWidth: 1, borderColor: c.border }}>
@@ -197,7 +225,7 @@ export default function Todo() {
       ) : (
         <SectionList
           sections={sections}
-          keyExtractor={(it) => it.task.id}
+          keyExtractor={(it) => (it.kind === "cards" ? it.tasks.map((t) => t.id).join("+") : it.task.id)}
           stickySectionHeadersEnabled={false}
           contentContainerStyle={{ paddingBottom: 150 }}
           renderSectionHeader={({ section }) => (
@@ -208,7 +236,9 @@ export default function Todo() {
               {section.key === "done" && <Ionicons name={showDone ? "chevron-up" : "chevron-down"} size={16} color={c.muted} />}
             </Pressable>
           )}
-          renderItem={({ item }) => (item.kind === "pending" ? pendingRow(item.task) : item.kind === "given" ? givenRow(item.task) : taskRow(item.task))}
+          renderItem={({ item }) => item.kind === "cards"
+            ? <View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 12, paddingBottom: 10 }}>{item.tasks.map(card)}{item.tasks.length === 1 && <View style={{ flex: 1 }} />}</View>
+            : item.kind === "pending" ? pendingRow(item.task) : item.kind === "given" ? givenRow(item.task) : taskRow(item.task)}
           ListEmptyComponent={<T muted style={{ textAlign: "center", padding: 30 }}>{q ? "No tasks match your search" : filter === "given" ? "You haven't given a to-do to anyone yet. In New Task, pick people under “Assign to”." : "No tasks in this list"}</T>}
           ListFooterComponent={filter !== "all" && filter !== "today" && filter !== "default" && filter !== "given"
             ? <Pressable onPress={() => deleteList(filter)} style={{ padding: 20, alignItems: "center" }}><T size={13} color={c.danger}>Delete this list</T></Pressable>

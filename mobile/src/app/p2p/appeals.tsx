@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Platform, View } from "react-native";
+import { Platform, View } from "react-native";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { dateTime } from "@/lib/format";
@@ -7,6 +7,7 @@ import { inr, STATUS, useP2P } from "@/lib/p2p";
 import type { P2POrder } from "@/lib/p2p-types";
 import { Button, Card, Empty, Input, Pill, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
+import { confirm } from "@/components/Confirm";
 
 /** Team only: disputed P2P orders. Read the chat and proof, then release to the buyer or cancel. Never moves money. */
 export default function Appeals() {
@@ -31,8 +32,7 @@ function AppealCard({ o }: { o: P2POrder }) {
   const decide = (outcome: "release" | "cancel") => {
     const go = () => run("p2p.resolveAppeal", { id: o.id, outcome, note: note.trim() }, outcome === "release" ? "Released to the buyer" : "Order cancelled");
     const text = outcome === "release" ? `Release ${o.qty} × ${o.product} to ${buyer?.name}? This can't be undone.` : `Cancel ${o.ref} and return the stock to ${seller?.name}?`;
-    if (Platform.OS === "web") { if (globalThis.confirm?.(text)) return go(); return; }
-    Alert.alert("Confirm decision", text, [{ text: "Back", style: "cancel" }, { text: "Confirm", onPress: () => { go().catch(() => {}); } }]);
+    confirm({ title: "Confirm decision", message: text, ok: "Confirm", cancel: "Back", danger: outcome !== "release", icon: "scale-outline" }).then((ok) => { if (ok) go().catch(() => {}); });
   };
   return (
     <Card>

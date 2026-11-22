@@ -1,4 +1,4 @@
-import { Alert, Platform, View } from "react-native";
+import { Platform, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTeam } from "@/lib/store";
@@ -7,6 +7,7 @@ import { caseOverdue } from "@/lib/format";
 import { AppearanceCard, Avatar, Badge, Card, Row, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
 import { StorageCard } from "@/components/StorageCard";
+import { confirm } from "@/components/Confirm";
 
 export default function More() {
   const { c } = useTheme();
@@ -21,8 +22,7 @@ export default function More() {
     <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}><Ionicons name={name} size={18} color="#fff" /></View>
   );
   const signOut = () => {
-    if (Platform.OS === "web") return logout();
-    Alert.alert("Sign out?", "", [{ text: "Cancel", style: "cancel" }, { text: "Sign out", style: "destructive", onPress: () => logout() }]);
+    confirm({ title: "Sign out?", message: "You can sign in again any time.", ok: "Sign out", danger: true, icon: "log-out-outline" }).then((ok) => { if (ok) logout(); });
   };
 
   return (

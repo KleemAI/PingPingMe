@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Platform, Pressable, ScrollView, View } from "react-native";
+import { Platform, Pressable, ScrollView, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useStore } from "@/lib/store";
@@ -7,11 +7,9 @@ import { useTheme } from "@/lib/theme";
 import { usePersonalChats } from "@/lib/people";
 import { Avatar, Button, Card, Empty, Input, T } from "@/components/ui";
 import { GroupTicks, freeGroups } from "@/components/GroupTicks";
+import { confirm } from "@/components/Confirm";
 
-const ask = (title: string, ok: string) => new Promise<boolean>((resolve) => {
-  if (Platform.OS === "web") return resolve(window.confirm(title));
-  Alert.alert(title, "", [{ text: "Cancel", style: "cancel", onPress: () => resolve(false) }, { text: ok, style: "destructive", onPress: () => resolve(true) }]);
-});
+const ask = (title: string, ok: string) => confirm({ title, ok, danger: true, icon: ok === "Leave" ? "log-out-outline" : "close-circle-outline" });
 
 /** A community: its announcements and groups (open the ones you're in); admins edit it and add / remove groups. */
 export default function CommunityScreen() {

@@ -1,4 +1,4 @@
-import { Alert, Platform, View } from "react-native";
+import { Platform, View } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useCustomer } from "@/lib/store";
@@ -6,6 +6,7 @@ import { useTheme } from "@/lib/theme";
 import { AppearanceCard, Avatar, Button, Card, Row, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
 import { StorageCard } from "@/components/StorageCard";
+import { confirm } from "@/components/Confirm";
 
 /** Customer account: who you are, verification, how to reach us, appearance and sign out. */
 export default function Account() {
@@ -49,8 +50,7 @@ export default function Account() {
       </Card>
       <Card title="Connection" icon="cloud-outline"><Row title="Server" subtitle={server || "same origin"} /></Card>
       <Button variant="outline" icon="log-out-outline" title="Sign out" onPress={() => {
-        if (Platform.OS === "web") return logout();
-        Alert.alert("Sign out?", "", [{ text: "Cancel", style: "cancel" }, { text: "Sign out", style: "destructive", onPress: () => logout() }]);
+        confirm({ title: "Sign out?", message: "You can sign in again any time.", ok: "Sign out", danger: true, icon: "log-out-outline" }).then((ok) => { if (ok) logout(); });
       }} />
     </ScrollPad>
   );

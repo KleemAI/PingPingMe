@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { router } from "expo-router";
-import { Alert, FlatList, Platform, View } from "react-native";
+import { FlatList, Platform, View } from "react-native";
 import { useTeam } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { dateTime } from "@/lib/format";
 import type { User } from "@/lib/types";
 import { Avatar, Button, Chips, Empty, Pill, SearchBar, T } from "@/components/ui";
+import { confirm } from "@/components/Confirm";
 
 type F = "unverified" | "verified" | "all";
 
@@ -23,11 +24,9 @@ export default function Customers() {
 
   const setVerified = (u: User, verified: boolean) => {
     const go = () => act("customer.verify", { id: u.id, verified }, verified ? `${u.name} can now sell on P2P` : "Verification removed");
-    if (verified || Platform.OS === "web") return go();
-    Alert.alert("Remove verification?", `${u.name} won't be able to sell on P2P, and their Sell ads leave the market.`, [
-      { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: () => { go().catch(() => {}); } },
-    ]);
+    if (verified) return go();
+    confirm({ title: "Remove verification?", message: `${u.name} won't be able to sell on P2P, and their Sell ads leave the market.`, ok: "Remove", danger: true, icon: "shield-outline" })
+      .then((ok) => { if (ok) go().catch(() => {}); });
   };
 
   return (

@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { MAX_NOTE_HTML, noteText, sanitizeNoteHtml } from "../common/richtext";
 import { In, IsNull, Not } from "typeorm";
 import type { Broadcast, Task, TaskList, TaskPerson, User } from "../common/contract";
 import { badRequest, conflict, forbidden, notFound } from "../common/errors";
@@ -19,7 +20,7 @@ const kindOf = (role: string): TaskPerson["kind"] => (TEAM_ROLES.includes(role) 
 const ruleOf = (t: TaskEntity): RepeatRule => ({ repeat: t.repeat as RepeatRule["repeat"], repeatEvery: t.repeatEvery, repeatUnit: t.repeatUnit as RepeatRule["repeatUnit"], anchorDay: t.anchorDay ?? undefined });
 
 const toTask = (t: TaskEntity): Task => clean({
-  id: t.id, ownerId: t.ownerId, ownerName: t.ownerName, audience: t.audience as Task["audience"], title: t.title, note: t.note || undefined,
+  id: t.id, ownerId: t.ownerId, ownerName: t.ownerName, audience: t.audience as Task["audience"], title: t.title, note: t.note || undefined, noteHtml: t.noteHtml || undefined,
   listId: t.listId ?? undefined, dueDate: t.dueDate ?? undefined, dueTime: t.dueTime ?? undefined, tzOffset: t.tzOffset,
   repeat: t.repeat as Task["repeat"], repeatEvery: t.repeatEvery, repeatUnit: t.repeatUnit as Task["repeatUnit"], anchorDay: t.anchorDay ?? undefined,
   assignedBy: t.assignedBy ?? undefined, assignedByName: t.assignedByName ?? undefined, status: (t.status || "accepted") as Task["status"],
@@ -121,8 +122,13 @@ export class TasksService {
   async save(tx: Tx, p: Payload) {
     const audience = p.audience ? oneOf(p.audience, ["me", "everyone"] as const, "who it's for") : "me";
     if (audience === "everyone" && !isTeam(tx.user)) throw forbidden("Only our team can share tasks with everyone");
+    // a formatted note comes as HTML: keep only the safe subset, and its plain text as `note`
+    const noteHtml = p.noteHtml !== undefined ? sanitizeNoteHtml(p.noteHtml) : undefined;
+    if (typeof p.noteHtml === "string" && p.noteHtml.length > MAX_NOTE_HTML) throw badRequest("The note is too long");
     const fields = {
-      title: str(p.title, "What is to be done?", 200), note: optStr(p.note, 2000) ?? "",
+      title: str(p.title, "What is to be done?", 200),
+      note: noteHtml !== undefined ? noteText(noteHtml).slice(0, 2000) : optStr(p.note, 2000) ?? "",
+      noteHtml: noteHtml ?? "",
       listId: audience === "everyone" ? null : await this.validList(tx, p.listId), audience, ...this.when(p),
     };
     const now = Date.now();
@@ -130,6 +136,8 @@ export class TasksService {
     if (p.id) {
       const t = await this.own(tx, p.id);
       if (t.ownerId !== tx.user.id) fields.listId = t.listId; // an admin editing someone's shared task keeps their list
+      // the web edits the plain note: an unchanged note keeps its formatting (and photos)
+      if (noteHtml === undefined && t.noteHtml && fields.note === t.note) Object.assign(fields, { noteHtml: t.noteHtml });
       Object.assign(t, fields, { updatedAt: now });
       await tx.em.save(t);
       return t.id;

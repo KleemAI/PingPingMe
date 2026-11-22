@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Linking, Platform, Pressable, View } from "react-native";
+import { Linking, Platform, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
@@ -8,6 +8,7 @@ import type { Broadcast } from "@/lib/types";
 import { notificationsAllowed } from "@/lib/reminders";
 import { Button, Card, Empty, Input, Sheet, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
+import { confirm } from "@/components/Confirm";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const toDate = (d: Date) => `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
@@ -38,8 +39,8 @@ export default function Reminders() {
   const cancel = (b: Broadcast) => {
     // a repeating reminder (shared task) is removed as a task
     const go = () => (b.id.startsWith("task:") ? act("task.delete", { id: b.id.slice(5) }, "Reminder removed for everyone") : act("broadcast.cancel", { id: b.id }, "Reminder cancelled for everyone"));
-    if (Platform.OS === "web") return go();
-    Alert.alert("Cancel this reminder?", `“${b.title}” will be removed for everyone.`, [{ text: "Keep", style: "cancel" }, { text: "Cancel reminder", style: "destructive", onPress: () => { go().catch(() => {}); } }]);
+    confirm({ title: "Cancel this reminder?", message: `“${b.title}” will be removed for everyone.`, ok: "Cancel reminder", cancel: "Keep", danger: true, icon: "notifications-off-outline" })
+      .then((ok) => { if (ok) go().catch(() => {}); });
   };
 
   const row = (b: Broadcast, done: boolean) => (

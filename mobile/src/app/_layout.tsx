@@ -8,6 +8,7 @@ import { useTaskEvents } from "@/lib/taskEvents";
 import { usePushNotifications } from "@/lib/push";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { Toasts } from "@/components/ui";
+import { ConfirmHost } from "@/components/Confirm";
 
 function Root() {
   const { c, dark } = useTheme();
@@ -47,8 +48,10 @@ function Root() {
         <Stack.Screen name="people/community/[id]" options={{ title: "Community" }} />
         <Stack.Screen name="task/[id]" options={{ title: "New Task" }} />
         <Stack.Screen name="task/batch" options={{ title: "Add in Batch Mode" }} />
+        <Stack.Screen name="task/note" options={{ title: "Note" }} />
       </Stack>
       <Toasts />
+      <ConfirmHost />
     </View>
   );
 }
