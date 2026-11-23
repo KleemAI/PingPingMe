@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
 import type { AppState, ResellerState, TeamState, Attachment } from "../types";
 import { shrinkPhoto } from "./media";
+import { emitOrder, type NewOrder } from "./orderAlerts";
+import { NewOrderAlert } from "@/components/NewOrderAlert";
 
 
 /** NestJS backend address for Socket.IO (set from API_URL in next.config.mjs). Empty = built-in server, polling only. */
 const REALTIME_URL = process.env.NEXT_PUBLIC_REALTIME_URL ?? "";
+/** true when Socket.IO pushes live updates (NestJS backend); otherwise the app polls. */
+export const HAS_SOCKET = !!REALTIME_URL;
 
 /** Opened from a phone on Wi-Fi? "localhost" would mean the phone — use this page's host instead. */
 function realtimeOrigin() {
@@ -81,6 +85,7 @@ export function StoreProvider({ children, expect }: { children: React.ReactNode;
       socket = io(realtimeOrigin(), { withCredentials: true, transports: ["websocket", "polling"] });
       socket.on("ready", () => { live = true; refresh(); });
       socket.on("changed", () => refresh());
+      socket.on("p2p_order", (o: NewOrder) => emitOrder(o)); // someone ordered on my P2P ad → ring
       socket.on("disconnect", () => { live = false; });
       socket.on("auth_error", () => router.replace("/login"));
     }
@@ -130,9 +135,10 @@ export function StoreProvider({ children, expect }: { children: React.ReactNode;
   return (
     <StoreCtx.Provider value={{ state, act, refresh, toast, upload, now }}>
       {children}
+      <NewOrderAlert />
       <div className="pointer-events-none fixed bottom-4 left-1/2 z-[100] flex -translate-x-1/2 flex-col items-center gap-2">
         {toasts.map((t) => (
-          <div key={t.id} className={`animate-pop rounded-lg px-4 py-2.5 text-sm text-white shadow-lg ${t.kind === "error" ? "bg-[#d93a4a]" : "bg-[#111b21] dark:bg-[#2a3942]"}`}>
+          <div key={t.id} className={`animate-pop rounded-[14px] border border-white/12 px-4 py-2.5 text-sm text-white shadow-lg ${t.kind === "error" ? "bg-[#d93a4a]" : "bg-[#1b1e23]"}`}>
             {t.text}
           </div>
         ))}

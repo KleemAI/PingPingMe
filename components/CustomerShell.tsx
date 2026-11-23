@@ -24,7 +24,7 @@ export default function CustomerShell({ children }: { children: React.ReactNode 
   useEffect(() => setDrawer(false), [path]);
 
   if (!state || state.scope !== "customer") {
-    return <div className="flex h-dvh items-center justify-center bg-[var(--panel)]"><Loader2 className="animate-spin text-[var(--accent)]" size={32} /></div>;
+    return <div className="flex h-dvh items-center justify-center"><Loader2 className="animate-spin text-[var(--accent)]" size={32} /></div>;
   }
   const cs = state as CustomerState;
   const openRequests = cs.requests.filter((r) => !["completed", "cancelled"].includes(r.status)).length;
@@ -40,7 +40,7 @@ export default function CustomerShell({ children }: { children: React.ReactNode 
   const sidebar = (
     <nav className="flex h-full flex-col" aria-label="Main menu">
       <div className="flex items-center gap-2.5 px-4 py-4">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent)] text-white"><MessagesSquare size={19} /></span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[var(--accent)] text-white shadow-[var(--pill-glow)]"><MessagesSquare size={19} /></span>
         <div className="min-w-0">
           <div className="truncate text-[15px] font-bold">{cs.business.name}</div>
           <div className="text-[11.5px] text-[var(--muted)]">Customer account</div>
@@ -49,7 +49,7 @@ export default function CustomerShell({ children }: { children: React.ReactNode 
       <div className="scroll-thin flex-1 space-y-0.5 overflow-y-auto px-2">
         {nav.map(({ href, label, icon: Icon, badge }) => (
           <Link key={href} href={href} aria-current={active(href) ? "page" : undefined}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] transition ${active(href) ? "bg-[var(--accent-soft)] font-semibold text-[var(--accent-strong)]" : "text-[var(--text)] hover:bg-[var(--hover)]"}`}>
+            className={`flex items-center gap-3 rounded-full px-3.5 py-2 text-[14px] transition ${active(href) ? "bg-[var(--active)] font-semibold text-[var(--text)]" : "text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"}`}>
             <Icon size={18} />
             <span className="flex-1">{label}</span>
             {!!badge && <span className="min-w-[20px] rounded-full bg-[var(--accent)] px-1.5 text-center text-[11px] font-semibold leading-5 text-white">{badge}</span>}
@@ -58,8 +58,8 @@ export default function CustomerShell({ children }: { children: React.ReactNode 
       </div>
       <div className="px-3 pb-2">
         {cs.me.verified
-          ? <div className="flex items-center gap-2 rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-[12.5px] font-semibold text-[var(--accent-strong)]"><BadgeCheck size={16} /> Verified · you can sell on P2P</div>
-          : <Link href="/p2p/profile" className="flex items-start gap-2 rounded-lg bg-amber-500/15 px-3 py-2 text-[12.5px] text-amber-800 dark:text-amber-200"><ShieldAlert size={16} className="mt-0.5 shrink-0" /><span><strong>Not verified.</strong> You can buy; selling on P2P opens once our team verifies you.</span></Link>}
+          ? <div className="flex items-center gap-2 rounded-[14px] bg-[var(--accent-soft)] px-3 py-2 text-[12.5px] font-semibold text-[var(--accent-strong)]"><BadgeCheck size={16} /> Verified · you can sell on P2P</div>
+          : <Link href="/p2p/profile" className="flex items-start gap-2 rounded-[14px] bg-amber-500/15 px-3 py-2 text-[12.5px] text-amber-800 dark:text-amber-200"><ShieldAlert size={16} className="mt-0.5 shrink-0" /><span><strong>Not verified.</strong> You can buy; selling on P2P opens once our team verifies you.</span></Link>}
       </div>
       <div className="border-t border-[var(--border)] p-3">
         <StorageMeter />
@@ -82,15 +82,15 @@ export default function CustomerShell({ children }: { children: React.ReactNode 
   );
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-[var(--bg-app)]">
-      <aside className="hidden w-60 shrink-0 border-r border-[var(--border)] bg-[var(--panel)] lg:block">{sidebar}</aside>
+    <div className="flex h-dvh overflow-hidden">
+      <aside className="glass-bar hidden w-60 shrink-0 border-r border-[var(--border)] lg:block">{sidebar}</aside>
       {drawer && (
-        <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setDrawer(false)}>
-          <aside className="animate-slide h-full w-64 bg-[var(--panel)]" onClick={(e) => e.stopPropagation()}>{sidebar}</aside>
+        <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px] lg:hidden" onClick={() => setDrawer(false)}>
+          <aside className="animate-slide h-full w-64 border-r border-[var(--border)] bg-[var(--panel-solid)] shadow-2xl" onClick={(e) => e.stopPropagation()}>{sidebar}</aside>
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--panel)] px-3 lg:hidden">
+        <header className="glass-bar relative z-30 flex h-12 shrink-0 items-center gap-2 border-b border-[var(--border)] px-3 lg:hidden">
           <button onClick={() => setDrawer(true)} aria-label="Open menu" className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)]">{drawer ? <X size={20} /> : <Menu size={20} />}</button>
           <span className="truncate text-sm font-medium">{nav.find((n) => active(n.href))?.label ?? cs.business.name}</span>
         </header>

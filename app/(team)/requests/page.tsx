@@ -50,7 +50,7 @@ function Page() {
     <div className="pb-10">
       <PageHeader title="Requests" subtitle="Each request links the customer chat, reseller thread, quote, order and any case." actions={<Button onClick={() => setPick(true)}><Plus size={16} /> New request</Button>} />
       <div className="space-y-3 px-4 pb-4 md:px-6">
-        <label className="flex max-w-md items-center gap-2 rounded-lg border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2">
+        <label className="flex max-w-md items-center gap-2 rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2">
           <Search size={16} className="text-[var(--muted)]" />
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search ref, title, customer…" className="w-full bg-transparent text-sm outline-none" />
         </label>
@@ -58,10 +58,10 @@ function Page() {
       </div>
       <div className="px-4 md:px-6">
         {list.length === 0 ? <Empty icon={ClipboardList} title="No requests here" /> : (
-          <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]">
+          <div className="glass overflow-hidden rounded-[20px]">
             <div className="scroll-thin overflow-x-auto">
               <table className="w-full min-w-[860px] text-[13.5px]">
-                <thead className="bg-[var(--panel-2)] text-left text-[12px] text-[var(--muted)]">
+                <thead className="bg-[var(--hover)] text-left text-[12px] text-[var(--muted)]">
                   <tr>{["Request", "Customer", "Category · Area", "Owner", "Reseller", "Status", "Priority", "Updated"].map((h) => <th key={h} className="px-4 py-2.5 font-medium">{h}</th>)}</tr>
                 </thead>
                 <tbody>

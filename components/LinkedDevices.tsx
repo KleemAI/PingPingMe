@@ -57,17 +57,17 @@ function LinkedDevices({ onClose }: { onClose: () => void }) {
       <p className="mb-3 text-[13px] text-[var(--muted)]">
         Every phone and browser signed in to your account. Up to {MAX_DEVICES} at a time — signing in on one more signs out the one used longest ago.
       </p>
-      {err && <p className="mb-3 rounded-lg bg-red-500/10 px-3 py-2 text-[13px] text-red-600 dark:text-red-300">{err}</p>}
+      {err && <p className="mb-3 rounded-[14px] bg-red-500/10 px-3 py-2 text-[13px] text-red-600 dark:text-red-300">{err}</p>}
       {!list && !err && <div className="flex justify-center py-8"><Loader2 className="animate-spin text-[var(--muted)]" /></div>}
       {list && (
         <>
           <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-[var(--muted)]">{list.length} of {MAX_DEVICES} devices</div>
-          <ul className="scroll-thin max-h-[50vh] divide-y divide-[var(--border)] overflow-y-auto rounded-lg border border-[var(--border)]">
+          <ul className="scroll-thin max-h-[50vh] divide-y divide-[var(--border)] overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--panel)]">
             {list.map((d) => {
               const Icon = d.kind === "mobile" ? Smartphone : d.kind === "api" ? Globe : Laptop;
               return (
                 <li key={d.id} className="flex items-center gap-3 px-3 py-2.5">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--panel-2)] text-[var(--muted)]"><Icon size={18} /></span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center glass-tile rounded-full text-[var(--muted)]"><Icon size={18} /></span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[14px] font-medium">{d.name}</div>
                     <div className="truncate text-[12px] text-[var(--muted)]">

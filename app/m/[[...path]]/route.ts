@@ -17,7 +17,7 @@ export async function GET() {
   // "Add to Home screen" support: opens full-screen like an installed app
   const head = [
     '<link rel="manifest" href="/m/manifest.json">',
-    '<meta name="theme-color" content="#00a884">',
+    '<meta name="theme-color" content="#07090c">',
     '<meta name="mobile-web-app-capable" content="yes">',
     '<meta name="apple-mobile-web-app-capable" content="yes">',
     '<meta name="apple-mobile-web-app-title" content="BizMsg">',

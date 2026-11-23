@@ -75,7 +75,7 @@ function ViewOnceBody({ m, mine, onOpen }: { m: Message; mine: boolean; onOpen: 
   const kind = m.attachments.some((a) => a.mime.startsWith("video/")) ? "Video" : "Photo";
   if (m.attachments.length && !mine && !m.viewedAt) {
     return (
-      <button onClick={onOpen} className="mt-1 flex items-center gap-2 rounded-md bg-black/5 px-3 py-2 text-[13.5px] font-medium hover:bg-black/10 dark:bg-white/10">
+      <button onClick={onOpen} className="mt-1 flex items-center gap-2 rounded-xl bg-black/5 px-3 py-2 text-[13.5px] font-medium hover:bg-black/10 dark:bg-white/10">
         <CircleDot size={17} className="text-[var(--accent)]" /> {kind} · view once — click to open
       </button>
     );
@@ -86,7 +86,7 @@ function ViewOnceBody({ m, mine, onOpen }: { m: Message; mine: boolean; onOpen: 
     <div className="mt-1">
       {m.attachments.length > 0 && <div className="mb-1 text-[11.5px] font-semibold text-amber-600 dark:text-amber-300">View once · kept for admins (audit)</div>}
       {m.attachments.map((a) => <AttachmentChip key={a.id} a={a} />)}
-      <div className="flex items-center gap-2 rounded-md bg-black/5 px-3 py-2 text-[13px] text-[var(--muted)] dark:bg-white/10"><CircleDot size={16} /> View-once {kind.toLowerCase()} · {opened}</div>
+      <div className="flex items-center gap-2 rounded-xl bg-black/5 px-3 py-2 text-[13px] text-[var(--muted)] dark:bg-white/10"><CircleDot size={16} /> View-once {kind.toLowerCase()} · {opened}</div>
     </div>
   );
 }
@@ -125,7 +125,7 @@ export function MessageList({ messages: all, side, onRetry, wallpaper = true, vi
   }, [last]);
 
   return (
-    <div ref={ref} className={`scroll-thin flex-1 overflow-y-auto py-3 ${wallpaper ? "chat-wallpaper" : "bg-[var(--panel-2)]"}`}>
+    <div ref={ref} className={`scroll-thin flex-1 overflow-y-auto py-3 ${wallpaper ? "chat-wallpaper" : "bg-transparent"}`}>
       {viewing && <ViewOnceViewer items={viewing} onClose={() => setViewing(null)} />}
       {messages.length === 0 && <div className="py-16 text-center text-sm text-[var(--muted)]">No messages yet</div>}
       {messages.map((m, i) => {
@@ -137,7 +137,7 @@ export function MessageList({ messages: all, side, onRetry, wallpaper = true, vi
           return (
             <Fragment key={m.id}>
               {newDay && <DayDivider ts={m.createdAt} />}
-              <div className="my-1.5 flex justify-center px-6"><span className="rounded-lg bg-[var(--bubble-in)] px-3 py-1 text-center text-[12px] text-[var(--muted)] shadow-sm">{m.text}</span></div>
+              <div className="my-1.5 flex justify-center px-6"><span className="glass rounded-full px-3 py-1 text-center text-[12px] text-[var(--muted)]">{m.text}</span></div>
             </Fragment>
           );
         }
@@ -146,7 +146,7 @@ export function MessageList({ messages: all, side, onRetry, wallpaper = true, vi
             <Fragment key={m.id}>
               {newDay && <DayDivider ts={m.createdAt} />}
               <div className="my-2 flex justify-center px-4 animate-pop">
-                <div className="w-full max-w-[560px] rounded-lg border border-amber-400/50 bg-[var(--note)] px-3 py-2 text-[13.5px] shadow-sm">
+                <div className="w-full max-w-[560px] rounded-2xl border border-amber-400/50 bg-[var(--note)] px-3 py-2 text-[13.5px] shadow-sm">
                   <div className="mb-0.5 flex items-center gap-1.5 text-[11.5px] font-semibold text-amber-700 dark:text-amber-300">
                     <Lock size={11} /> Internal note · {m.authorName} · only your team can see this
                   </div>
@@ -166,7 +166,7 @@ export function MessageList({ messages: all, side, onRetry, wallpaper = true, vi
           <Fragment key={m.id}>
             {newDay && <DayDivider ts={m.createdAt} />}
             <div className={`flex ${mine ? "justify-end" : "justify-start"} ${tail ? "mt-2" : "mt-0.5"} px-[4%] animate-pop`}>
-              <div className={`relative max-w-[85%] rounded-lg px-2.5 pt-1.5 pb-1 text-[14px] leading-[19px] shadow-[0_1px_0.5px_rgba(11,20,26,0.13)] md:max-w-[70%] ${bg} ${m.status === "failed" ? "ring-1 ring-rose-400" : ""} ${m.disappeared ? "opacity-60" : ""}`}>
+              <div className={`relative max-w-[85%] rounded-2xl px-3 pt-1.5 pb-1 text-[14px] leading-[19px] shadow-[0_1px_2px_rgba(0,0,0,0.12)] md:max-w-[70%] ${tail && !bare ? (mine ? "rounded-tr-md" : "rounded-tl-md") : ""} ${bg} ${m.status === "failed" ? "ring-1 ring-rose-400" : ""} ${m.disappeared ? "opacity-60" : ""}`}>
                 {m.disappeared && <div className="mb-0.5 flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-300"><EyeOff size={12} /> Disappeared for everyone else · admins only (audit)</div>}
                 {tail && <div className={`mb-0.5 text-[12px] font-semibold ${mine ? "text-[var(--accent-strong)]" : isReseller ? "text-sky-600 dark:text-sky-300" : "text-[var(--accent-strong)]"}`}>{m.authorName}</div>}
                 {m.text && <RichText text={m.text} />}
@@ -195,7 +195,7 @@ export function MessageList({ messages: all, side, onRetry, wallpaper = true, vi
 function DayDivider({ ts }: { ts: number }) {
   return (
     <div className="sticky top-1 z-[5] my-3 flex justify-center">
-      <span className="rounded-lg bg-[var(--bubble-in)] px-3 py-1 text-[12px] text-[var(--muted)] shadow-sm">{dayDivider(ts)}</span>
+      <span className="glass-bar rounded-full border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--muted)]">{dayDivider(ts)}</span>
     </div>
   );
 }
@@ -203,9 +203,9 @@ function DayDivider({ ts }: { ts: number }) {
 export type ComposerMode = { id: string; label: string; hint: string; kind: "customer" | "reseller" | "internal" };
 
 const MODE_STYLE = {
-  customer: { ring: "ring-[var(--accent)]", chip: "bg-[var(--accent)] text-white", icon: MessageCircle, btn: "bg-[var(--accent)]" },
-  reseller: { ring: "ring-sky-500", chip: "bg-sky-600 text-white", icon: Store, btn: "bg-sky-600" },
-  internal: { ring: "ring-amber-400", chip: "bg-amber-400 text-amber-950", icon: StickyNote, btn: "bg-amber-500" },
+  customer: { ring: "ring-[var(--accent)]/60", chip: "chip-on", icon: MessageCircle, btn: "bg-[var(--accent)] text-white shadow-[0_4px_14px_rgba(47,127,224,0.4)] hover:bg-[var(--accent-strong)]" },
+  reseller: { ring: "ring-sky-500/60", chip: "bg-sky-600 text-white", icon: Store, btn: "bg-sky-600 text-white" },
+  internal: { ring: "ring-amber-400/70", chip: "bg-amber-400 text-amber-950", icon: StickyNote, btn: "bg-amber-500 text-white" },
 };
 
 /** Composer that makes the recipient explicit BEFORE sending (brief: communication clarity). */
@@ -277,12 +277,12 @@ export function Composer({ modes, onSend, savedReplies = [], disabled, allowView
     try { await onSend(mode.id, sticker, []); setEmoji(false); } catch {} finally { setBusy(false); }
   };
 
-  if (disabled) return <div className="border-t border-[var(--border)] bg-[var(--panel-2)] px-4 py-3 text-center text-[13px] text-[var(--muted)]">{disabled}</div>;
+  if (disabled) return <div className="glass-bar border-t border-[var(--border)] px-4 py-3 text-center text-[13px] text-[var(--muted)]">{disabled}</div>;
 
   return (
-    <div className="relative border-t border-[var(--border)] bg-[var(--panel-2)] px-3 pt-2 pb-2.5">
+    <div className="glass-bar relative border-t border-[var(--border)] px-3 pt-2 pb-2.5">
       {open && (
-        <div className="animate-pop absolute right-3 bottom-full left-3 z-20 mb-2 max-w-xl overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)] shadow-xl">
+        <div className="animate-pop absolute right-3 bottom-full left-3 z-20 mb-2 max-w-xl overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--panel-solid)] shadow-xl">
           <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2 text-[13px]">
             <span className="flex items-center gap-1.5 font-semibold"><Zap size={14} className="text-[var(--accent)]" /> Saved replies</span>
             <button onClick={() => { setShowSaved(false); if (slash !== null) setText(""); }} className="text-[var(--muted)]"><X size={15} /></button>
@@ -306,7 +306,7 @@ export function Composer({ modes, onSend, savedReplies = [], disabled, allowView
           const Icon = s.icon;
           return (
             <button key={m.id} onClick={() => setModeId(m.id)}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[12.5px] font-medium transition ${m.id === mode.id ? s.chip : "bg-[var(--panel)] text-[var(--muted)] hover:text-[var(--text)]"}`}>
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[12.5px] font-medium transition ${m.id === mode.id ? s.chip : "border border-[var(--border)] bg-[var(--input)] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"}`}>
               <Icon size={13} /> {m.label}
             </button>
           );
@@ -317,7 +317,7 @@ export function Composer({ modes, onSend, savedReplies = [], disabled, allowView
       {files.length > 0 && (
         <div className="mb-1.5 flex flex-wrap gap-1.5">
           {files.map((f) => (
-            <span key={f.id} className="flex items-center gap-1 rounded-full bg-[var(--panel)] px-2.5 py-1 text-[12px]">
+            <span key={f.id} className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--input)] px-2.5 py-1 text-[12px]">
               <Paperclip size={12} /> {f.name}
               <button onClick={() => setFiles((x) => x.filter((y) => y.id !== f.id))}><X size={12} /></button>
             </span>
@@ -325,7 +325,7 @@ export function Composer({ modes, onSend, savedReplies = [], disabled, allowView
           {viewOnceOk && (
             <button type="button" onClick={() => setViewOnce((v) => !v)} aria-pressed={viewOnce}
               title="View once: they can open it one time, then it's gone from the chat (admins keep it for the audit log)"
-              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium ${viewOnce ? "bg-[var(--accent)] text-white" : "bg-[var(--panel)] text-[var(--muted)] hover:text-[var(--text)]"}`}>
+              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium ${viewOnce ? "bg-[var(--accent)] text-white" : "border border-[var(--border)] bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)]"}`}>
               <CircleDot size={13} /> View once{viewOnce ? ": on" : ""}
             </button>
           )}
@@ -333,7 +333,7 @@ export function Composer({ modes, onSend, savedReplies = [], disabled, allowView
       )}
 
       <div className="flex items-end gap-2">
-        <div className={`flex min-w-0 flex-1 items-end gap-1 rounded-xl bg-[var(--input)] px-1.5 ring-2 ${st.ring}`}>
+        <div className={`flex min-w-0 flex-1 items-end gap-1 rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-1.5 ring-1 backdrop-blur-md ${st.ring}`}>
           <button type="button" onClick={() => setEmoji((x) => !x)} title="Emoji & stickers" aria-label="Emoji and stickers" aria-expanded={emoji}
             className={`p-2 ${emoji ? "text-[var(--accent-strong)]" : "text-[var(--muted)] hover:text-[var(--text)]"}`}><Smile size={19} /></button>
           <button onClick={() => fileRef.current?.click()} title="Attach a photo, video or document" aria-label="Attach file" className="p-2 text-[var(--muted)] hover:text-[var(--text)]">{uploading ? <Loader2 size={19} className="animate-spin" /> : <Paperclip size={19} />}</button>
@@ -365,7 +365,7 @@ export function Composer({ modes, onSend, savedReplies = [], disabled, allowView
           {mode.kind !== "internal" && <VoiceRecorder onRecorded={addFile} disabled={uploading} />}
         </div>
         <button onClick={send} disabled={!canSend || busy || uploading} title="Send"
-          className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full text-white transition disabled:opacity-40 ${st.btn}`}>
+          className={`flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full transition disabled:opacity-40 ${st.btn}`}>
           {busy ? <Loader2 size={18} className="animate-spin" /> : mode.kind === "internal" ? <StickyNote size={18} /> : <SendHorizontal size={19} />}
         </button>
       </div>

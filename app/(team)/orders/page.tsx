@@ -49,7 +49,7 @@ function Page() {
           </div>
           {view === "orders" && (
             <>
-              <label className="flex max-w-md items-center gap-2 rounded-lg border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2">
+              <label className="flex max-w-md items-center gap-2 rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2">
                 <Search size={16} className="text-[var(--muted)]" />
                 <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search order, customer, reseller, item…" className="w-full bg-transparent text-sm outline-none" />
               </label>
@@ -59,10 +59,10 @@ function Page() {
         </div>
         <div className="px-4 md:px-6">
           {view === "orders" ? (list.length === 0 ? <Empty icon={Package} title="No orders" text="Orders are created when a quote is sent and confirmed when the customer approves." /> : (
-            <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]">
+            <div className="glass overflow-hidden rounded-[20px]">
               <div className="scroll-thin overflow-x-auto">
                 <table className="w-full min-w-[820px] text-[13.5px]">
-                  <thead className="bg-[var(--panel-2)] text-left text-[12px] text-[var(--muted)]">
+                  <thead className="bg-[var(--hover)] text-left text-[12px] text-[var(--muted)]">
                     <tr>{["Order", "Customer", "Items", "Reseller", "Total", "Delivery", "Status", "Created"].map((h) => <th key={h} className="px-4 py-2.5 font-medium">{h}</th>)}</tr>
                   </thead>
                   <tbody>
@@ -92,13 +92,13 @@ function Page() {
                       <div className="mb-2 text-[var(--muted)]">{db.resellers.find((x) => x.id === qt.resellerId)?.name} · margin {qt.markupPct}%</div>
                       <ol className="space-y-1.5">
                         {[...qt.revisions].reverse().map((v) => (
-                          <li key={v.rev} className="flex flex-wrap justify-between gap-2 rounded-lg bg-[var(--panel-2)] px-3 py-2">
+                          <li key={v.rev} className="flex flex-wrap justify-between gap-2 rounded-[14px] bg-[var(--panel-2)] px-3 py-2">
                             <span><b>Rev {v.rev}</b> · {v.items.map((i) => `${i.name} ×${i.qty} @ ₹${i.unitPrice}`).join(", ")}</span>
                             <span className="text-[var(--muted)]">{rupees(v.items.reduce((s, i) => s + i.qty * i.unitPrice, 0))} · {v.deliveryEstimate} · valid to {new Date(v.validUntil).toLocaleDateString()}</span>
                           </li>
                         ))}
                       </ol>
-                      {qt.approvedAt && <p className="mt-2 text-[12.5px] text-emerald-600 dark:text-emerald-300">Approved {dateTime(qt.approvedAt)} · recorded by {db.users.find((u) => u.id === qt.approvedById)?.name}</p>}
+                      {qt.approvedAt && <p className="mt-2 text-[12.5px] text-[var(--success)]">Approved {dateTime(qt.approvedAt)} · recorded by {db.users.find((u) => u.id === qt.approvedById)?.name}</p>}
                     </div>
                   </Card>
                 );
@@ -109,8 +109,8 @@ function Page() {
       </div>
 
       {sel && (
-        <aside className="animate-slide fixed inset-0 z-30 overflow-y-auto bg-[var(--panel-2)] xl:static xl:w-[400px] xl:shrink-0 xl:border-l xl:border-[var(--border)]">
-          <div className="flex items-center justify-between bg-[var(--panel)] px-4 py-3">
+        <aside className="animate-slide fixed inset-0 z-30 overflow-y-auto bg-[var(--bg-app)] xl:static xl:w-[400px] xl:shrink-0 xl:border-l xl:border-[var(--border)] xl:bg-transparent">
+          <div className="glass-bar sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
             <span className="font-semibold">Order {sel.ref}</span>
             <button onClick={() => router.replace("/orders", { scroll: false })} className="rounded-full p-1 text-[var(--muted)] hover:bg-[var(--hover)]"><X size={18} /></button>
           </div>

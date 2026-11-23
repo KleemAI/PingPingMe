@@ -66,7 +66,7 @@ export default function OverviewPage() {
       </div>
 
       {o.failedSends.length > 0 && (
-        <Link href="/inbox/customer?filter=failed" className="mx-4 mt-3 flex items-center gap-2 rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 md:mx-6 dark:text-rose-300">
+        <Link href="/inbox/customer?filter=failed" className="mx-4 mt-3 flex items-center gap-2 rounded-[14px] border border-rose-400/40 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-700 md:mx-6 dark:text-rose-300">
           <Send size={16} /> {o.failedSends.length} message{o.failedSends.length > 1 ? "s" : ""} failed to send — open to retry
         </Link>
       )}
@@ -74,14 +74,14 @@ export default function OverviewPage() {
       <div className="mt-5 grid gap-4 px-4 md:px-6 xl:grid-cols-3">
         {/* Reporting */}
         <Card title="Performance" className="xl:col-span-2">
-          <div className="grid grid-cols-2 gap-px bg-[var(--border)] sm:grid-cols-4">
+          <div className="grid grid-cols-2 border-b border-[var(--border)] sm:grid-cols-4">
             {[
               ["Avg first response", report.frt ? duration(report.frt) : "—"],
               ["Avg request resolution", report.reqRes ? duration(report.reqRes) : "—"],
               ["Avg case resolution", report.caseRes ? duration(report.caseRes) : "—"],
               ["Order value (excl. cancelled)", rupees(report.value)],
             ].map(([k, v]) => (
-              <div key={k} className="bg-[var(--panel)] p-4">
+              <div key={k} className="border-r border-[var(--border)] p-4 last:border-r-0">
                 <div className="text-xl font-bold">{v}</div>
                 <div className="text-[12px] text-[var(--muted)]">{k}</div>
               </div>
@@ -96,7 +96,7 @@ export default function OverviewPage() {
                     <Avatar name={u.name} size={28} />
                     <div className="min-w-0 flex-1">
                       <div className="flex justify-between text-[13px]"><span className="truncate">{u.name}</span><span className="text-[var(--muted)]">{chats + requests + cases}</span></div>
-                      <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-[var(--panel-2)]">
+                      <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-[var(--active)]">
                         <div className="bg-sky-500" style={{ width: `${(chats / maxWork) * 100}%` }} title={`${chats} chats`} />
                         <div className="bg-amber-400" style={{ width: `${(requests / maxWork) * 100}%` }} title={`${requests} requests`} />
                         <div className="bg-rose-500" style={{ width: `${(cases / maxWork) * 100}%` }} title={`${cases} cases`} />
@@ -117,7 +117,7 @@ export default function OverviewPage() {
                 {report.orderCounts.map(({ s, n }) => (
                   <Link key={s} href={`/orders?status=${s}`} className="flex items-center gap-3 text-[13px] hover:opacity-80">
                     <span className="w-32 shrink-0">{ORDER_STATUS[s].label}</span>
-                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--panel-2)]">
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--active)]">
                       <div className="h-full rounded-full bg-[var(--accent)]" style={{ width: `${(n / Math.max(1, db.orders.length)) * 100}%` }} />
                     </div>
                     <span className="w-5 text-right text-[var(--muted)]">{n}</span>

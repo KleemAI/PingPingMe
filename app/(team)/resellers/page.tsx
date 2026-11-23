@@ -41,7 +41,7 @@ function Page() {
       <div className={`${selected ? "hidden xl:block" : ""} min-w-0 flex-1 overflow-y-auto pb-10`}>
         <PageHeader title="Resellers" subtitle="Your partner network — directory, verification, availability and workload." actions={isAdmin && <Button onClick={() => setEdit("new")}><Plus size={16} /> Add reseller</Button>} />
         <div className="flex flex-wrap items-center gap-2 px-4 pb-3 md:px-6">
-          <label className="flex min-w-[220px] flex-1 items-center gap-2 rounded-lg border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2">
+          <label className="flex min-w-[220px] flex-1 items-center gap-2 rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2">
             <Search size={16} className="text-[var(--muted)]" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, contact, category, area…" className="w-full bg-transparent text-sm outline-none" />
           </label>
@@ -60,7 +60,7 @@ function Page() {
           <div className="grid gap-3 px-4 md:grid-cols-2 md:px-6 2xl:grid-cols-3">
             {list.map((r) => (
               <button key={r.id} onClick={() => router.replace(`/resellers?r=${r.id}`, { scroll: false })}
-                className={`rounded-xl border bg-[var(--panel)] p-4 text-left transition hover:shadow-md ${selected?.id === r.id ? "border-[var(--accent)]" : "border-[var(--border)]"}`}>
+                className={`glass rounded-[20px] p-4 text-left transition hover:-translate-y-0.5 ${selected?.id === r.id ? "!border-[var(--accent)]" : ""}`}>
                 <div className="flex items-start gap-3">
                   <Avatar name={r.name} size={44} />
                   <div className="min-w-0 flex-1">
@@ -101,8 +101,8 @@ function Detail({ r, onClose, onEdit }: { r: Reseller; onClose: () => void; onEd
   const portalUser = db.users.find((u) => u.resellerId === r.id);
 
   return (
-    <aside className="animate-slide fixed inset-0 z-30 overflow-y-auto bg-[var(--panel-2)] xl:static xl:w-[420px] xl:shrink-0 xl:border-l xl:border-[var(--border)]">
-      <div className="flex items-center justify-between bg-[var(--panel)] px-4 py-3">
+    <aside className="animate-slide fixed inset-0 z-30 overflow-y-auto bg-[var(--bg-app)] xl:static xl:w-[420px] xl:shrink-0 xl:border-l xl:border-[var(--border)] xl:bg-transparent">
+      <div className="glass-bar sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
         <span className="font-semibold">Reseller profile</span>
         <button onClick={onClose} className="rounded-full p-1 text-[var(--muted)] hover:bg-[var(--hover)]"><X size={18} /></button>
       </div>
@@ -145,13 +145,13 @@ function Detail({ r, onClose, onEdit }: { r: Reseller; onClose: () => void; onEd
                 </Field>
               </div>
             )}
-            {r.status === "suspended" && <p className="mt-3 rounded-lg bg-rose-500/10 p-2.5 text-[12.5px] text-rose-700 dark:text-rose-300">Suspended partners can&apos;t receive new assignments. Their open requests stay visible below for reassignment or closure.</p>}
+            {r.status === "suspended" && <p className="mt-3 rounded-[14px] bg-rose-500/10 p-2.5 text-[12.5px] text-rose-700 dark:text-rose-300">Suspended partners can&apos;t receive new assignments. Their open requests stay visible below for reassignment or closure.</p>}
           </div>
         </Card>
         <Card title="Response performance">
-          <div className="grid grid-cols-4 gap-px bg-[var(--border)] text-center">
+          <div className="grid grid-cols-4 text-center">
             {[["Assigned", as.length], ["Accepted", as.filter((a) => a.respondedAt && a.outcome !== "declined").length], ["Declined", as.filter((a) => a.outcome === "declined").length], ["Avg reply", avgResp ? duration(avgResp) : "—"]].map(([k, v]) => (
-              <div key={k as string} className="bg-[var(--panel)] p-3"><div className="text-lg font-bold">{v}</div><div className="text-[11px] text-[var(--muted)]">{k}</div></div>
+              <div key={k as string} className="border-r border-[var(--border)] p-3 last:border-r-0"><div className="text-lg font-bold">{v}</div><div className="text-[11px] text-[var(--muted)]">{k}</div></div>
             ))}
           </div>
         </Card>
@@ -224,7 +224,7 @@ function EditModal({ r, onClose }: { r: Reseller | null; onClose: () => void }) 
 }
 
 const Chip = ({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) => (
-  <button type="button" onClick={onClick} className={`rounded-full border px-3 py-1 text-[12.5px] ${on ? "border-[var(--accent)] bg-[var(--accent-soft)] font-medium text-[var(--accent-strong)]" : "border-[var(--border-strong)] text-[var(--muted)]"}`}>{children}</button>
+  <button type="button" onClick={onClick} className={`rounded-full border px-3 py-1 text-[12.5px] transition ${on ? "chip-on border-transparent font-semibold" : "border-[var(--border-strong)] bg-[var(--input)] text-[var(--text)] hover:bg-[var(--active)]"}`}>{children}</button>
 );
 
 export default function ResellersPage() {

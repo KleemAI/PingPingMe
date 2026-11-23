@@ -28,7 +28,7 @@ export function SearchChips({ value, onChange }: { value: SearchType; onChange: 
     <div className="scroll-thin flex gap-1.5 overflow-x-auto px-3 pb-2" role="tablist" aria-label="Search in">
       {SEARCH_FILTERS.map((f) => (
         <button key={f.id} role="tab" aria-selected={value === f.id} onClick={() => onChange(f.id)}
-          className={`shrink-0 rounded-full px-3 py-1 text-[12.5px] transition ${value === f.id ? "bg-[var(--accent-soft)] font-semibold text-[var(--accent-strong)]" : "bg-[var(--panel-2)] text-[var(--muted)] hover:text-[var(--text)]"}`}>
+          className={`shrink-0 rounded-full border px-3.5 py-1 text-[12.5px] transition ${value === f.id ? "chip-on border-transparent font-semibold" : "border-[var(--border-strong)] bg-[var(--input)] text-[var(--muted)] hover:bg-[var(--active)] hover:text-[var(--text)]"}`}>
           {f.label}
         </button>
       ))}
@@ -92,7 +92,7 @@ export function SearchResults({ hits, searching, onOpen, empty }: { hits: Search
               {h.at ? <span className="shrink-0 text-[11.5px] text-[var(--muted)]">{listTime(h.at)}</span> : null}
             </div>
             <div className="flex items-center gap-1.5 text-[12.5px] text-[var(--muted)]">
-              <span className="flex shrink-0 items-center gap-1 rounded-full bg-[var(--panel-2)] px-1.5 py-px text-[10.5px]"><B.icon size={10} /> {B.label}</span>
+              <span className="flex shrink-0 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--hover)] px-1.5 py-px text-[10.5px]"><B.icon size={10} /> {B.label}</span>
               <span className="truncate">{h.subtitle ? plain(h.subtitle) : ""}</span>
             </div>
           </div>

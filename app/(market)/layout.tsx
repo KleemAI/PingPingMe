@@ -15,18 +15,18 @@ function MarketShell({ children }: { children: React.ReactNode }) {
   const { state } = useStore();
   const { dark, toggle } = useDark();
   if (!state) {
-    return <div className="flex h-dvh items-center justify-center bg-[var(--panel)]"><Loader2 className="animate-spin text-[var(--accent)]" size={32} /></div>;
+    return <div className="flex h-dvh items-center justify-center"><Loader2 className="animate-spin text-[var(--accent)]" size={32} /></div>;
   }
   const me = state.me;
   const customer = state.scope === "customer";
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-[var(--bg-app)]">
-      <header className="shrink-0 border-b border-[var(--border)] bg-[var(--panel)]">
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <header className="glass-bar relative z-30 shrink-0 border-b border-[var(--border)]">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent)] text-white"><MessagesSquare size={19} /></span>
+          <span className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[var(--accent)] text-white shadow-[var(--pill-glow)]"><MessagesSquare size={19} /></span>
           <span className="text-[15px] font-bold">Business Messaging</span>
           {state.scope === "reseller" && (
-            <Link href="/portal" className="ml-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] text-[var(--muted)] hover:bg-[var(--hover)]"><LayoutDashboard size={15} /> Reseller portal</Link>
+            <Link href="/portal" className="ml-2 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"><LayoutDashboard size={15} /> Reseller portal</Link>
           )}
           <div className="ml-auto flex items-center gap-2">
             {customer && (me.verified

@@ -25,10 +25,10 @@ export default function CustomerRequests() {
   return (
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-5">
       <div>
-        <h1 className="text-[22px] font-bold">My requests</h1>
-        <p className="text-[13.5px] text-[var(--muted)]">Price requests you sent. Quotes and updates arrive in <Link href="/c/chat" className="font-medium text-[var(--accent-strong)] underline">Chat with us</Link>.</p>
+        <h1 className="text-[22px] font-bold tracking-tight">My requests</h1>
+        <p className="text-[13.5px] text-[var(--muted)]">Price requests you sent. Quotes and updates arrive in <Link href="/c/chat" className="font-medium text-[var(--accent)] underline">Chat with us</Link>.</p>
       </div>
-      <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]">
+      <div className="glass overflow-hidden rounded-[20px]">
         {cs.requests.length === 0 && <Empty icon={ClipboardList} title="No requests yet" text="Open Products & services and tap “Ask for price”." />}
         {cs.requests.map((r) => (
           <div key={r.id} className="flex flex-wrap items-center gap-3 border-b border-[var(--border)] px-4 py-3 last:border-0">

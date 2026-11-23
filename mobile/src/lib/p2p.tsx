@@ -18,6 +18,23 @@ export const mmss = (ms: number) => {
 };
 export const completionText = (m: Merchant) => (m.trades + m.cancelled ? pct((m.trades / (m.trades + m.cancelled)) * 100) : "—");
 export const positiveText = (m: Merchant) => (m.ratingsTotal ? pct((m.ratingsPos / m.ratingsTotal) * 100) : "—");
+/** "45 sec", "8 min", "3.2 hours", "3.2 days" — how fast a seller delivers after being paid (or "New seller"). */
+export function deliveryText(m?: Merchant) {
+  const sec = m?.avgReleaseSec;
+  if (!m?.sales || sec === undefined) return "New seller";
+  if (sec < 90) return `${Math.max(1, Math.round(sec))} sec`;
+  if (sec < 90 * 60) return `${Math.round(sec / 60)} min`;
+  if (sec < 36 * 3600) return `${(sec / 3600).toFixed(1).replace(/\.0$/, "")} hours`;
+  return `${(sec / 86400).toFixed(1).replace(/\.0$/, "")} days`;
+}
+/** "👍 96% · 25 ratings" for a product, or "No ratings yet". */
+export const productRating = (a: { ratingsPos?: number; ratingsTotal?: number }) =>
+  a.ratingsTotal ? `👍 ${Math.round(((a.ratingsPos ?? 0) / a.ratingsTotal) * 100)}% · ${a.ratingsTotal} rating${a.ratingsTotal === 1 ? "" : "s"}` : "No ratings yet";
+/** Lowest price of a listing (its cheapest plan that isn't sold out). */
+export const fromPrice = (a: { price: number; plans?: { price: number; soldOut?: boolean }[] }) => {
+  const open = (a.plans ?? []).filter((x) => !x.soldOut);
+  return open.length ? Math.min(...open.map((x) => x.price)) : a.price;
+};
 export const SELL_BLOCKED = "Selling opens once our team has verified your account. You can buy right away.";
 export const METHODS = ["UPI", "IMPS", "Bank transfer"] as const;
 

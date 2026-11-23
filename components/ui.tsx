@@ -11,7 +11,7 @@ const TONES = {
   gray: "bg-slate-500/12 text-slate-600 dark:text-slate-300",
   blue: "bg-sky-500/12 text-sky-700 dark:text-sky-300",
   amber: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
-  green: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+  green: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300", // "done / paid" stays green on purpose
   red: "bg-rose-500/15 text-rose-700 dark:text-rose-300",
   violet: "bg-violet-500/15 text-violet-700 dark:text-violet-300",
   teal: "bg-teal-500/15 text-teal-700 dark:text-teal-300",
@@ -38,18 +38,18 @@ export function Avatar({ name, size = 40, group, community, announcement }: { na
 type BtnProps = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "ghost" | "outline" | "danger"; size?: "sm" | "md" };
 export function Button({ variant = "primary", size = "md", className = "", ...rest }: BtnProps) {
   const v = {
-    primary: "bg-[var(--accent)] text-white hover:brightness-95",
+    primary: "bg-[var(--primary)] text-[var(--on-primary)] hover:brightness-90",
     ghost: "text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]",
-    outline: "border border-[var(--border-strong)] text-[var(--text)] hover:bg-[var(--hover)]",
-    danger: "bg-[#d93a4a] text-white hover:brightness-95",
+    outline: "glass-pill hover:brightness-110",
+    danger: "bg-[var(--danger)] text-white hover:brightness-95",
   }[variant];
-  const s = size === "sm" ? "h-8 px-3 text-[13px]" : "h-9 px-4 text-sm";
-  return <button {...rest} className={`inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${v} ${s} ${className}`} />;
+  const s = size === "sm" ? "h-8 px-3.5 text-[13px] rounded-xl" : "h-10 px-5 text-sm rounded-[14px]";
+  return <button {...rest} className={`inline-flex items-center justify-center gap-1.5 font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${v} ${s} ${className}`} />;
 }
 
 export function Card({ children, className = "", title, action }: { children: React.ReactNode; className?: string; title?: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <section className={`rounded-xl border border-[var(--border)] bg-[var(--panel)] ${className}`}>
+    <section className={`glass rounded-[20px] ${className}`}>
       {title && (
         <header className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
           <h3 className="text-[14px] font-semibold">{title}</h3>
@@ -71,7 +71,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
   );
 }
 
-export const inputCls = "w-full rounded-lg border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20";
+export const inputCls = "w-full rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-3.5 py-2.5 text-sm outline-none placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/25";
 
 export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -83,9 +83,9 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} className={`animate-pop max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl bg-[var(--panel)] shadow-2xl sm:rounded-2xl ${wide ? "sm:max-w-2xl" : "sm:max-w-md"}`}>
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--panel)] px-5 py-3.5">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={ref} className={`animate-pop max-h-[92dvh] w-full overflow-y-auto rounded-t-[26px] border border-[var(--border)] bg-[var(--panel-solid)] shadow-2xl sm:rounded-[26px] ${wide ? "sm:max-w-2xl" : "sm:max-w-md"}`}>
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] bg-[var(--panel-solid)] px-5 py-3.5">
           <h2 className="text-[16px] font-semibold">{title}</h2>
           <button onClick={onClose} className="rounded-full p-1 text-[var(--muted)] hover:bg-[var(--hover)]"><X size={18} /></button>
         </header>
@@ -161,7 +161,7 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { id: 
     <div className="scroll-thin flex gap-1.5 overflow-x-auto">
       {tabs.map((t) => (
         <button key={t.id} onClick={() => onChange(t.id)}
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[13px] transition ${value === t.id ? "bg-[var(--accent-soft)] font-medium text-[var(--accent-strong)]" : "bg-[var(--panel-2)] text-[var(--muted)] hover:bg-[var(--active)]"}`}>
+          className={`flex shrink-0 items-center gap-1.5 rounded-full border px-4 py-1.5 text-[13.5px] transition ${value === t.id ? "chip-on border-transparent font-semibold" : "border-[var(--border-strong)] bg-[var(--input)] font-medium text-[var(--text)] hover:bg-[var(--active)]"}`}>
           {t.label}
           {t.count !== undefined && <span className="text-[11px] opacity-75">{t.count}</span>}
         </button>
@@ -172,8 +172,8 @@ export function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { id: 
 
 export function StatLink({ href, label, value, tone = "gray", icon: Icon, alert }: { href: string; label: string; value: number; tone?: Tone; icon: React.ComponentType<{ size?: number }>; alert?: boolean }) {
   return (
-    <Link href={href} className={`group flex items-center gap-3 rounded-xl border bg-[var(--panel)] p-4 transition hover:-translate-y-0.5 hover:shadow-md ${alert && value > 0 ? "border-rose-400/50" : "border-[var(--border)]"}`}>
-      <span className={`flex h-10 w-10 items-center justify-center rounded-lg ${TONES[tone]}`}><Icon size={19} /></span>
+    <Link href={href} className={`glass group flex items-center gap-3 rounded-[20px] p-4 transition hover:-translate-y-0.5 ${alert && value > 0 ? "!border-rose-400/50" : ""}`}>
+      <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${TONES[tone]}`}><Icon size={19} /></span>
       <span className="min-w-0">
         <span className="block text-2xl font-bold leading-tight">{value}</span>
         <span className="block truncate text-[12.5px] text-[var(--muted)] group-hover:text-[var(--text)]">{label}</span>

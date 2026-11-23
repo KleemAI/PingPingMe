@@ -27,13 +27,13 @@ function VerificationCard() {
       <div className="space-y-4 p-4">
         {me.verification !== "verified" && (
           <div className="space-y-2">
-            <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><Clock size={18} className="mt-0.5 shrink-0" />
+            <p className="flex items-start gap-2 rounded-[14px] border border-amber-400/40 bg-amber-500/10 px-3 py-2.5 text-amber-900 dark:text-amber-200"><Clock size={18} className="mt-0.5 shrink-0" />
               <span><strong>Not verified yet.</strong> You can buy straight away. To <strong>sell</strong> (post Sell ads or sell to buyers), our team verifies your account by hand first.</span></p>
             <p className="text-[13px] text-[var(--muted)]">Our team will contact you on your email to check your details. As soon as they mark you verified, selling opens here automatically — no need to sign in again.</p>
           </div>
         )}
         {me.verification === "verified" && (
-          <p className="flex items-start gap-2 rounded-lg bg-[var(--accent-soft)] px-3 py-2.5"><BadgeCheck size={18} className="mt-0.5 shrink-0 text-[var(--accent-strong)]" />
+          <p className="flex items-start gap-2 rounded-[14px] border border-[var(--accent)]/25 bg-[var(--accent-soft)] px-3 py-2.5"><BadgeCheck size={18} className="mt-0.5 shrink-0 text-[var(--accent-strong)]" />
             <span><strong>You are verified.</strong> You can now post Sell ads and sell to buyers.</span></p>
         )}
 
@@ -63,7 +63,7 @@ function PayToCard() {
         <Field label="UPI ID"><input value={f.upi} onChange={set("upi")} placeholder="name@bank" maxLength={100} className={`${inputCls} h-10`} /></Field>
         <Field label="Bank account (optional)" hint="e.g. HDFC ••4421 — bank name and last digits are enough"><input value={f.bank} onChange={set("bank")} maxLength={100} className={`${inputCls} h-10`} /></Field>
         <Field label="Account holder name"><input value={f.accountName} onChange={set("accountName")} maxLength={100} className={`${inputCls} h-10`} /></Field>
-        {msg && <p role={msg.ok ? "status" : "alert"} className={`text-[13.5px] font-medium ${msg.ok ? "text-[var(--accent-strong)]" : "text-rose-600"}`}>{msg.text}</p>}
+        {msg && <p role={msg.ok ? "status" : "alert"} className={`text-[13.5px] font-medium ${msg.ok ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>{msg.text}</p>}
         <Button type="submit" disabled={busy} className="!h-10">Save payment details</Button>
       </form>
     </Card>
@@ -83,8 +83,8 @@ export default function P2PProfile() {
           <p className="text-[13.5px] text-[var(--muted)]">{KIND_LABEL[me.kind]} · P2P member since {new Date(me.joinedAt).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}</p>
         </div>
         <div className="flex gap-2 text-[13px]">
-          <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 font-semibold text-[var(--accent-strong)]">Can buy</span>
-          <span className={`rounded-full px-3 py-1 font-semibold ${canSell ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]" : "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"}`}>{canSell ? "Can sell" : "Selling locked"}</span>
+          <span className="chip-on rounded-full px-3 py-1 font-semibold">Can buy</span>
+          <span className={`rounded-full px-3 py-1 font-semibold ${canSell ? "chip-on" : "border border-amber-400/40 bg-amber-500/10 text-amber-800 dark:text-amber-300"}`}>{canSell ? "Can sell" : "Selling locked"}</span>
         </div>
       </Card>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

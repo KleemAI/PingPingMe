@@ -17,7 +17,7 @@ export default function P2POrders() {
   const [busy, setBusy] = useState(false);
   const list = s.orders.filter((o) => (f === "all" ? true : f === "active" ? ACTIVE.includes(o.status) : o.status === f));
   return (
-    <View style={{ flex: 1, backgroundColor: c.screen }}>
+    <View style={{ flex: 1 }}>
       <Chips<F> value={f} onChange={setF} items={[
         { id: "active", label: "In progress", count: s.orders.filter((o) => ACTIVE.includes(o.status)).length },
         { id: "completed", label: "Completed", count: s.orders.filter((o) => o.status === "completed").length },

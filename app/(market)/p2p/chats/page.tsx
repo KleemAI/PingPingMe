@@ -17,7 +17,7 @@ export default function P2PChats() {
     <div className="space-y-4">
       <h1 className="text-[24px] font-bold">Order chats</h1>
       <p className="text-[14px] text-[var(--muted)]">Every P2P order has its own chat with the other person. Keep all payment talk here — it is the proof our team uses if there is an appeal.</p>
-      <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]">
+      <div className="glass overflow-hidden rounded-[20px]">
         {chats.length === 0 && <Empty icon={MessageSquare} title="No chats yet" text="A chat opens when you place or receive an order." />}
         {chats.map(({ o, last }) => {
           const other = merchant(myRole(o) === "buyer" ? o.sellerId : o.buyerId)!;

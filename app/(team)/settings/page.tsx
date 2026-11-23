@@ -23,7 +23,7 @@ export default function SettingsPage() {
         ]} />
       </div>
       <div className="max-w-4xl px-4 md:px-6">
-        {!isAdmin && tab !== "replies" && <p className="mb-3 flex items-center gap-2 rounded-lg bg-[var(--panel-2)] px-3 py-2 text-[13px] text-[var(--muted)]"><Lock size={14} /> View only — ask an admin to make changes.</p>}
+        {!isAdmin && tab !== "replies" && <p className="mb-3 flex items-center gap-2 rounded-[14px] bg-[var(--panel-2)] px-3 py-2 text-[13px] text-[var(--muted)]"><Lock size={14} /> View only — ask an admin to make changes.</p>}
         {tab === "team" && <TeamTab />}
         {tab === "channels" && <Channels />}
         {tab === "notifications" && <Notifications />}
@@ -54,7 +54,7 @@ function TeamTab() {
           {db.users.filter((u) => u.role !== "reseller").map((u) => (
             <li key={u.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
               <Avatar name={u.name} size={36} />
-              <div className="min-w-0 flex-1"><div className="font-medium">{u.name} {u.id === team!.me.id && <Pill tone="green">you</Pill>} {!u.active && <Pill tone="red">disabled</Pill>}</div><div className="text-[12.5px] text-[var(--muted)]">{u.email}</div></div>
+              <div className="min-w-0 flex-1"><div className="font-medium">{u.name} {u.id === team!.me.id && <Pill tone="blue">you</Pill>} {!u.active && <Pill tone="red">disabled</Pill>}</div><div className="text-[12.5px] text-[var(--muted)]">{u.email}</div></div>
               <select disabled={!isAdmin || u.id === team!.me.id} className={`${inputCls} w-40`} value={u.role} onChange={(e) => act("user.update", { id: u.id, role: e.target.value }, "Role updated")}>
                 <option value="admin">Owner / admin</option><option value="agent">Operations agent</option>
               </select>
@@ -113,7 +113,7 @@ function Channels() {
 
 function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
-    <button disabled={disabled} onClick={() => onChange(!on)} className={`relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-50 ${on ? "bg-[var(--accent)]" : "bg-slate-400/50"}`}>
+    <button disabled={disabled} onClick={() => onChange(!on)} className={`relative h-6 w-11 shrink-0 rounded-full border border-[var(--border)] transition disabled:opacity-50 ${on ? "bg-[var(--accent)]" : "bg-[var(--active)]"}`}>
       <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${on ? "left-[22px]" : "left-0.5"}`} />
     </button>
   );

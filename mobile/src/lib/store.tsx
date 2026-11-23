@@ -5,7 +5,8 @@ import * as Sharing from "expo-sharing";
 import type { AppState as ServerState, Attachment, CustomerState, ResellerState, TeamState } from "./types";
 import { io, type Socket } from "socket.io-client";
 import { storage } from "./storage";
-import { shrinkPhoto } from "./media";
+import { formFile, shrinkPhoto } from "./media";
+import { emitOrderAlert, type OrderAlert } from "./orderAlerts";
 
 /** A sign-up code was emailed. `devCode` only while the server has no email set up (testing). */
 export type CodeSent = { email: string; retryIn: number; devCode?: string };
@@ -147,6 +148,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       socket = io(origin, { auth: { token }, transports: ["websocket"], reconnectionDelayMax: 10_000 });
       socket.on("ready", () => { live = true; refresh(); });
       socket.on("changed", () => { if (active) refresh(); });
+      socket.on("p2p_order", (o: OrderAlert) => emitOrderAlert(o));
       socket.on("disconnect", () => { live = false; });
       socket.on("auth_error", (e: { message?: string }) => { toast(e?.message ?? "Session expired — please sign in again", "error"); clearSession(); });
     }
@@ -261,13 +263,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     const f = await shrinkPhoto(picked); // photos: 1080 px JPEG before they leave the phone
     const fd = new FormData();
     if (Platform.OS === "web" && f.file) fd.append("file", f.file, f.name);
-    else fd.append("file", { uri: f.uri, name: f.name, type: f.mimeType ?? "application/octet-stream" } as unknown as Blob);
+    else fd.append("file", formFile({ uri: f.uri }, f.name, f.mimeType ?? "application/octet-stream"));
     let res: Response;
     try {
       res = await call(`${API}/files`, { method: "POST", body: fd });
     } catch {
-      toast("No connection to the server", "error");
-      throw new Error("offline");
+      // one more try: a dropped connection (server restarting, flaky Wi-Fi / tunnel) often works the second time
+      await new Promise((r) => setTimeout(r, 1500));
+      try {
+        res = await call(`${API}/files`, { method: "POST", body: fd });
+      } catch (e) {
+        toast(`Couldn't upload ${f.name} — no connection to the server${e instanceof Error && e.message ? ` (${e.message})` : ""}`, "error");
+        throw new Error("offline");
+      }
     }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) { toast(data.error ?? "Upload failed", "error"); throw new Error(data.error); }

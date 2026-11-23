@@ -42,7 +42,7 @@ export default function MyAds() {
   return (
     <div className="space-y-5">
       {!canSell && (
-        <div role="note" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[14px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+        <div role="note" className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-[14px] text-amber-900 dark:text-amber-200">
           <span>
             <strong>Selling is locked for now.</strong>{" "}
             You can post Buy ads. Sell ads open as soon as our team has verified your account — there is nothing for you to fill in.
@@ -51,7 +51,7 @@ export default function MyAds() {
         </div>
       )}
       {toRelease.map((o) => (
-        <Link key={o.id} href={`/p2p/order/${o.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[14px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+        <Link key={o.id} href={`/p2p/order/${o.id}`} className="flex flex-wrap items-center justify-between gap-2 rounded-[14px] border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-[14px] text-amber-900 transition hover:bg-amber-500/15 dark:text-amber-200">
           <span><strong>{o.ref} is paid.</strong> {s.merchants.find((m) => m.id === o.buyerId)?.name} says they sent {inr(o.amount)} — check your account and release {o.qty} × {o.product}.</span>
           <span className="font-semibold">Review order →</span>
         </Link>
@@ -67,13 +67,13 @@ export default function MyAds() {
       <div className="flex flex-wrap items-start gap-5">
         <section className="min-w-0 flex-[999_1_520px] space-y-3">
           <h1 className="text-[22px] font-bold">My ads</h1>
-          {toggleErr && <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-[13.5px] font-medium text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">{toggleErr}</p>}
+          {toggleErr && <p role="alert" className="rounded-[14px] border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-[13.5px] font-medium text-[var(--danger)]">{toggleErr}</p>}
           {mine.length === 0 && <Card><Empty icon={Megaphone} title="No ads yet" text="Post your first ad with the form." /></Card>}
           {mine.map((a) => (
             <Card key={a.id} className="flex flex-wrap items-center gap-4 p-4">
               <div className="min-w-[200px] flex-1">
                 <div className="flex items-center gap-2">
-                  <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${a.side === "sell" ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]" : "bg-sky-500/12 text-sky-700 dark:text-sky-300"}`}>{a.side === "sell" ? "Sell" : "Buy"}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-semibold ${a.side === "sell" ? "chip-on" : "border border-[var(--border-strong)] text-[var(--text)]"}`}>{a.side === "sell" ? "Sell" : "Buy"}</span>
                   <span className="text-[15px] font-semibold">{a.product}</span>
                 </div>
                 <div className="mt-1 text-[12.5px] text-[var(--muted)]">Limit {inr(a.minAmount)} – {inr(a.maxAmount)} · {a.payments.join(", ")} · pay within {a.payWindowMin} min</div>
@@ -83,7 +83,7 @@ export default function MyAds() {
                 <div className="text-[12.5px] text-[var(--muted)]">{a.availableQty} available · {held(a.id)} held</div>
               </div>
               <button onClick={async () => { const r = await toggleAd(a.id); setToggleErr(r.ok ? "" : r.error); }} aria-pressed={a.online}
-                className={`ml-auto min-h-10 min-w-24 rounded-full px-4 text-[13.5px] font-semibold ${a.online ? "bg-[var(--accent)] text-white" : "border border-[var(--border-strong)] text-[var(--muted)]"}`}>
+                className={`ml-auto min-h-10 min-w-24 rounded-full px-4 text-[13.5px] font-semibold transition ${a.online ? "bg-[var(--accent)] text-white shadow-[var(--pill-glow)]" : "border border-[var(--border-strong)] text-[var(--muted)] hover:bg-[var(--hover)]"}`}>
                 {a.online ? "Online" : "Offline"}
               </button>
             </Card>
@@ -98,8 +98,8 @@ export default function MyAds() {
               {(["sell", "buy"] as const).map((x) => {
                 const off = x === "sell" && !canSell;
                 return (
-                  <label key={x} title={off ? SELL_BLOCKED : undefined} className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border text-[14.5px] capitalize ${off ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${f.side === x ? "border-[var(--accent-strong)] bg-[var(--accent-soft)] font-semibold" : "border-[var(--border-strong)]"}`}>
-                    <input type="radio" name="side" disabled={off} checked={f.side === x} onChange={() => set({ side: x })} className="accent-[var(--accent-strong)]" />{x}{off ? " (verify first)" : ""}
+                  <label key={x} title={off ? SELL_BLOCKED : undefined} className={`flex min-h-11 flex-1 items-center justify-center gap-2 rounded-[14px] border-[1.5px] text-[14.5px] capitalize ${off ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${f.side === x ? "border-[var(--accent)] bg-[var(--accent-soft)] font-semibold" : "border-[var(--border-strong)] bg-[var(--input)]"}`}>
+                    <input type="radio" name="side" disabled={off} checked={f.side === x} onChange={() => set({ side: x })} className="accent-[var(--accent)]" />{x}{off ? " (verify first)" : ""}
                   </label>
                 );
               })}
@@ -120,7 +120,7 @@ export default function MyAds() {
               <div className="flex flex-wrap gap-4">
                 {METHODS.map((m) => (
                   <label key={m} className="flex min-h-10 items-center gap-2 text-[14px]">
-                    <input type="checkbox" checked={f.payments.includes(m)} onChange={(e) => set({ payments: e.target.checked ? [...f.payments, m] : f.payments.filter((x) => x !== m) })} className="h-4 w-4 accent-[var(--accent-strong)]" />{m}
+                    <input type="checkbox" checked={f.payments.includes(m)} onChange={(e) => set({ payments: e.target.checked ? [...f.payments, m] : f.payments.filter((x) => x !== m) })} className="h-4 w-4 accent-[var(--accent)]" />{m}
                   </label>
                 ))}
               </div>
@@ -132,11 +132,11 @@ export default function MyAds() {
               <textarea value={f.terms} onChange={(e) => set({ terms: e.target.value })} rows={3} placeholder="e.g. Ships within 2 days after release. 1-year warranty." className={`${inputCls} mt-1.5`} />
             </label>
             {f.side === "sell" && !me.payTo?.upi && !me.payTo?.bank && (
-              <p role="note" className="rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Add where buyers pay you on your <Link href="/p2p/profile" className="font-semibold underline">Profile</Link> before posting a Sell ad.</p>
+              <p role="note" className="rounded-[14px] border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[13px] text-amber-900 dark:text-amber-200">Add where buyers pay you on your <Link href="/p2p/profile" className="font-semibold underline">Profile</Link> before posting a Sell ad.</p>
             )}
-            {err && <p role="alert" className="text-[13.5px] font-medium text-rose-600">{err}</p>}
-            {ok && <p role="status" className="rounded-lg bg-[var(--accent-soft)] px-3 py-2 text-[13.5px]">{ok}</p>}
-            <button type="submit" disabled={busy} className="min-h-12 w-full disabled:opacity-50 rounded-lg bg-[var(--accent)] text-[16px] font-semibold text-white hover:brightness-95">Publish ad</button>
+            {err && <p role="alert" className="text-[13.5px] font-medium text-[var(--danger)]">{err}</p>}
+            {ok && <p role="status" className="rounded-[14px] border border-emerald-400/40 bg-emerald-500/10 px-3 py-2 text-[13.5px] text-emerald-800 dark:text-emerald-200">{ok}</p>}
+            <button type="submit" disabled={busy} className="min-h-12 w-full rounded-[14px] bg-[var(--primary)] text-[16px] font-bold text-[var(--on-primary)] transition hover:brightness-90 disabled:opacity-45">Publish ad</button>
           </form>
         </Card>
       </div>

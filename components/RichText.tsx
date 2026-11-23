@@ -63,7 +63,7 @@ export function EmojiPanel({ onEmoji, onSticker }: { onEmoji: (e: string) => voi
     onEmoji(e);
   };
   return (
-    <div className="animate-pop absolute bottom-full left-3 z-20 mb-2 w-[min(94vw,360px)] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)] shadow-xl" onMouseDown={(e) => e.preventDefault()}>
+    <div className="animate-pop absolute bottom-full left-3 z-20 mb-2 w-[min(94vw,360px)] overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--panel-solid)] shadow-xl" onMouseDown={(e) => e.preventDefault()}>
       <div className="flex overflow-x-auto border-b border-[var(--border)] px-1">
         {tabs.map((t) => (
           <button key={t.id} type="button" title={t.label} onClick={() => setTab(t.id)}
@@ -90,7 +90,7 @@ export function EmojiPanel({ onEmoji, onSticker }: { onEmoji: (e: string) => voi
 export function FormatBar({ onFormat }: { onFormat: (mark: string) => void }) {
   const b = (mark: string, label: React.ReactNode, title: string) => (
     <button key={mark} type="button" title={title} onMouseDown={(e) => { e.preventDefault(); onFormat(mark); }}
-      className="flex h-7 min-w-[30px] items-center justify-center rounded-md bg-[var(--panel)] px-1.5 text-[13px] hover:bg-[var(--hover)]">{label}</button>
+      className="flex h-7 min-w-[30px] items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--input)] px-1.5 text-[13px] hover:bg-[var(--hover)]">{label}</button>
   );
   return (
     <div className="mb-1.5 flex items-center gap-1.5">

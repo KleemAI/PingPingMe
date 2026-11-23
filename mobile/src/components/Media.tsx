@@ -51,6 +51,7 @@ export function MediaAttachment({ a }: { a: Attachment }) {
 
 /** A file of an end-to-end encrypted chat: downloaded and decrypted on the phone, then shown like any other. */
 function EncryptedAttachment({ a }: { a: Attachment }) {
+  const { c } = useTheme();
   const { toast } = useStore();
   const uri = useDecryptedUri(a);
   const share = async () => {
@@ -61,7 +62,7 @@ function EncryptedAttachment({ a }: { a: Attachment }) {
   if (!uri) {
     return (
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, marginTop: 4 }}>
-        <Ionicons name="lock-closed" size={14} color="#667781" />
+        <Ionicons name="lock-closed" size={14} color={c.muted} />
         <T size={12.5} muted numberOfLines={1} style={{ flexShrink: 1 }}>{uri === undefined ? `Opening ${a.name}…` : `Couldn't open ${a.name}`}</T>
       </View>
     );
@@ -77,7 +78,7 @@ function EncryptedAttachment({ a }: { a: Attachment }) {
   const icon = a.mime.startsWith("video/") ? "videocam" : a.mime === "application/pdf" ? "document-text" : "attach";
   return (
     <Pressable onPress={share} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, marginTop: 4 }}>
-      <Ionicons name={icon} size={16} color="#667781" />
+      <Ionicons name={icon} size={16} color={c.muted} />
       <T size={12.5} numberOfLines={1} style={{ flexShrink: 1 }}>{a.name}</T>
       <T size={11.5} muted>{(a.size / 1024 / 1024).toFixed(1)} MB</T>
     </Pressable>
@@ -85,6 +86,7 @@ function EncryptedAttachment({ a }: { a: Attachment }) {
 }
 
 function PlainAttachment({ a }: { a: Attachment }) {
+  const { c } = useTheme();
   const { openFile } = useStore();
   const src = useFileSource(a);
   if (a.mime.startsWith("image/")) {
@@ -98,7 +100,7 @@ function PlainAttachment({ a }: { a: Attachment }) {
   const icon = a.mime.startsWith("video/") ? "videocam" : a.mime === "application/pdf" ? "document-text" : "attach";
   return (
     <Pressable onPress={() => openFile(a)} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, marginTop: 4 }}>
-      <Ionicons name={icon} size={16} color="#667781" />
+      <Ionicons name={icon} size={16} color={c.muted} />
       <T size={12.5} numberOfLines={1} style={{ flexShrink: 1 }}>{a.name}</T>
       <T size={11.5} muted>{(a.size / 1024 / 1024).toFixed(1)} MB</T>
     </Pressable>

@@ -19,6 +19,11 @@ export class P2PAdEntity {
   @Column({ type: "text", array: true }) payments: string[];
   @Column({ name: "pay_window_min", type: "int" }) payWindowMin: number;
   @Column({ type: "text", nullable: true }) terms: string | null;
+  /** shop-style listing: category chip, picture, unit text next to the price, and priced options ("plans") */
+  @Column({ type: "varchar", length: 40, nullable: true }) category: string | null;
+  @Column({ type: "jsonb", nullable: true }) image: Attachment | null;
+  @Column({ type: "varchar", length: 30, nullable: true }) unit: string | null;
+  @Column({ type: "jsonb", default: () => "'[]'" }) plans: { id: string; label: string; price: number; soldOut?: boolean }[];
   @Column({ default: false }) featured: boolean;
   @Index() @Column({ default: true }) online: boolean;
   @Column({ name: "created_at", ...TS }) createdAt: number;

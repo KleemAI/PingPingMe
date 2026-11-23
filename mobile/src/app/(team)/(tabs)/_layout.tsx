@@ -5,9 +5,11 @@ import { useTeam } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { overview } from "@/lib/format";
 import { HeaderActions } from "@/components/ui";
+import { useGlassTabs } from "@/components/p2p/glass";
 
 export default function TeamTabs() {
   const { c } = useTheme();
+  const tabs = useGlassTabs(c.accent);
   const { db, me, now } = useTeam();
   const o = useMemo(() => overview(db, now, me.id), [db, now, me.id]);
   const unread = db.conversations.filter((x) => x.unread > 0).length;
@@ -19,11 +21,7 @@ export default function TeamTabs() {
   return (
     <Tabs screenOptions={{
       headerRight: () => <HeaderActions />,
-      tabBarActiveTintColor: c.accentStrong, tabBarInactiveTintColor: c.muted,
-      tabBarStyle: { backgroundColor: c.header, borderTopColor: c.border },
-      headerStyle: { backgroundColor: c.header }, headerTintColor: c.text, headerTitleStyle: { fontWeight: "700", fontSize: 20 },
-      sceneStyle: { backgroundColor: c.screen },
-      tabBarBadgeStyle: { backgroundColor: c.accent, color: "#fff", fontSize: 11 },
+      ...tabs,
     }}>
       <Tabs.Screen name="index" options={{ title: "Overview", tabBarIcon: icon("grid"), tabBarBadge: alerts || undefined }} />
       <Tabs.Screen name="inbox" options={{ title: "Chats", tabBarIcon: icon("chatbubbles"), tabBarBadge: unread || undefined }} />

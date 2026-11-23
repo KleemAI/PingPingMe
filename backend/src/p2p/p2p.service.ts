@@ -1,11 +1,13 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { In } from "typeorm";
-import type { P2PAd, P2PMerchant, P2POrder, P2PPaymentMethod, P2PState, User } from "../common/contract";
+import type { Attachment, P2PAd, P2PMerchant, P2POrder, P2PPaymentMethod, P2PState, User } from "../common/contract";
 import { badRequest, conflict, forbidden, notFound } from "../common/errors";
 import { Payload, clean, newId, oneOf, optStr, str, MAX_MESSAGE } from "../common/util";
 import { SYSTEM_USER } from "../common/system-user";
 import { isTeam } from "../auth/decorators";
 import { FilesService } from "../files/files.service";
+import { PushService } from "../push/push.service";
+import { AlertBus } from "../realtime/alerts.service";
 import { P2PAdEntity, P2PMessageEntity, P2POrderEntity, P2PProfileEntity, UserEntity } from "../database/entities";
 import { nextCounter, UnitOfWork, type Tx } from "../database/unit-of-work.service";
 
@@ -39,7 +41,7 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger("P2P");
   private timer?: NodeJS.Timeout;
 
-  constructor(private readonly uow: UnitOfWork, private readonly files: FilesService) {}
+  constructor(private readonly uow: UnitOfWork, private readonly files: FilesService, private readonly push: PushService, private readonly alerts: AlertBus) {}
 
   onModuleInit() {
     // background job: cancel unpaid orders whose payment time ran out and give the stock back
@@ -87,6 +89,11 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
       em.find(P2PProfileEntity, { where: { userId: In(payToIds) } }),
     ]);
     const byId = new Map(users.map((u) => [u.id, u]));
+    // each product's rating: the 👍 / 👎 buyers gave on its orders
+    const adRatings: { ad_id: string; pos: string; total: string }[] = ads.length ? await em.query(
+      `SELECT ad_id, count(*) FILTER (WHERE rating = 'positive') AS pos, count(*) AS total FROM p2p_orders
+        WHERE ad_id = ANY($1) AND rating IS NOT NULL GROUP BY ad_id`, [ads.map((a) => a.id)]) : [];
+    const rated = new Map(adRatings.map((r) => [r.ad_id, { pos: Number(r.pos), total: Number(r.total) }]));
     const visibleAd = (a: P2PAdEntity) => {
       if (a.merchantId === me) return true;
       const owner = byId.get(a.merchantId);
@@ -101,7 +108,7 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
       return clean({
         id: u.id, name: u.name, kind: kindOf(u.role), verification: verified ? "verified" : "none", verified,
         trades: st?.trades ?? 0, cancelled: st?.cancelled ?? 0, ratingsPos: st?.pos ?? 0, ratingsTotal: st?.total ?? 0,
-        avgReleaseMin: Math.round(st?.rel ?? 0), joinedAt: new Date(u.createdAt).getTime(),
+        avgReleaseMin: Math.round(st?.rel ?? 0), avgReleaseSec: st?.sales ? Math.round((st.rel ?? 0) * 60) : undefined, sales: st?.sales ?? 0, joinedAt: new Date(u.createdAt).getTime(),
         payTo: prof ? clean({ upi: prof.upi ?? undefined, bank: prof.bank ?? undefined, accountName: prof.accountName }) : u.id === me ? { accountName: u.name } : undefined,
       }) as P2PMerchant;
     });
@@ -127,6 +134,8 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
         id: a.id, merchantId: a.merchantId, side: a.side as P2PAd["side"], product: a.product, price: a.price, totalQty: a.totalQty,
         availableQty: a.availableQty, minAmount: a.minAmount, maxAmount: a.maxAmount, payments: a.payments as P2PPaymentMethod[],
         payWindowMin: a.payWindowMin, terms: a.terms ?? undefined, featured: a.featured, online: a.online, createdAt: a.createdAt,
+        category: a.category ?? undefined, image: a.image ?? undefined, unit: a.unit ?? undefined, plans: a.plans?.length ? a.plans : undefined,
+        ratingsPos: rated.get(a.id)?.pos ?? 0, ratingsTotal: rated.get(a.id)?.total ?? 0,
       }) as P2PAd),
       orders: orders.map(toOrder),
       appeals: appeals.map(toOrder),
@@ -135,18 +144,19 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
 
   /** Trust numbers computed from orders, so they can never drift from what actually happened. */
   private async stats(ids: string[]) {
-    const rows: { id: string; trades: string; cancelled: string; pos: string; total: string; rel: string | null }[] = await this.uow.manager.query(
+    const rows: { id: string; trades: string; cancelled: string; pos: string; total: string; rel: string | null; sales: string }[] = await this.uow.manager.query(
       `SELECT u.id,
          (SELECT count(*) FROM p2p_orders o WHERE o.status = 'completed' AND (o.buyer_id = u.id OR o.seller_id = u.id)) AS trades,
          (SELECT count(*) FROM p2p_orders o WHERE o.status = 'cancelled' AND o.buyer_id = u.id AND o.cancelled_by IN ('buyer', 'expired')) AS cancelled,
          (SELECT count(*) FROM p2p_orders o WHERE o.seller_id = u.id AND o.rating = 'positive') AS pos,
          (SELECT count(*) FROM p2p_orders o WHERE o.seller_id = u.id AND o.rating IS NOT NULL) AS total,
          (SELECT avg(extract(epoch FROM (o.released_at - o.paid_at)) / 60) FROM p2p_orders o
-            WHERE o.seller_id = u.id AND o.released_at IS NOT NULL AND o.paid_at IS NOT NULL) AS rel
+            WHERE o.seller_id = u.id AND o.released_at IS NOT NULL AND o.paid_at IS NOT NULL) AS rel,
+         (SELECT count(*) FROM p2p_orders o WHERE o.status = 'completed' AND o.seller_id = u.id) AS sales
        FROM unnest($1::varchar[]) AS u(id)`,
       [ids],
     );
-    return new Map(rows.map((r) => [r.id, { trades: Number(r.trades), cancelled: Number(r.cancelled), pos: Number(r.pos), total: Number(r.total), rel: r.rel === null ? 0 : Number(r.rel) }]));
+    return new Map(rows.map((r) => [r.id, { trades: Number(r.trades), cancelled: Number(r.cancelled), pos: Number(r.pos), total: Number(r.total), rel: r.rel === null ? 0 : Number(r.rel), sales: Number(r.sales) }]));
   }
 
   // ------------------------------------------------------------------ helpers
@@ -200,7 +210,17 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
     const qty = Number(p.qty);
     if (!Number.isInteger(qty) || qty < 1) throw badRequest("Enter a whole number of units");
     if (qty > a.availableQty) throw conflict(`Only ${a.availableQty} units available`);
-    const amount = round2(qty * a.price);
+    // a listing with plans: the order is for one plan, at that plan's price
+    let price = a.price;
+    let product = a.product;
+    if (a.plans?.length) {
+      const plan = a.plans.find((x) => x.id === String(p.planId ?? ""));
+      if (!plan) throw badRequest("Pick a plan");
+      if (plan.soldOut) throw conflict(`${plan.label} is sold out`);
+      price = plan.price;
+      product = `${a.product} · ${plan.label}`.slice(0, 80);
+    }
+    const amount = round2(qty * price);
     if (amount < a.minAmount || amount > a.maxAmount) throw badRequest(`Order amount must be between ₹${a.minAmount.toLocaleString("en-IN")} and ₹${a.maxAmount.toLocaleString("en-IN")}`);
     const method = oneOf(p.paymentMethod, METHODS, "payment method");
     if (!a.payments.includes(method)) throw badRequest("Pick a payment method this ad accepts");
@@ -220,13 +240,24 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
 
     const now = Date.now();
     const o = tx.em.create(P2POrderEntity, {
-      id: newId("po"), ref: `P2P-${1000 + (await nextCounter(tx.em, "P2P"))}`, adId: a.id, buyerId, sellerId, product: a.product, qty, price: a.price, amount,
+      id: newId("po"), ref: `P2P-${1000 + (await nextCounter(tx.em, "P2P"))}`, adId: a.id, buyerId, sellerId, product, qty, price, amount,
       paymentMethod: method, status: "pending_payment", createdAt: now, expiresAt: now + a.payWindowMin * MIN,
     });
     await tx.em.save(o);
     a.availableQty -= qty;
     await tx.em.save(a);
     await this.sys(tx, o.id, `Order created. ${qty} unit${qty > 1 ? "s" : ""} held for the buyer for ${a.payWindowMin} minutes.`);
+
+    // ring the ad owner (Zomato-style): a full-screen alert in their open apps, a loud push when the phone app is closed.
+    // buyerName is whoever placed the order — on a buy ad that is the seller.
+    const alert = { id: o.id, ref: o.ref, product, qty, amount, buyerName: tx.user.name, paymentMethod: method, expiresAt: o.expiresAt, at: now };
+    tx.afterCommit(async () => this.alerts.emit(owner.id, "p2p_order", alert));
+    this.push.notify(tx, [owner.id], {
+      title: `New order · ${o.ref}`,
+      body: `${tx.user.name} ordered ${qty} × ${product} · ₹${amount.toLocaleString("en-IN")}`,
+      data: { type: "p2p-order", id: o.id },
+      channelId: "orders", sound: "new_order.wav",
+    });
     return o.id;
   }
 
@@ -339,11 +370,26 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
     if (!payments.length || payments.some((m) => !(METHODS as readonly string[]).includes(m))) throw badRequest("Pick at least one payment method");
     const payWindowMin = Number(p.payWindowMin);
     if (!PAY_WINDOWS.includes(payWindowMin)) throw badRequest("Pick a payment time");
+    const category = optStr(p.category, 40) ?? null;
+    const unit = optStr(p.unit, 30) ?? null;
+    let image: Attachment | null = null;
+    if (p.image) {
+      [image] = await this.files.attachments(tx, [String(p.image)]);
+      if (!image?.mime.startsWith("image/")) throw badRequest("The picture must be a photo");
+    }
+    const plans = (Array.isArray(p.plans) ? p.plans : []).slice(0, 8).map((x, i) => {
+      const o = (x ?? {}) as Record<string, unknown>;
+      const label = String(o.label ?? "").trim().slice(0, 30);
+      const pp = round2(Number(o.price));
+      if (!label || !(pp > 0) || pp > 10_000_000) throw badRequest("Each plan needs a name and a price");
+      return { id: `pl${i + 1}`, label, price: pp, ...(o.soldOut ? { soldOut: true } : {}) };
+    });
+    if (plans.length && plans.every((x) => x.soldOut)) throw badRequest("At least one plan must be available");
     if ((await tx.em.count(P2PAdEntity, { where: { merchantId: tx.user.id } })) >= MAX_ADS) throw conflict(`You can have up to ${MAX_ADS} ads — remove or reuse an old one`);
     const id = newId("pa");
     await tx.em.insert(P2PAdEntity, {
       id, merchantId: tx.user.id, side, product, price, totalQty, availableQty: totalQty, minAmount, maxAmount, payments, payWindowMin,
-      terms: optStr(p.terms, 500), featured: false, online: true, createdAt: Date.now(),
+      terms: optStr(p.terms, 500), featured: false, online: true, createdAt: Date.now(), category, unit, image, plans,
     });
     return id;
   }

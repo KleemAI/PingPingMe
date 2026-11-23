@@ -11,7 +11,8 @@ const TOKEN_RE = /^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]{10,}\]$/;
 const SEND_URL = () => process.env.EXPO_PUSH_URL ?? "https://exp.host/--/api/v2/push/send";
 const CHANNEL = "messages"; // created by the app (Android notification channel)
 
-export type Push = { title: string; body: string; data: Record<string, string> };
+/** channelId / sound: optional, for alerts louder than a message (e.g. a new P2P order → "orders" + "new_order.wav"). */
+export type Push = { title: string; body: string; data: Record<string, string>; channelId?: string; sound?: string };
 
 /** Short text for a notification: the message (folded to one line) or what was attached. */
 export function preview(text: string, attachments: Attachment[] = [], viewOnce = false) {
@@ -86,7 +87,7 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
       const batch = tokens.slice(i, i + 100);
       const res = await fetch(SEND_URL(), {
         method: "POST", headers, signal: AbortSignal.timeout(15_000),
-        body: JSON.stringify(batch.map((t) => ({ to: t.token, title: push.title, body: push.body, data: push.data, sound: "default", channelId: CHANNEL, priority: "high" }))),
+        body: JSON.stringify(batch.map((t) => ({ to: t.token, title: push.title, body: push.body, data: push.data, sound: push.sound ?? "default", channelId: push.channelId ?? CHANNEL, priority: "high" }))),
       });
       if (!res.ok) { this.log.warn(`Expo push: HTTP ${res.status}`); continue; }
       const out = (await res.json().catch(() => ({}))) as { data?: { status: string; details?: { error?: string } }[] };

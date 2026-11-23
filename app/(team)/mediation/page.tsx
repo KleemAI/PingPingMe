@@ -32,7 +32,7 @@ function Page() {
       <div className={`${sel ? "hidden xl:block" : ""} min-w-0 flex-1 overflow-y-auto pb-10`}>
         <PageHeader title="Mediation & support" subtitle="Complaints between customers and resellers — evidence, ownership, target times and outcomes." actions={<Button onClick={() => setOpen(true)}><Plus size={16} /> Open case</Button>} />
         <div className="space-y-3 px-4 pb-4 md:px-6">
-          <label className="flex max-w-md items-center gap-2 rounded-lg border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2">
+          <label className="flex max-w-md items-center gap-2 rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2">
             <Search size={16} className="text-[var(--muted)]" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search cases…" className="w-full bg-transparent text-sm outline-none" />
           </label>
           <Tabs value={f} onChange={setF} tabs={(["open", "overdue", "mine", "approval", "resolved", "all"] as F[]).map((id) => ({ id, label: { open: "Open", overdue: "Overdue", mine: "Mine", approval: "Needs approval", resolved: "Resolved", all: "All" }[id], count: db.cases.filter((c) => match(c, id)).length }))} />
@@ -43,8 +43,8 @@ function Page() {
             const od = caseOverdue(c, now);
             return (
               <button key={c.id} onClick={() => router.replace(`/mediation?case=${c.id}`, { scroll: false })}
-                className={`flex w-full items-center gap-3 rounded-xl border bg-[var(--panel)] p-4 text-left transition hover:shadow-md ${sel?.id === c.id ? "border-[var(--accent)]" : od ? "border-rose-400/50" : "border-[var(--border)]"}`}>
-                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${od ? "bg-rose-500/15 text-rose-500" : "bg-[var(--panel-2)] text-[var(--muted)]"}`}><Scale size={18} /></span>
+                className={`glass flex w-full items-center gap-3 rounded-[20px] p-4 text-left transition hover:-translate-y-0.5 ${sel?.id === c.id ? "!border-[var(--accent)]" : od ? "!border-rose-400/50" : ""}`}>
+                <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] ${od ? "bg-rose-500/15 text-rose-500" : "glass-tile text-[var(--muted)]"}`}><Scale size={18} /></span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[12px] text-[var(--muted)]">{c.ref}</span><span className="truncate font-medium">{c.title}</span></div>
                   <div className="mt-0.5 text-[12.5px] text-[var(--muted)]">{db.contacts.find((x) => x.id === c.contactId)?.name} · {c.category} · Owner {db.users.find((u) => u.id === c.ownerId)?.name ?? "—"}</div>
@@ -83,8 +83,8 @@ function CaseDetail({ c, onClose }: { c: MediationCase; onClose: () => void }) {
   const resolved = c.status === "resolved";
 
   return (
-    <aside className="animate-slide fixed inset-0 z-30 overflow-y-auto bg-[var(--panel-2)] xl:static xl:w-[480px] xl:shrink-0 xl:border-l xl:border-[var(--border)]">
-      <div className="sticky top-0 z-10 flex items-center justify-between bg-[var(--panel)] px-4 py-3">
+    <aside className="animate-slide fixed inset-0 z-30 overflow-y-auto bg-[var(--bg-app)] xl:static xl:w-[480px] xl:shrink-0 xl:border-l xl:border-[var(--border)] xl:bg-transparent">
+      <div className="glass-bar sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
         <span className="font-semibold">{c.ref}</span>
         <button onClick={onClose} className="rounded-full p-1 text-[var(--muted)] hover:bg-[var(--hover)]"><X size={18} /></button>
       </div>
@@ -100,7 +100,7 @@ function CaseDetail({ c, onClose }: { c: MediationCase; onClose: () => void }) {
               {order && <span>Order: <Link className="text-[var(--accent)] hover:underline" href={`/orders?o=${order.id}`}>{order.ref}</Link></span>}
               {order && <span>Reseller: {db.resellers.find((r) => r.id === order.resellerId)?.name}</span>}
             </div>
-            {!resolved && <div className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12.5px] ${od ? "bg-rose-500/10 text-rose-600 dark:text-rose-300" : "bg-[var(--panel-2)] text-[var(--muted)]"}`}><Clock size={13} /> Target response {od ? "missed — " : ""}{relative(c.targetResponseAt, now)}</div>}
+            {!resolved && <div className={`flex items-center gap-1.5 rounded-[14px] px-3 py-2 text-[12.5px] ${od ? "bg-rose-500/10 text-rose-600 dark:text-rose-300" : "bg-[var(--panel-2)] text-[var(--muted)]"}`}><Clock size={13} /> Target response {od ? "missed — " : ""}{relative(c.targetResponseAt, now)}</div>}
             <div className="grid grid-cols-2 gap-2">
               <Field label="Owner">
                 <select className={inputCls} value={c.ownerId ?? ""} onChange={(e) => act("case.update", { id: c.id, ownerId: e.target.value }, "Owner updated")}>
@@ -119,7 +119,7 @@ function CaseDetail({ c, onClose }: { c: MediationCase; onClose: () => void }) {
             )}
             {resolved && (
               <div className="space-y-2">
-                <div className="rounded-lg bg-emerald-500/10 p-3 text-[13px] text-emerald-700 dark:text-emerald-300"><b>Outcome:</b> {c.resolution}<span className="block text-[11.5px] opacity-80">Resolved {c.resolvedAt && dateTime(c.resolvedAt)}</span></div>
+                <div className="rounded-[14px] bg-emerald-500/10 p-3 text-[13px] text-emerald-700 dark:text-emerald-300"><b>Outcome:</b> {c.resolution}<span className="block text-[11.5px] opacity-80">Resolved {c.resolvedAt && dateTime(c.resolvedAt)}</span></div>
                 <Button size="sm" variant="outline" onClick={() => { setText(""); setModal("reopen"); }}><RotateCcw size={14} /> Reopen case</Button>
               </div>
             )}
@@ -145,7 +145,7 @@ function CaseDetail({ c, onClose }: { c: MediationCase; onClose: () => void }) {
             }}>
               <div className="flex gap-2">
                 <select className={`${inputCls} w-36`} value={ev.from} onChange={(e) => setEv({ ...ev, from: e.target.value as typeof ev.from })}><option value="customer">From customer</option><option value="reseller">From reseller</option><option value="team">Our team</option></select>
-                <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--border-strong)] px-3 text-[13px] text-[var(--muted)] hover:bg-[var(--hover)]">
+                <label className="flex cursor-pointer items-center gap-1.5 rounded-[14px] border border-[var(--border-strong)] px-3 text-[13px] text-[var(--muted)] hover:bg-[var(--hover)]">
                   <Paperclip size={14} /> Attach
                   <input type="file" hidden onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) { try { const a = await upload(f); setFiles((x) => [...x, a]); } catch {} } }} />
                 </label>
@@ -168,7 +168,7 @@ function CaseDetail({ c, onClose }: { c: MediationCase; onClose: () => void }) {
                 </select>
               </Field>
               {c.remedy && c.remedy !== "none" && (
-                <div className={`flex flex-wrap items-center gap-2 rounded-lg p-3 text-[13px] ${c.remedyApproval === "approved" ? "bg-emerald-500/10" : c.remedyApproval === "rejected" ? "bg-rose-500/10" : "bg-amber-500/10"}`}>
+                <div className={`flex flex-wrap items-center gap-2 rounded-[14px] p-3 text-[13px] ${c.remedyApproval === "approved" ? "bg-emerald-500/10" : c.remedyApproval === "rejected" ? "bg-rose-500/10" : "bg-amber-500/10"}`}>
                   <ShieldAlert size={15} /> <span className="flex-1">{c.remedy} · approval <b>{c.remedyApproval}</b></span>
                   {isAdmin && c.remedyApproval === "pending" && (<>
                     <Button size="sm" onClick={() => act("case.approveRemedy", { id: c.id, approve: true }, "Approved")}>Approve</Button>

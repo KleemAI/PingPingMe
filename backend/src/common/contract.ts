@@ -447,10 +447,14 @@ export type P2PMerchant = {
   ratingsPos: number; // positive ratings received as seller
   ratingsTotal: number;
   avgReleaseMin: number;
+  avgReleaseSec?: number; // average time from "paid" to delivered (released), in seconds
+  sales?: number; // completed orders as the seller ("deliveries")
   joinedAt: number;
   payTo?: P2PPayTo; // only your own, and the seller's on your open purchases
 };
 
+/** One option of a listing, e.g. "3 months" at its own price. */
+export type P2PPlan = { id: string; label: string; price: number; soldOut?: boolean };
 export type P2PAd = {
   id: string;
   merchantId: string;
@@ -464,6 +468,12 @@ export type P2PAd = {
   payments: P2PPaymentMethod[];
   payWindowMin: number;
   terms?: string;
+  category?: string; // e.g. "Courses", "AI tools"
+  image?: { id: string; name: string; size: number; mime: string };
+  unit?: string; // shown next to the price: "/ month", "Full course", "S-XL"
+  plans?: P2PPlan[]; // options with their own price (e.g. 1 month · 3 months); the order picks one
+  ratingsPos?: number; // buyers' ratings of this product (👍 out of all ratings on its orders)
+  ratingsTotal?: number;
   featured: boolean;
   online: boolean;
   createdAt: number;

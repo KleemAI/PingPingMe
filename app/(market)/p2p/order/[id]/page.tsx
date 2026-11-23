@@ -28,8 +28,8 @@ function Steps({ o }: { o: P2POrder }) {
         const done = o.status !== "cancelled" && n < reached;
         const current = o.status !== "cancelled" && n === reached;
         return (
-          <li key={st.title} className={`rounded-xl border p-3 ${done ? "border-emerald-300 bg-[var(--accent-soft)]" : current ? "border-[var(--accent-strong)] bg-[var(--panel)]" : "border-[var(--border)] bg-[var(--panel)]"}`}>
-            <span className={`mb-1 flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-bold ${done || current ? "bg-[var(--accent)] text-white" : "bg-[var(--panel-2)] text-[var(--muted)]"}`}>{n}</span>
+          <li key={st.title} className={`glass rounded-[20px] p-3 ${done ? "!border-emerald-400/50" : current ? "!border-[var(--accent)]" : ""}`}>
+            <span className={`mb-1 flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-bold ${done ? "bg-emerald-500 text-white" : current ? "bg-[var(--accent)] text-white" : "border border-[var(--border-strong)] text-[var(--muted)]"}`}>{n}</span>
             <div className="text-[13.5px] font-semibold">{st.title}</div>
             <div className="text-[12px] text-[var(--muted)]">{st.note}</div>
           </li>
@@ -87,7 +87,7 @@ export default function OrderPage() {
               {o.status === "appeal" && <p className="text-[14px] text-[var(--muted)]">Reason: {o.appealReason}. Both sides can still add proof in the chat.</p>}
             </div>
             {o.status === "pending_payment" && (
-              <div className={`flex flex-col items-center rounded-xl px-5 py-2.5 ${left < 5 * 60_000 ? "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300" : "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300"}`}>
+              <div className={`flex flex-col items-center rounded-[14px] border px-5 py-2.5 ${left < 5 * 60_000 ? "border-rose-400/40 bg-rose-500/10 text-rose-700 dark:text-rose-300" : "border-amber-400/40 bg-amber-500/10 text-amber-800 dark:text-amber-300"}`}>
                 <span className="flex items-center gap-1 text-[11.5px] font-semibold"><Timer size={13} /> TIME LEFT TO PAY</span>
                 <span className="text-[28px] font-bold tabular-nums">{mmss(left)}</span>
               </div>
@@ -102,7 +102,7 @@ export default function OrderPage() {
               <div><dt className="text-[var(--muted)]">Product</dt><dd className="font-semibold">{o.product}</dd></div>
               <div><dt className="text-[var(--muted)]">Quantity</dt><dd className="font-semibold">{o.qty} units</dd></div>
               <div><dt className="text-[var(--muted)]">Price</dt><dd className="font-semibold">{inr(o.price)} / unit</dd></div>
-              <div><dt className="text-[var(--muted)]">{role === "buyer" ? "You pay" : "You receive"}</dt><dd className="text-[19px] font-bold text-[var(--accent-strong)]">{inr(o.amount)}</dd></div>
+              <div><dt className="text-[var(--muted)]">{role === "buyer" ? "You pay" : "You receive"}</dt><dd className="text-[19px] font-bold">{inr(o.amount)}</dd></div>
             </dl>
             <div className="border-t border-[var(--border)] pt-4">
               <div className="mb-2 text-[12.5px] text-[var(--muted)]">{role === "buyer" ? "Seller" : "Buyer"}</div>
@@ -116,24 +116,24 @@ export default function OrderPage() {
               <h2 className="text-[16px] font-semibold">Pay the seller</h2>
               <p className="text-[14px] text-[var(--muted)]">Send exactly <strong className="text-[var(--text)]">{inr(o.amount)}</strong> from your own UPI or bank app. Don&apos;t write product names in the payment note.</p>
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border border-[var(--border)] px-3 py-2.5"><div className="text-[12px] text-[var(--muted)]">Method</div><div className="font-semibold">{o.paymentMethod}</div></div>
-                <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] px-3 py-2.5">
+                <div className="rounded-[14px] border border-[var(--border)] bg-[var(--hover)] px-3 py-2.5"><div className="text-[12px] text-[var(--muted)]">Method</div><div className="font-semibold">{o.paymentMethod}</div></div>
+                <div className="flex items-center justify-between gap-2 rounded-[14px] border border-[var(--border)] bg-[var(--hover)] px-3 py-2.5">
                   <div className="min-w-0"><div className="text-[12px] text-[var(--muted)]">{o.paymentMethod === "UPI" ? "UPI ID" : "Account"}</div><div className="truncate font-semibold">{payTo}</div></div>
-                  <button type="button" aria-label="Copy" onClick={() => { navigator.clipboard?.writeText(payTo ?? ""); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="flex h-9 items-center gap-1 rounded-md border border-[var(--border-strong)] px-2 text-[12.5px] hover:bg-[var(--hover)]"><Copy size={13} /> {copied ? "Copied" : "Copy"}</button>
+                  <button type="button" aria-label="Copy" onClick={() => { navigator.clipboard?.writeText(payTo ?? ""); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="glass-pill flex h-9 items-center gap-1 rounded-full px-3 text-[12.5px] font-semibold hover:brightness-110"><Copy size={13} /> {copied ? "Copied" : "Copy"}</button>
                 </div>
-                <div className="rounded-lg border border-[var(--border)] px-3 py-2.5"><div className="text-[12px] text-[var(--muted)]">Account name</div><div className="font-semibold">{seller.payTo?.accountName ?? "—"}</div></div>
+                <div className="rounded-[14px] border border-[var(--border)] bg-[var(--hover)] px-3 py-2.5"><div className="text-[12px] text-[var(--muted)]">Account name</div><div className="font-semibold">{seller.payTo?.accountName ?? "—"}</div></div>
               </div>
               <label className="block text-[13px] font-semibold">
                 Payment screenshot (proof)
                 <input type="file" accept="image/*,application/pdf" onChange={(e) => setProof(e.target.files?.[0] ?? null)}
-                  className="mt-1.5 block w-full rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--panel-2)] p-3 text-[13.5px] font-normal" />
+                  className="mt-1.5 block w-full rounded-[14px] border border-dashed border-[var(--border-strong)] bg-[var(--input)] p-3 text-[13.5px] font-normal" />
               </label>
-              {err && <p role="alert" className="text-[13.5px] font-medium text-rose-600">{err}</p>}
+              {err && <p role="alert" className="text-[13.5px] font-medium text-[var(--danger)]">{err}</p>}
               <div className="flex flex-wrap gap-3">
-                <button onClick={() => run(p2p.markPaid(o.id, proof ?? undefined))} className="min-h-11 rounded-lg bg-[var(--accent)] px-5 text-[15px] font-semibold text-white hover:brightness-95">I have paid — notify seller</button>
+                <button onClick={() => run(p2p.markPaid(o.id, proof ?? undefined))} className="min-h-11 rounded-[14px] bg-[var(--primary)] px-5 text-[15px] font-semibold text-[var(--on-primary)] hover:brightness-90">I have paid — notify seller</button>
                 <Button variant="outline" className="!h-11" onClick={() => { if (confirm("Cancel this order? Don't cancel if you already paid.")) run(p2p.cancel(o.id)); }}>Cancel order</Button>
               </div>
-              <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><AlertTriangle size={15} className="mt-0.5 shrink-0" /> Only tap “I have paid” after the money has left your account. False payment claims can get your account suspended.</p>
+              <p className="flex items-start gap-2 rounded-[14px] border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[12.5px] text-amber-900 dark:text-amber-200"><AlertTriangle size={15} className="mt-0.5 shrink-0" /> Only tap “I have paid” after the money has left your account. False payment claims can get your account suspended.</p>
             </Card>
           )}
 
@@ -160,7 +160,7 @@ export default function OrderPage() {
               <div className="flex flex-wrap gap-5">
                 <div className="min-w-[200px] flex-1 space-y-2">
                   <h2 className="text-[16px] font-semibold">Buyer&apos;s payment proof</h2>
-                  <div className="flex h-40 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--panel-2)] text-[13px] text-[var(--muted)]">
+                  <div className="flex h-40 flex-col items-center justify-center gap-1 rounded-[14px] border border-dashed border-[var(--border-strong)] bg-[var(--hover)] text-[13px] text-[var(--muted)]">
                     {o.proof ? <AttachmentChip a={o.proof} /> : <><Paperclip size={20} /> No proof uploaded</>}
                   </div>
                   <p className="text-[12.5px] text-[var(--muted)]">Marked paid at {o.paidAt ? time(o.paidAt) : "—"}</p>
@@ -173,13 +173,13 @@ export default function OrderPage() {
                     <li>The sender&apos;s name matches <strong>{other.name}</strong>.</li>
                   </ul>
                   <label className="flex min-h-10 items-start gap-2.5 text-[14px]">
-                    <input type="checkbox" checked={checked} onChange={(e) => { setChecked(e.target.checked); setErr(""); }} className="mt-1 h-4 w-4 accent-[var(--accent-strong)]" />
+                    <input type="checkbox" checked={checked} onChange={(e) => { setChecked(e.target.checked); setErr(""); }} className="mt-1 h-4 w-4 accent-[var(--accent)]" />
                     I have checked my account and received {inr(o.amount)}
                   </label>
-                  {err && <p role="alert" className="text-[13.5px] font-medium text-rose-600">{err}</p>}
+                  {err && <p role="alert" className="text-[13.5px] font-medium text-[var(--danger)]">{err}</p>}
                   <div className="flex flex-wrap gap-3">
                     <button onClick={() => { if (!checked) return setErr("Tick the box first — release cannot be undone."); run(p2p.release(o.id)); }}
-                      className="min-h-11 rounded-lg bg-[var(--accent)] px-5 text-[15px] font-semibold text-white hover:brightness-95">Release {o.qty} units</button>
+                      className="min-h-11 rounded-[14px] bg-[var(--primary)] px-5 text-[15px] font-semibold text-[var(--on-primary)] hover:brightness-90">Release {o.qty} units</button>
                     {o.status === "paid" && !appealOpen && <Button variant="outline" className="!h-11" onClick={() => setAppealOpen(true)}>Payment not received — appeal</Button>}
                   </div>
                 </div>
@@ -193,7 +193,7 @@ export default function OrderPage() {
               <h2 className="text-[16px] font-semibold">Open an appeal</h2>
               <p className="text-[13.5px] text-[var(--muted)]">Our support team will look at the chat and both sides&apos; proof, then decide. The goods stay held until then.</p>
               <textarea value={reason} onChange={(e) => { setReason(e.target.value); setErr(""); }} rows={3} placeholder={role === "buyer" ? "e.g. I paid 25 minutes ago but the seller is not responding" : "e.g. The money has not arrived in my account"} className={inputCls} aria-label="Reason for appeal" />
-              {err && <p role="alert" className="text-[13.5px] font-medium text-rose-600">{err}</p>}
+              {err && <p role="alert" className="text-[13.5px] font-medium text-[var(--danger)]">{err}</p>}
               <div className="flex gap-3">
                 <Button variant="danger" className="!h-11" onClick={async () => { if (await run(p2p.appeal(o.id, reason))) setAppealOpen(false); }}>Submit appeal</Button>
                 <Button variant="ghost" className="!h-11" onClick={() => setAppealOpen(false)}>Back</Button>
@@ -204,7 +204,7 @@ export default function OrderPage() {
           {/* ---------- completed ---------- */}
           {o.status === "completed" && (
             <Card className="space-y-3 p-5">
-              <h2 className="flex items-center gap-2 text-[16px] font-semibold"><CheckCircle2 size={19} className="text-[var(--accent-strong)]" /> Released {o.releasedAt ? `at ${time(o.releasedAt)}` : ""}</h2>
+              <h2 className="flex items-center gap-2 text-[16px] font-semibold"><CheckCircle2 size={19} className="text-emerald-500" /> Released {o.releasedAt ? `at ${time(o.releasedAt)}` : ""}</h2>
               <p className="text-[14px] text-[var(--muted)]">{role === "buyer" ? `${seller.name} confirmed your payment and released ${o.qty} units.` : `You released ${o.qty} units to ${other.name}. Ship them as per your terms.`}</p>
               {role === "buyer" && !o.rating && (
                 <div className="flex flex-wrap items-center gap-3">
@@ -224,14 +224,14 @@ export default function OrderPage() {
         </div>
 
         {/* ---------- chat ---------- */}
-        <aside aria-label="Order chat" className="flex min-w-0 flex-[1_1_340px] flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]">
+        <aside aria-label="Order chat" className="glass flex min-w-0 flex-[1_1_340px] flex-col overflow-hidden rounded-[20px]">
           <div className="border-b border-[var(--border)] px-4 py-3 text-[15px] font-semibold">Chat with {other.name}</div>
           <div className="chat-wallpaper scroll-thin flex max-h-[520px] min-h-[360px] flex-col gap-2 overflow-y-auto p-4">
             {o.messages.map((m) => {
-              if (m.from === "system") return <p key={m.id} className="self-center rounded-md bg-[var(--panel)] px-2.5 py-1 text-center text-[12px] text-[var(--muted)]">{m.text}</p>;
+              if (m.from === "system") return <p key={m.id} className="self-center rounded-full border border-[var(--border)] bg-[var(--panel-solid)] px-3 py-1 text-center text-[12px] text-[var(--muted)]">{m.text}</p>;
               const mine = m.from === role;
               return (
-                <div key={m.id} className={`max-w-[80%] rounded-lg px-3 py-1.5 text-[14px] ${!m.attachments?.length && isBare(m.text) ? "" : "shadow-sm"} ${mine ? "self-end" : "self-start"} ${!m.attachments?.length && isBare(m.text) ? "" : mine ? "bg-[var(--bubble-out)]" : "bg-[var(--bubble-in)]"}`}>
+                <div key={m.id} className={`max-w-[80%] rounded-2xl px-3 py-1.5 text-[14px] ${!m.attachments?.length && isBare(m.text) ? "" : "shadow-sm"} ${mine ? "self-end" : "self-start"} ${!m.attachments?.length && isBare(m.text) ? "" : mine ? "bg-[var(--bubble-out)]" : "bg-[var(--bubble-in)]"}`}>
                   {m.text && <RichText text={m.text} />}
                   {m.attachments?.map((x) => <AttachmentChip key={x.id} a={x} />)}
                   <div className="mt-0.5 text-right text-[11px] text-[var(--muted)]">{time(m.at)}</div>

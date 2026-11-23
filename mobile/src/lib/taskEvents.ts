@@ -48,7 +48,7 @@ export function useTaskEvents(userId: string | undefined, tasks: Task[] | undefi
         content: {
           title: one.title, body: one.body, sound: "default",
           data: { planId: `event-${since.current}`, kind: "event", title: one.title, message: one.body },
-          priority: Notifications.AndroidNotificationPriority.HIGH, color: "#00a884",
+          priority: Notifications.AndroidNotificationPriority.HIGH, color: "#2f7fe0",
         },
         trigger: { channelId: "reminders" },
       });

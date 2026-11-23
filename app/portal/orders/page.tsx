@@ -18,10 +18,10 @@ export default function PortalOrders() {
         {orders.map((o) => {
           const r = s.requests.find((x) => x.id === o.requestId);
           return (
-            <Link key={o.id} href={`/portal/${o.requestId}`} className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 hover:shadow-md">
-              <Package size={20} className="text-sky-500" />
+            <Link key={o.id} href={`/portal/${o.requestId}`} className="glass flex items-center gap-3 rounded-[20px] p-4 transition hover:-translate-y-0.5">
+              <span className="glass-tile flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px]"><Package size={19} className="text-[var(--accent)]" /></span>
               <div className="min-w-0 flex-1">
-                <div className="font-medium"><span className="font-mono text-[12px] text-[var(--muted)]">{o.ref}</span> {r?.title}</div>
+                <div className="font-semibold"><span className="font-mono text-[12px] text-[var(--muted)]">{o.ref}</span> {r?.title}</div>
                 <div className="text-[12.5px] text-[var(--muted)]">{rupees(o.costTotal)} · delivery {o.deliveryEstimate} · {listTime(o.createdAt)}</div>
               </div>
               <StatusPill meta={ORDER_STATUS[o.status]} />

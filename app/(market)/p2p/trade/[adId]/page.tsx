@@ -7,7 +7,7 @@ import { ChevronLeft, Clock, ShieldCheck } from "lucide-react";
 import { inr, SELL_BLOCKED, useP2P } from "@/lib/p2p/store";
 import type { PaymentMethod } from "@/lib/p2p/types";
 import { Card, inputCls } from "@/components/ui";
-import { MerchantLine } from "../../_components/bits";
+import { DeliveryLine, ListingImage, MerchantLine } from "../../_components/bits";
 
 export default function TradePage() {
   const { adId } = useParams<{ adId: string }>();
@@ -44,45 +44,72 @@ export default function TradePage() {
 
   return (
     <div className="space-y-5">
-      <Link href="/p2p" className="inline-flex min-h-10 items-center gap-1 text-[14px] font-medium text-[var(--accent-strong)]"><ChevronLeft size={17} /> Back to market</Link>
+      <div className="flex items-center gap-3">
+        <Link href="/p2p" aria-label="Back to market" className="glass flex h-10 w-10 shrink-0 items-center justify-center rounded-full hover:bg-[var(--hover)]"><ChevronLeft size={19} /></Link>
+        <div>
+          <div className="text-[22px] font-extrabold leading-tight">Checkout</div>
+          <div className="text-[13px] text-[var(--muted)]">Step 1 of 3</div>
+        </div>
+      </div>
+      <ol aria-label="Checkout steps" className="flex items-center gap-2 text-[13px]">
+        {["Review", "Pay seller", "Delivery"].map((label, i) => (
+          <li key={label} className="flex flex-1 items-center gap-2 last:flex-none">
+            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12.5px] font-bold ${i === 0 ? "bg-[var(--accent)] text-white" : "border border-[var(--border-strong)] text-[var(--muted)]"}`}>{i + 1}</span>
+            <span className={i === 0 ? "font-semibold" : "text-[var(--muted)]"}>{label}</span>
+            {i < 2 && <span aria-hidden className="h-px flex-1 bg-[var(--border-strong)]" />}
+          </li>
+        ))}
+      </ol>
+      <Card className="flex items-center gap-4 p-3">
+        <ListingImage ad={a} size={84} />
+        <div className="min-w-0 flex-1">
+          <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{a.category ?? "Product"}</div>
+          <div className="truncate text-[18px] font-bold">{a.product}</div>
+          <DeliveryLine m={m} />
+        </div>
+        <div className="shrink-0 pr-2 text-right">
+          <div className="text-[20px] font-bold">{inr(a.price)}</div>
+          <div className="text-[12.5px] text-[var(--muted)]">{a.unit ?? "/ unit"}</div>
+        </div>
+      </Card>
       <div className="flex flex-wrap items-start gap-5">
         <Card className="min-w-[300px] flex-[2] p-5">
-          <h1 className="mb-4 text-[22px] font-bold">{iBuy ? "Buy" : "Sell"} {a.product}</h1>
+          <h1 className="mb-4 text-[20px] font-bold">{iBuy ? "Buy" : "Sell"} {a.product}</h1>
           <form onSubmit={submit} className="space-y-4" noValidate>
             <label className="block text-[13px] font-semibold">
               Quantity (units)
               <input value={qty} onChange={(e) => { setQty(e.target.value.replace(/[^\d]/g, "")); setErr(""); }} inputMode="numeric"
-                className={`${inputCls} mt-1.5 h-11 text-[16px]`} aria-describedby="qty-hint" />
+                className={`${inputCls} mt-1.5 h-12 max-w-[220px] border-[var(--accent)] text-[17px] font-semibold`} aria-describedby="qty-hint" />
               <span id="qty-hint" className="mt-1 block text-[12.5px] font-normal text-[var(--muted)]">Between {minQty} and {maxQty} units for this ad</span>
             </label>
             <fieldset>
               <legend className="mb-1.5 text-[13px] font-semibold">{iBuy ? "You will pay with" : "Buyer will pay you with"}</legend>
               <div className="flex flex-wrap gap-2">
                 {a.payments.map((p) => (
-                  <label key={p} className={`flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3.5 text-[14px] ${method === p ? "border-[var(--accent-strong)] bg-[var(--accent-soft)] font-semibold" : "border-[var(--border-strong)]"}`}>
-                    <input type="radio" name="method" checked={method === p} onChange={() => { setMethod(p); setErr(""); }} className="accent-[var(--accent-strong)]" />
+                  <label key={p} className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-[14px] border-[1.5px] px-4 text-[14px] transition ${method === p ? "border-[var(--accent)] bg-[var(--accent-soft)] font-semibold" : "border-[var(--border-strong)] bg-[var(--input)] hover:bg-[var(--hover)]"}`}>
+                    <input type="radio" name="method" checked={method === p} onChange={() => { setMethod(p); setErr(""); }} className="accent-[var(--accent)]" />
                     {p}
                   </label>
                 ))}
               </div>
             </fieldset>
-            <div className="flex items-center justify-between rounded-xl bg-[var(--panel-2)] px-4 py-3">
+            <div className="flex items-center justify-between rounded-[14px] border border-[var(--border)] bg-[var(--hover)] px-4 py-3">
               <span className="text-[14px] text-[var(--muted)]">{iBuy ? "You pay" : "You receive"}</span>
               <span className="text-[24px] font-bold">{inr(total)}</span>
             </div>
-            {err && <p role="alert" className="text-[13.5px] font-medium text-rose-600">{err}</p>}
+            {err && <p role="alert" className="text-[13.5px] font-medium text-[var(--danger)]">{err}</p>}
             {own && <p className="text-[13.5px] text-[var(--muted)]">This is your own ad.</p>}
             {blocked && (
-              <p role="note" className="rounded-lg bg-amber-50 px-3 py-2 text-[13.5px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+              <p role="note" className="rounded-[14px] border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[13.5px] text-amber-900 dark:text-amber-200">
                 {SELL_BLOCKED} <Link href="/p2p/profile" className="font-semibold underline">See your status</Link>
               </p>
             )}
             <button type="submit" disabled={own || blocked || busy}
-              className={`flex min-h-12 w-full items-center justify-center rounded-lg text-[16px] font-semibold text-white hover:brightness-95 disabled:opacity-50 ${iBuy ? "bg-[var(--accent)]" : "bg-[#c0392b]"}`}>
+              className="flex min-h-14 w-full items-center justify-center rounded-[16px] bg-[var(--primary)] text-[17px] font-extrabold text-[var(--on-primary)] shadow-[var(--pill-glow)] transition hover:brightness-90 disabled:cursor-not-allowed disabled:opacity-45">
               {iBuy ? `Buy ${n > 0 ? n : ""} for ${inr(total)}` : `Sell ${n > 0 ? n : ""} for ${inr(total)}`}
             </button>
             <p className="flex items-start gap-2 text-[12.5px] text-[var(--muted)]">
-              <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[var(--accent-strong)]" />
+              <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[var(--accent)]" />
               {iBuy ? `The units are held for you as soon as you place the order. Pay within ${a.payWindowMin} minutes or the order is cancelled automatically.` : `The buyer must pay within ${a.payWindowMin} minutes. Release only after the money reaches your account.`}
             </p>
           </form>
@@ -98,7 +125,7 @@ export default function TradePage() {
             <div><dt className="text-[var(--muted)]">Avg. release</dt><dd className="font-semibold">{m.avgReleaseMin} min</dd></div>
           </dl>
           {a.terms && (
-            <div className="rounded-lg bg-[var(--note)] px-3 py-2 text-[13px]">
+            <div className="rounded-[14px] border border-[var(--border)] bg-[var(--note)] px-3 py-2 text-[13px]">
               <div className="font-semibold">Seller&apos;s terms</div>
               {a.terms}
             </div>

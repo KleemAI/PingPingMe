@@ -10,9 +10,9 @@ import { Avatar, Button, Modal, inputCls } from "./ui";
 const freeGroups = (groups: GroupChat[]) => groups.filter((g) => g.admin && !g.communityId && !g.announcement);
 
 function GroupTicks({ groups, picked, setPicked }: { groups: GroupChat[]; picked: string[]; setPicked: (ids: string[]) => void }) {
-  if (!groups.length) return <p className="rounded-lg bg-[var(--panel-2)] px-3 py-2 text-[12.5px] text-[var(--muted)]">No groups to add — you can add groups you&apos;re an admin of and that aren&apos;t in a community.</p>;
+  if (!groups.length) return <p className="rounded-[14px] bg-[var(--panel-2)] px-3 py-2 text-[12.5px] text-[var(--muted)]">No groups to add — you can add groups you&apos;re an admin of and that aren&apos;t in a community.</p>;
   return (
-    <ul className="scroll-thin max-h-56 divide-y divide-[var(--border)] overflow-y-auto rounded-lg border border-[var(--border)]">
+    <ul className="scroll-thin max-h-56 divide-y divide-[var(--border)] overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--panel)]">
       {groups.map((g) => {
         const on = picked.includes(g.id);
         return (
@@ -20,7 +20,7 @@ function GroupTicks({ groups, picked, setPicked }: { groups: GroupChat[]; picked
             <button type="button" onClick={() => setPicked(on ? picked.filter((x) => x !== g.id) : [...picked, g.id])} className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[var(--hover)]">
               <Avatar name={g.name} size={34} group />
               <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{g.name}</div><div className="text-[12px] text-[var(--muted)]">{g.members.length} members</div></div>
-              <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${on ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border)]"}`}>{on && <Check size={13} />}</span>
+              <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${on ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border-strong)]"}`}>{on && <Check size={13} />}</span>
             </button>
           </li>
         );
@@ -88,7 +88,7 @@ export function CommunityInfo({ community: c, groups, onClose, onOpenGroup, relo
           </div>
         )}
 
-        <ul className="scroll-thin max-h-72 divide-y divide-[var(--border)] overflow-y-auto rounded-lg border border-[var(--border)]">
+        <ul className="scroll-thin max-h-72 divide-y divide-[var(--border)] overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--panel)]">
           {c.groups.map((g) => (
             <li key={g.id} className="flex items-center gap-3 px-3 py-2">
               {g.announcement ? <span className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent-strong)]"><Megaphone size={16} /></span> : <Avatar name={g.name} size={34} group />}
@@ -105,7 +105,7 @@ export function CommunityInfo({ community: c, groups, onClose, onOpenGroup, relo
         </ul>
 
         {c.admin && (adding ? (
-          <div className="space-y-2 rounded-lg border border-[var(--border)] p-3">
+          <div className="glass space-y-2 rounded-[20px] p-3">
             <GroupTicks groups={freeGroups(groups)} picked={picked} setPicked={setPicked} />
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => { setAdding(false); setPicked([]); }}>Cancel</Button>

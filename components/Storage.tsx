@@ -22,7 +22,7 @@ export function StorageMeter() {
         <span>{u.quota ? `${size(u.used)} of ${size(u.quota)}` : `${size(u.used)} used`}</span>
       </div>
       {!!u.quota && (
-        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[var(--panel-2)]">
+        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[var(--active)]">
           <div className={`h-full rounded-full ${pct >= 90 ? "bg-rose-500" : "bg-[var(--accent)]"}`} style={{ width: `${Math.max(pct, u.used ? 1 : 0)}%` }} />
         </div>
       )}

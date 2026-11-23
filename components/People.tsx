@@ -180,7 +180,7 @@ export default function People() {
 
   const row = (key: string, name: string, sub: React.ReactNode, right: React.ReactNode, onClick: () => void, active: boolean, isGroup = false, kind?: "community" | "announcement") => (
     <li key={key}>
-      <button onClick={onClick} className={`flex w-full items-center gap-3 px-3 text-left ${active ? "bg-[var(--active)]" : "hover:bg-[var(--hover)]"}`}>
+      <button onClick={onClick} className={`flex w-full items-center gap-3 px-3 text-left transition ${active ? "bg-[var(--active)]" : "hover:bg-[var(--hover)]"}`}>
         <Avatar name={name} size={46} group={isGroup} community={kind === "community"} announcement={kind === "announcement"} />
         <div className="min-w-0 flex-1 border-b border-[var(--border)] py-2.5">
           <div className="flex items-baseline justify-between gap-2"><span className="truncate text-[15px]">{name}</span>{right}</div>
@@ -196,7 +196,7 @@ export default function People() {
 
   return (
     <div className="flex h-full min-h-0">
-      <section className={`flex w-full min-w-0 flex-col border-r border-[var(--border)] bg-[var(--panel)] md:w-[360px] md:shrink-0 ${open ? "hidden md:flex" : "flex"}`}>
+      <section className={`glass-bar flex w-full min-w-0 flex-col border-r border-[var(--border)] md:w-[360px] md:shrink-0 ${open ? "hidden md:flex" : "flex"}`}>
         <div className="flex items-start justify-between gap-2 px-4 pt-4 pb-2">
           <div>
             <h1 className="text-[20px] font-bold">Chats</h1>
@@ -208,7 +208,7 @@ export default function People() {
           </div>
         </div>
         <div className="px-3 pb-2">
-          <label className="flex items-center gap-2.5 rounded-lg bg-[var(--panel-2)] px-3 py-[7px]">
+          <label className="flex items-center gap-2.5 rounded-[14px] border border-[var(--border)] bg-[var(--input)] px-3 py-[7px] focus-within:border-[var(--accent)]">
             {searching ? <Loader2 size={16} className="animate-spin text-[var(--muted)]" /> : <Search size={16} className="text-[var(--muted)]" />}
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chats, people, groups, messages" aria-label="Search"
               className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--muted)]" />
@@ -251,7 +251,7 @@ export default function People() {
           <div className="flex flex-1 items-center justify-center"><Empty icon={MessagesSquare} title="Chats" text="Search someone on the left and say hello — or make a group." /></div>
         ) : (
           <>
-            <header className="flex min-h-[60px] shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--panel-2)] px-3 py-2">
+            <header className="glass-bar flex min-h-[60px] shrink-0 items-center gap-3 border-b border-[var(--border)] px-3 py-2">
               <button onClick={() => setOpen(null)} className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)] md:hidden" aria-label="Back"><ArrowLeft size={19} /></button>
               <Avatar name={header.name} size={40} />
               <div className="min-w-0 flex-1">
@@ -288,14 +288,14 @@ function PeoplePicker({ picked, setPicked, exclude = [] }: { picked: Person[]; s
       {picked.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5">
           {picked.map((p) => (
-            <span key={p.id} className="flex items-center gap-1 rounded-full bg-[var(--panel-2)] py-1 pr-2 pl-1 text-[12.5px]">
+            <span key={p.id} className="flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--input)] py-1 pr-2 pl-1 text-[12.5px]">
               <Avatar name={p.name} size={20} /> {p.name}
               <button onClick={() => toggle(p)} aria-label={`Remove ${p.name}`} className="text-[var(--muted)]"><X size={12} /></button>
             </span>
           ))}
         </div>
       )}
-      <label className="flex items-center gap-2 rounded-lg border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2">
+      <label className="flex items-center gap-2 rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2 focus-within:border-[var(--accent)]">
         {searching ? <Loader2 size={15} className="animate-spin text-[var(--muted)]" /> : <Search size={15} className="text-[var(--muted)]" />}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or phone number" className="w-full bg-transparent text-sm outline-none" autoFocus />
       </label>
@@ -304,7 +304,7 @@ function PeoplePicker({ picked, setPicked, exclude = [] }: { picked: Person[]; s
           const on = picked.some((x) => x.id === p.id);
           return (
             <li key={p.id}>
-              <button onClick={() => toggle(p)} className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left hover:bg-[var(--hover)]">
+              <button onClick={() => toggle(p)} className="flex w-full items-center gap-3 rounded-[14px] px-2 py-1.5 text-left hover:bg-[var(--hover)]">
                 <Avatar name={p.name} size={34} />
                 <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{p.name}</div><div className="truncate text-[12px] text-[var(--muted)]">{p.role === "team" ? "Our team" : "Customer"}{p.hint ? ` · ${p.hint}` : ""}</div></div>
                 <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${on ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border-strong)]"}`}>{on && <Check size={13} />}</span>
@@ -339,7 +339,7 @@ export function GroupView({ group, meId, onBack, reload, communities = [], group
   } as Message)), [group, meId, e2e.me]);
   return (
     <>
-      <header className="flex min-h-[60px] shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--panel-2)] px-3 py-2">
+      <header className="glass-bar flex min-h-[60px] shrink-0 items-center gap-3 border-b border-[var(--border)] px-3 py-2">
         <button onClick={onBack} className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)] md:hidden" aria-label="Back"><ArrowLeft size={19} /></button>
         <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={openInfo}>
           <Avatar name={group.name} size={40} group announcement={group.announcement} />
@@ -424,14 +424,14 @@ function GroupInfo({ group, meId, onClose, onLeft, reload, onCommunity }: { grou
           )}
         </div>
         {group.communityName && (
-          <button onClick={onCommunity} disabled={!onCommunity} className="flex w-full items-center gap-2 rounded-lg bg-[var(--panel-2)] px-3 py-2 text-left text-[13px]">
+          <button onClick={onCommunity} disabled={!onCommunity} className="flex w-full items-center gap-2 rounded-[14px] bg-[var(--panel-2)] px-3 py-2 text-left text-[13px]">
             <Megaphone size={15} className="text-[var(--accent-strong)]" /> Part of the community <b>{group.communityName}</b>
             {onCommunity && <span className="ml-auto text-[12px] text-[var(--accent)]">View</span>}
           </button>
         )}
 
         {group.admin && (adding ? (
-          <div className="rounded-lg border border-[var(--border)] p-3">
+          <div className="rounded-[20px] border border-[var(--border)] bg-[var(--panel)] p-3">
             <PeoplePicker picked={picked} setPicked={setPicked} exclude={group.members.map((m) => m.id)} />
             <div className="mt-2 flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => { setAdding(false); setPicked([]); }}>Cancel</Button>
@@ -440,7 +440,7 @@ function GroupInfo({ group, meId, onClose, onLeft, reload, onCommunity }: { grou
           </div>
         ) : <Button variant="outline" size="sm" onClick={() => setAdding(true)}><UserPlus size={14} /> Add members</Button>)}
 
-        <ul className="scroll-thin max-h-72 divide-y divide-[var(--border)] overflow-y-auto rounded-lg border border-[var(--border)]">
+        <ul className="scroll-thin max-h-72 divide-y divide-[var(--border)] overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--panel)]">
           {group.members.map((m) => (
             <li key={m.id} className="flex items-center gap-3 px-3 py-2">
               <Avatar name={m.name} size={34} />

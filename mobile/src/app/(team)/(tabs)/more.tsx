@@ -44,7 +44,7 @@ export default function More() {
         <Row left={icon("bag-handle", "#ea580c")} title="Catalog" subtitle={proposals ? `${proposals} reseller proposal${proposals > 1 ? "s" : ""} to review` : `${(db.products ?? []).filter((p) => p.status === "approved" && p.active).length} live products`} right={<View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}><Badge n={proposals} />{chev}</View>} onPress={() => router.push("/catalog")} />
         <Row left={icon("checkbox", "#16a34a")} title="My To-Do" subtitle="Your own tasks, with date, time and repeat" right={chev} onPress={() => router.push("/todo")} />
         <Row left={icon("alarm", "#2563eb")} title="Reminders for everyone" subtitle={`${(state?.broadcasts ?? []).filter((b) => b.dueAt > now).length} upcoming · rings on every phone`} right={chev} onPress={() => router.push("/reminders")} />
-        <Row left={icon("swap-horizontal", "#00a884")} title="P2P market" subtitle="Buy & sell between users · appeals" right={chev} onPress={() => router.push("/p2p")} />
+        <Row left={icon("swap-horizontal", "#2f7fe0")} title="P2P market" subtitle="Buy & sell between users · appeals" right={chev} onPress={() => router.push("/p2p")} />
       </Card>
       <StorageCard />
       <AppearanceCard />

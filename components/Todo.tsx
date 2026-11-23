@@ -20,9 +20,9 @@ export function TodoButton({ className = "p-2", label }: { className?: string; l
   return (
     <>
       <button onClick={() => setOpen(true)} title="My To-Do" aria-label={n ? `To-Do, ${n} due` : "To-Do"}
-        className={`relative flex items-center gap-1.5 text-[var(--muted)] hover:bg-[var(--hover)] ${label ? "rounded-lg text-[12.5px] font-medium" : "rounded-full"} ${className}`}>
+        className={`relative flex items-center gap-1.5 text-[var(--muted)] hover:bg-[var(--hover)] ${label ? "rounded-[14px] text-[12.5px] font-medium" : "rounded-full"} ${className}`}>
         <ListTodo size={17} />{label && <span>To-Do</span>}
-        {n > 0 && <span className={`${label ? "" : "absolute -top-0.5 -right-0.5 "}min-w-[16px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-bold leading-4 text-white`}>{n}</span>}
+        {n > 0 && <span className={`${label ? "" : "absolute -top-0.5 -right-0.5 "}min-w-[16px] rounded-full bg-[var(--accent)] px-1 text-center text-[10px] font-bold leading-4 text-white`}>{n}</span>}
       </button>
       {open && <TodoPanel onClose={() => setOpen(false)} />}
     </>
@@ -117,7 +117,7 @@ function TodoPanel({ onClose }: { onClose: () => void }) {
     );
   };
   const pendingRow = (t: Task) => (
-    <li key={t.id} className="space-y-2 rounded-lg bg-[var(--accent-soft)] p-3">
+    <li key={t.id} className="space-y-2 rounded-[14px] bg-[var(--accent-soft)] p-3">
       <div>
         <div className="text-[14.5px] font-semibold">{t.title}</div>
         {t.note && <p className="whitespace-pre-wrap text-[13px]">{t.note}</p>}
@@ -155,7 +155,7 @@ function TodoPanel({ onClose }: { onClose: () => void }) {
             <select value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="List" className={`${inputCls} w-auto font-medium`}>
               {filters.map(([id, name]) => <option key={id} value={id}>{name}{count(id) ? ` (${count(id)})` : ""}</option>)}
             </select>
-            <button onClick={() => setNewList("")} className="rounded-lg px-2 py-1.5 text-[13px] text-[var(--accent-strong)] hover:bg-[var(--hover)]">+ New list</button>
+            <button onClick={() => setNewList("")} className="rounded-[14px] px-2 py-1.5 text-[13px] text-[var(--accent-strong)] hover:bg-[var(--hover)]">+ New list</button>
             <div className="relative ml-auto min-w-[160px] flex-1 sm:max-w-[220px]">
               <Search size={15} className="absolute left-2.5 top-2.5 text-[var(--muted)]" />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search tasks" className={`${inputCls} pl-8`} />
@@ -163,7 +163,7 @@ function TodoPanel({ onClose }: { onClose: () => void }) {
           </div>
 
           {newList !== null && (
-            <form onSubmit={addList} className="flex gap-2 rounded-lg border border-[var(--border)] p-2">
+            <form onSubmit={addList} className="flex gap-2 rounded-[14px] border border-[var(--border)] p-2">
               <input autoFocus value={newList} onChange={(e) => setNewList(e.target.value)} maxLength={60} placeholder="Enter List Name" className={inputCls} />
               <Button type="button" variant="ghost" onClick={() => setNewList(null)}>Cancel</Button>
               <Button type="submit" disabled={!newList.trim()}>Add</Button>
@@ -178,7 +178,7 @@ function TodoPanel({ onClose }: { onClose: () => void }) {
           </form>
 
           {typeof Notification !== "undefined" && Notification.permission === "default" && (
-            <button onClick={() => Notification.requestPermission()} className="flex w-full items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-left text-[13px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+            <button onClick={() => Notification.requestPermission()} className="flex w-full items-center gap-2 rounded-[14px] border border-amber-300 bg-amber-50 px-3 py-2 text-left text-[13px] text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-200">
               <BellRing size={16} /> Allow browser notifications so to-dos also ring when this tab is in the background.
             </button>
           )}
@@ -262,7 +262,7 @@ function TaskEditor({ task, list, today, onClose }: { task?: Task; list: string;
 
         {!task && (
           <Field label="Assign to" hint={others.length ? "They must accept it first. You'll be told when they accept, decline or finish it." : people.length ? (state.scope === "team" ? "Type a name to give it to anyone." : "You can give a to-do to our team.") : undefined}>
-            <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-[var(--border-strong)] bg-[var(--input)] p-1.5">
+            <div className="flex flex-wrap items-center gap-1.5 rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] p-1.5">
               {to.map((uid) => (
                 <button type="button" key={uid} onClick={() => toggleTo(uid)} className="flex items-center gap-1 rounded-full bg-[var(--accent-soft)] py-1 pl-2.5 pr-1.5 text-[13px] font-semibold text-[var(--accent-strong)]">
                   {nameOf(uid)} <X size={12} />
@@ -272,7 +272,7 @@ function TaskEditor({ task, list, today, onClose }: { task?: Task; list: string;
                 <UserPlus size={14} className="absolute left-1.5 top-2 text-[var(--muted)]" />
                 <input value={who} onChange={(e) => setWho(e.target.value)} placeholder="Add people…" className="w-full bg-transparent py-1 pl-6 text-sm outline-none" />
                 {matches.length > 0 && (
-                  <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--panel)] shadow-lg">
+                  <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded-[14px] border border-[var(--border)] bg-[var(--panel-solid)] shadow-lg">
                     {matches.map((p) => (
                       <li key={p.id}>
                         <button type="button" onClick={() => { toggleTo(p.id); setWho(""); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13.5px] hover:bg-[var(--hover)]">

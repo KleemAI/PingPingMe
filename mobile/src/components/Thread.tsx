@@ -12,6 +12,7 @@ import { decryptedUri, uploadEncrypted, useDecryptedUri } from "@/lib/e2e";
 import * as Sharing from "expo-sharing";
 import { EmojiPanel, FormatBar, RichText, isBare } from "./RichText";
 import { MAX_MESSAGE, wrapSelection } from "@/lib/chatFormat";
+import { useGlass } from "./p2p/glass";
 
 export function Ticks({ m, size = 15 }: { m: Message; size?: number }) {
   const { c } = useTheme();
@@ -127,6 +128,7 @@ export function MessageList({ messages: all, side, onRetry, viewer = "team", wal
   openAction?: string;
 }) {
   const { c } = useTheme();
+  const { glows } = useGlass();
   const { act, openFile, server, token } = useStore(); // openAction: "pm.open" in personal chats
   const ref = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [viewing, setViewing] = useState<Attachment[] | null>(null);
@@ -157,7 +159,7 @@ export function MessageList({ messages: all, side, onRetry, viewer = "team", wal
   return (
     <>
     {viewing && <ViewOnceViewer items={viewing} onClose={() => setViewing(null)} />}
-    <ScrollView ref={ref} style={{ flex: 1, backgroundColor: wallpaper ? c.bg : c.screen }} contentContainerStyle={{ paddingVertical: 10, paddingHorizontal: 10 }}
+    <ScrollView ref={ref} style={{ flex: 1, backgroundColor: wallpaper ? c.bg : c.screen, backgroundImage: glows }} contentContainerStyle={{ paddingVertical: 10, paddingHorizontal: 10 }}
       onContentSizeChange={() => ref.current?.scrollToEnd({ animated: false })}>
       {messages.length === 0 && <T muted style={{ textAlign: "center", marginTop: 60 }}>No messages yet</T>}
       {messages.map((m, i) => {

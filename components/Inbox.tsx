@@ -148,7 +148,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
   return (
     <div className="flex h-full min-h-0">
       {/* list */}
-      <section className={`${active || activeGroup ? "hidden md:flex" : "flex"} w-full flex-col border-r border-[var(--border)] bg-[var(--panel)] md:w-[340px] md:shrink-0 xl:w-[380px]`}>
+      <section className={`${active || activeGroup ? "hidden md:flex" : "flex"} glass-bar w-full flex-col border-r border-[var(--border)] md:w-[340px] md:shrink-0 xl:w-[380px]`}>
         <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
           <div>
             <h1 className="text-[20px] font-bold">{kind === "customer" ? "Customer inbox" : "Business inbox"}</h1>
@@ -162,7 +162,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
           </div>
         </div>
         <div className="px-3 pb-2">
-          <label className="flex items-center gap-2.5 rounded-lg bg-[var(--panel-2)] px-3 py-[7px]">
+          <label className="flex items-center gap-2.5 rounded-[14px] border border-[var(--border)] bg-[var(--input)] px-3 py-[7px] focus-within:border-[var(--accent)]">
             <Search size={16} className="text-[var(--muted)]" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={kind === "business" ? "Search company, contact or message" : "Search name, phone or message"} className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--muted)]" />
             {q && <button onClick={() => setQ("")} aria-label="Clear search" className="text-[var(--muted)]"><X size={15} /></button>}
@@ -198,7 +198,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
                         <span className="truncate">{!last ? `${g.members.length} members` : last.system ? last.text : `${last.authorId === me.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : msgText(last, myDevice) ? plain(msgText(last, myDevice)) : "📎 Attachment"}`}</span>
                         {g.unread > 0 && <span className="ml-auto min-w-[19px] shrink-0 rounded-full bg-[var(--accent)] px-1.5 text-center text-[11px] font-semibold leading-[19px] text-white">{g.unread}</span>}
                       </div>
-                      <div className="mt-1 flex items-center gap-1"><span className="rounded-full bg-[var(--panel-2)] px-2 py-0.5 text-[11px] text-[var(--muted)]">Group · {g.members.length}</span></div>
+                      <div className="mt-1 flex items-center gap-1"><span className="rounded-full border border-[var(--border)] bg-[var(--input)] px-2 py-0.5 text-[11px] text-[var(--muted)]">Group · {g.members.length}</span></div>
                     </div>
                   </button>
                 </li>
@@ -271,7 +271,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
       ) : active ? (
         <Chat key={active.id} conv={active} onBack={() => select(null)} details={details} setDetails={setDetails} />
       ) : (
-        <div className="hidden flex-1 flex-col items-center justify-center gap-3 bg-[var(--panel-2)] text-center text-[var(--muted)] md:flex">
+        <div className="hidden flex-1 flex-col items-center justify-center gap-3 bg-transparent text-center text-[var(--muted)] md:flex">
           {moved ? (
             <>
               <RefreshCw size={36} />
@@ -307,14 +307,14 @@ function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBac
   return (
     <div className="flex min-w-0 flex-1">
       <section className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-[60px] shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--panel-2)] px-3 py-2">
+        <header className="glass-bar relative z-[6] flex min-h-[60px] shrink-0 items-center gap-3 border-b border-[var(--border)] px-3 py-2">
           <button onClick={onBack} className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--active)] md:hidden"><ArrowLeft size={20} /></button>
           <Avatar name={co?.name ?? ct.name} size={40} />
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium">{co ? `${co.name} · ${ct.name}` : ct.name}</div>
             <div className="truncate text-[12px] text-[var(--muted)]">{channel} · {ct.phone} · Owner: <b className="font-medium text-[var(--text)]">{owner?.name ?? "Unassigned"}</b></div>
           </div>
-          <select value={conv.status} onChange={(e) => act("conv.update", { id: conv.id, status: e.target.value }, "Status updated")} className="hidden rounded-lg border border-[var(--border-strong)] bg-[var(--input)] px-2 py-1.5 text-[13px] sm:block">
+          <select value={conv.status} onChange={(e) => act("conv.update", { id: conv.id, status: e.target.value }, "Status updated")} className="hidden rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-2.5 py-1.5 text-[13px] outline-none focus:border-[var(--accent)] sm:block">
             {Object.entries(CONV_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
           <DisappearingPicker value={conv.disappearSeconds} onChange={(v) => act("conv.disappearing", { conversationId: conv.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />
@@ -356,8 +356,8 @@ function Details({ conv, onClose }: { conv: Conversation; onClose: () => void })
   const lastIn = db.messages.filter((m) => m.conversationId === conv.id && m.direction === "in").at(-1);
 
   return (
-    <aside className="animate-slide fixed inset-0 z-30 flex flex-col bg-[var(--panel-2)] sm:left-auto sm:w-[360px] sm:border-l sm:border-[var(--border)] sm:shadow-2xl 2xl:static 2xl:shadow-none">
-      <header className="flex h-[60px] shrink-0 items-center gap-3 bg-[var(--panel)] px-4 2xl:hidden">
+    <aside className="animate-slide fixed inset-0 z-30 flex flex-col bg-[var(--panel-solid)] sm:left-auto sm:w-[360px] sm:border-l sm:border-[var(--border)] sm:shadow-2xl 2xl:static 2xl:bg-transparent 2xl:shadow-none">
+      <header className="flex h-[60px] shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--panel-solid)] px-4 2xl:hidden">
         <button onClick={onClose} className="text-[var(--muted)]"><ArrowLeft size={20} /></button>
         <span className="font-medium">Details</span>
       </header>

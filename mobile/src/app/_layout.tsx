@@ -9,6 +9,7 @@ import { usePushNotifications } from "@/lib/push";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { Toasts } from "@/components/ui";
 import { ConfirmHost } from "@/components/Confirm";
+import { NewOrderAlert } from "@/components/NewOrderAlert";
 
 function Root() {
   const { c, dark } = useTheme();
@@ -51,6 +52,7 @@ function Root() {
         <Stack.Screen name="task/note" options={{ title: "Note" }} />
       </Stack>
       <Toasts />
+      <NewOrderAlert />
       <ConfirmHost />
     </View>
   );

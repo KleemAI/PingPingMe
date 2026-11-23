@@ -25,7 +25,7 @@ export default function Products() {
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[22px] font-bold">Products &amp; services</h1>
+          <h1 className="text-[22px] font-bold tracking-tight">Products &amp; services</h1>
           <p className="text-[13.5px] text-[var(--muted)]">Ask for a price on anything — our team replies with a quote in your chat.</p>
         </div>
         <Button variant="outline" onClick={() => setAsk("general")}>Can&apos;t find it? Ask us</Button>
@@ -39,22 +39,22 @@ export default function Products() {
         <div className="flex flex-wrap gap-1.5">
           {cats.map((c) => (
             <button key={c} onClick={() => setCat(c)} aria-pressed={cat === c}
-              className={`rounded-full px-3 py-1.5 text-[13px] ${cat === c ? "bg-[var(--accent-soft)] font-semibold text-[var(--accent-strong)]" : "bg-[var(--panel-2)] text-[var(--muted)] hover:bg-[var(--hover)]"}`}>{c}</button>
+              className={`rounded-full border px-4 py-1.5 text-[13px] transition ${cat === c ? "chip-on border-transparent font-semibold" : "border-[var(--border-strong)] bg-[var(--input)] font-medium text-[var(--text)] hover:bg-[var(--active)]"}`}>{c}</button>
           ))}
         </div>
       </div>
 
-      {list.length === 0 && <div className="rounded-xl border border-[var(--border)] bg-[var(--panel)]"><Empty icon={ShoppingBag} title="Nothing here yet" text="Tell us what you need and we'll find it for you." /></div>}
+      {list.length === 0 && <div className="glass rounded-[20px]"><Empty icon={ShoppingBag} title="Nothing here yet" text="Tell us what you need and we'll find it for you." /></div>}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {list.map((p) => (
-          <article key={p.id} className="flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]">
-            <div className="flex aspect-[4/3] items-center justify-center bg-[var(--panel-2)]">
+          <article key={p.id} className="glass flex flex-col gap-3 rounded-[20px] p-3 transition hover:-translate-y-0.5">
+            <div className="glass-tile flex aspect-[4/3] items-center justify-center overflow-hidden rounded-[16px]">
               {p.image
                 // eslint-disable-next-line @next/next/no-img-element
                 ? <img src={`/api/files/${p.image.id}`} alt={p.name} loading="lazy" className="h-full w-full object-cover" />
                 : <ImageOff size={30} className="text-[var(--muted)]" aria-hidden />}
             </div>
-            <div className="flex flex-1 flex-col gap-1.5 p-4">
+            <div className="flex flex-1 flex-col gap-1.5 px-1 pb-1">
               <div className="flex flex-wrap items-center gap-1.5">
                 <Pill tone={p.kind === "service" ? "violet" : "blue"}>{p.kind === "service" ? "Service" : "Product"}</Pill>
                 <span className="text-[12px] text-[var(--muted)]">{p.category}</span>
@@ -62,8 +62,8 @@ export default function Products() {
               <h2 className="text-[15.5px] font-semibold">{p.name}</h2>
               {p.description && <p className="line-clamp-3 text-[13px] text-[var(--muted)]">{p.description}</p>}
               <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-                <span className="text-[16px] font-bold">{p.price ? <>{rupees(p.price)} <span className="text-[12px] font-normal text-[var(--muted)]">/ {p.unit}</span></> : <span className="text-[13.5px] font-medium text-[var(--muted)]">Price on request</span>}</span>
-                <Button onClick={() => setAsk(p)}>{p.price ? "Get a quote" : "Ask for price"}</Button>
+                <span className="text-[18px] font-bold tracking-tight">{p.price ? <>{rupees(p.price)} <span className="text-[12px] font-normal text-[var(--muted)]">/ {p.unit}</span></> : <span className="text-[13.5px] font-medium text-[var(--muted)]">Price on request</span>}</span>
+                <button type="button" onClick={() => setAsk(p)} className="glass-pill flex min-h-10 shrink-0 items-center justify-center rounded-full px-5 text-[14px] font-semibold transition hover:brightness-110">{p.price ? "Get a quote" : "Ask for price"}</button>
               </div>
             </div>
           </article>

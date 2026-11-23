@@ -8,6 +8,7 @@ import { AuditModule } from "./audit/audit.module";
 import { FilesModule } from "./files/files.module";
 import { ChannelModule } from "./channel/channel.module";
 import { RealtimeGateway } from "./realtime/realtime.gateway";
+import { AlertBus } from "./realtime/alerts.service";
 import { ConversationsService } from "./conversations/conversations.service";
 import { ConversationsController, MessagesController } from "./conversations/conversations.controller";
 import { ContactsService } from "./contacts/contacts.service";
@@ -71,7 +72,7 @@ import { OpsController } from "./ops/ops.controller";
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
-    RealtimeGateway,
+    RealtimeGateway, AlertBus,
     ConversationsService, ContactsService, RequestsService, ResellersService, QuotesService, OrdersService, ExportService,
     CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService, PeopleService, PushService, GroupsService, CommunitiesService, SearchService, CatalogService, CustomerService, BroadcastsService, TasksService,
   ],

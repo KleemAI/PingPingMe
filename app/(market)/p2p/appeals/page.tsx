@@ -52,14 +52,14 @@ function AppealCard({ o }: { o: P2POrder }) {
           <p className="text-[13.5px] text-[var(--muted)]">Buyer <strong className="text-[var(--text)]">{buyer?.name}</strong> · Seller <strong className="text-[var(--text)]">{seller?.name}</strong></p>
         </div>
       </div>
-      <p className="rounded-lg bg-rose-50 px-3 py-2 text-[14px] text-rose-900 dark:bg-rose-500/10 dark:text-rose-200"><strong>Reason:</strong> {o.appealReason}</p>
+      <p className="rounded-[14px] border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-[14px] text-rose-900 dark:text-rose-200"><strong>Reason:</strong> {o.appealReason}</p>
       <div className="text-[13.5px]">
         <div className="mb-1 font-semibold">Payment proof</div>
         {o.proof ? <AttachmentChip a={o.proof} /> : <span className="text-[var(--muted)]">The buyer did not attach any proof.</span>}
       </div>
       <div>
         <div className="mb-1 text-[13.5px] font-semibold">Chat</div>
-        <ol className="scroll-thin max-h-64 space-y-1.5 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--panel-2)] p-3 text-[13.5px]">
+        <ol className="scroll-thin max-h-64 space-y-1.5 overflow-y-auto rounded-[14px] border border-[var(--border)] bg-[var(--hover)] p-3 text-[13.5px]">
           {o.messages.map((m) => (
             <li key={m.id} className={m.from === "system" ? "text-[12.5px] text-[var(--muted)]" : ""}>
               <span className="font-semibold">{m.from === "buyer" ? buyer?.name : m.from === "seller" ? seller?.name : "System"}:</span> {m.text}
@@ -71,7 +71,7 @@ function AppealCard({ o }: { o: P2POrder }) {
       <label className="block text-[13px] font-semibold">Decision note (both sides see it)
         <textarea value={note} onChange={(e) => { setNote(e.target.value); setErr(""); }} rows={2} maxLength={1000} className={`${inputCls} mt-1.5`} placeholder="e.g. Bank statement shows the payment arrived — goods released." />
       </label>
-      {err && <p role="alert" className="text-[13.5px] font-medium text-rose-600">{err}</p>}
+      {err && <p role="alert" className="text-[13.5px] font-medium text-[var(--danger)]">{err}</p>}
       <div className="flex flex-wrap gap-2">
         <Button disabled={busy} className="!h-10" onClick={() => decide("release")}>Release to buyer</Button>
         <Button disabled={busy} variant="outline" className="!h-10" onClick={() => decide("cancel")}>Cancel order</Button>

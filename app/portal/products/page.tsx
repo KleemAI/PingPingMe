@@ -18,16 +18,16 @@ export default function PortalProducts() {
     <div className="mx-auto max-w-4xl space-y-4 px-4 py-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[22px] font-bold">My products</h1>
+          <h1 className="text-[22px] font-bold tracking-tight">My products</h1>
           <p className="text-[13.5px] text-[var(--muted)]">Propose products or services you can supply. Our team reviews them, sets the customer price and publishes them. Customers don&apos;t see your name or your price.</p>
         </div>
         <Button onClick={() => setEdit("new")}><Plus size={16} /> Propose a product</Button>
       </div>
-      <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]">
+      <div className="glass overflow-hidden rounded-[20px]">
         {rs.products.length === 0 && <Empty icon={ShoppingBag} title="No products yet" text="Propose what you can supply — our team publishes it after a quick review." />}
         {rs.products.map((p) => (
           <div key={p.id} className="flex flex-wrap items-center gap-3 border-b border-[var(--border)] px-4 py-3 last:border-0">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--panel-2)]">
+            <div className="glass-tile flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[14px]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {p.image ? <img src={`/api/files/${p.image.id}`} alt="" className="h-full w-full object-cover" /> : <ImageOff size={18} className="text-[var(--muted)]" />}
             </div>
@@ -58,7 +58,7 @@ function ProposeModal({ product, onClose }: { product: ResellerProduct | null; o
   return (
     <Modal open onClose={onClose} title={product ? "Edit proposal" : "Propose a product or service"}>
       <form onSubmit={save} className="space-y-3">
-        {product && <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Saving changes sends it back to our team for review.</p>}
+        {product && <p className="rounded-[14px] bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">Saving changes sends it back to our team for review.</p>}
         <Field label="Name"><input required value={f.name} onChange={set("name")} maxLength={200} className={inputCls} /></Field>
         <Field label="Description"><textarea value={f.description} onChange={set("description")} rows={3} maxLength={2000} className={inputCls} /></Field>
         <div className="grid grid-cols-2 gap-3">

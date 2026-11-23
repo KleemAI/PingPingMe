@@ -69,7 +69,7 @@ export async function syncNotifications(broadcasts: Broadcast[] | null, tasks: T
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync(CHANNEL, {
       name: "Tasks & reminders", description: "Your tasks and reminders from our team, at their time", importance: Notifications.AndroidImportance.HIGH,
-      sound: "default", vibrationPattern: [0, 250, 250, 250], lightColor: "#00a884", lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      sound: "default", vibrationPattern: [0, 250, 250, 250], lightColor: "#2f7fe0", lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
   }
   const now = Date.now();
@@ -86,7 +86,7 @@ export async function syncNotifications(broadcasts: Broadcast[] | null, tasks: T
       content: {
         title: p.title, subtitle: "Business Messaging", body: p.body, sound: "default",
         data: { planId: p.id, key: p.key, kind: p.kind, title: p.title, message: p.body },
-        priority: Notifications.AndroidNotificationPriority.HIGH, color: "#00a884",
+        priority: Notifications.AndroidNotificationPriority.HIGH, color: "#2f7fe0",
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(p.at), channelId: CHANNEL },
     });

@@ -44,7 +44,7 @@ export default function RequestWorkspace({ params }: { params: Promise<{ id: str
   return (
     <div className="pb-10">
       {/* header */}
-      <div className="border-b border-[var(--border)] bg-[var(--panel)] px-4 pt-4 pb-3 md:px-6">
+      <div className="glass-bar border-b border-[var(--border)] px-4 pt-4 pb-3 md:px-6">
         <Link href="/requests" className="mb-2 inline-flex items-center gap-1 text-[13px] text-[var(--muted)] hover:text-[var(--text)]"><ArrowLeft size={14} /> Requests</Link>
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0 flex-1">
@@ -62,13 +62,13 @@ export default function RequestWorkspace({ params }: { params: Promise<{ id: str
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 rounded-lg border border-[var(--border-strong)] bg-[var(--input)] px-2.5 py-1 text-[13px]">
+            <label className="flex items-center gap-2 rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-2.5 py-1 text-[13px]">
               <UserCog size={15} className="text-[var(--muted)]" /> Owner
               <select className="bg-transparent font-medium outline-none" value={r.agentId ?? ""} onChange={(e) => act("request.update", { id: r.id, agentId: e.target.value }, "Owner updated")}>
                 {agents.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </label>
-            <select className="rounded-lg border border-[var(--border-strong)] bg-[var(--input)] px-2.5 py-1.5 text-[13px]" value={r.priority} onChange={(e) => act("request.update", { id: r.id, priority: e.target.value })}>
+            <select className="rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-2.5 py-1.5 text-[13px]" value={r.priority} onChange={(e) => act("request.update", { id: r.id, priority: e.target.value })}>
               {Object.entries(PRIORITY).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
             <Button size="sm" variant="outline" onClick={() => setModal("reminder")}><Bell size={14} /> Follow-up</Button>
@@ -81,7 +81,7 @@ export default function RequestWorkspace({ params }: { params: Promise<{ id: str
         <div className="scroll-thin mt-4 flex items-center gap-1 overflow-x-auto pb-1">
           {r.status === "cancelled" ? <Pill tone="gray">Cancelled {r.closedAt ? dateTime(r.closedAt) : ""}</Pill> : STEPS.map((s, i) => (
             <div key={s} className="flex shrink-0 items-center gap-1">
-              <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium ${i < stepIdx ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]" : i === stepIdx ? "bg-[var(--accent)] text-white" : "bg-[var(--panel-2)] text-[var(--muted)]"}`}>
+              <span className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium ${i < stepIdx ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]" : i === stepIdx ? "chip-on" : "bg-[var(--hover)] text-[var(--muted)]"}`}>
                 {i < stepIdx ? <CheckCircle2 size={12} /> : <span className="w-3 text-center">{i + 1}</span>} {REQ_STATUS[s].label}
               </span>
               {i < STEPS.length - 1 && <span className={`h-px w-4 ${i < stepIdx ? "bg-[var(--accent)]" : "bg-[var(--border-strong)]"}`} />}
@@ -97,7 +97,7 @@ export default function RequestWorkspace({ params }: { params: Promise<{ id: str
             <div className="space-y-2 p-4 text-[13px]">
               <div className="flex items-center gap-2.5"><Avatar name={ct.name} size={36} /><div><div className="font-medium">{ct.name}</div><div className="text-[var(--muted)]">{co ? co.name : ct.type === "business" ? "Business" : "Customer"} · {ct.phone}</div></div></div>
               {conv && <Link href={`/inbox/${ct.type}?c=${conv.id}`} className="inline-block font-medium text-[var(--accent)] hover:underline">Open conversation →</Link>}
-              <div className="rounded-lg bg-[var(--panel-2)] p-3">
+              <div className="rounded-[14px] bg-[var(--panel-2)] p-3">
                 <div className="mb-1 text-[11.5px] font-semibold text-[var(--muted)]">REQUIREMENT · shared with reseller</div>
                 <p className="whitespace-pre-wrap">{r.requirement}</p>
               </div>
@@ -114,8 +114,8 @@ export default function RequestWorkspace({ params }: { params: Promise<{ id: str
                     <Pill tone={r.resellerResponse === "accepted" ? "green" : r.resellerResponse === "clarification" ? "amber" : "violet"}>{r.resellerResponse === "pending" ? "Awaiting response" : r.resellerResponse === "clarification" ? "Asked for clarification" : "Accepted"}</Pill>
                     {r.resellerResponse === "pending" && r.responseDueAt && <span className={od ? "font-medium text-rose-500" : "text-[var(--muted)]"}>due {relative(r.responseDueAt, now)}</span>}
                   </div>
-                  {od && <p className="rounded-lg bg-rose-500/10 p-2 text-[12.5px] text-rose-700 dark:text-rose-300">No response within the agreed time. Nudge them in the reseller thread or reassign — the record is kept.</p>}
-                  {res.status === "suspended" && <p className="rounded-lg bg-rose-500/10 p-2 text-[12.5px] text-rose-700 dark:text-rose-300">This reseller is suspended. Reassign or close.</p>}
+                  {od && <p className="rounded-[14px] bg-rose-500/10 p-2 text-[12.5px] text-rose-700 dark:text-rose-300">No response within the agreed time. Nudge them in the reseller thread or reassign — the record is kept.</p>}
+                  {res.status === "suspended" && <p className="rounded-[14px] bg-rose-500/10 p-2 text-[12.5px] text-rose-700 dark:text-rose-300">This reseller is suspended. Reassign or close.</p>}
                 </div>
               ) : <p className="text-[var(--muted)]">No reseller yet. {r.assignments.length ? "Previous reseller declined or was removed." : "Pick a match to share the requirement."}</p>}
               {r.assignments.length > 0 && (
@@ -249,7 +249,7 @@ function AssignModal({ r, onClose }: { r: Request; onClose: () => void }) {
       <div className="scroll-thin max-h-72 space-y-2 overflow-y-auto">
         {ranked.map(({ x, cat, area, eligible }) => (
           <button key={x.id} disabled={!eligible || x.id === r.resellerId} onClick={() => setPick(x.id)}
-            className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${pick === x.id ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-[var(--border)] hover:bg-[var(--hover)]"}`}>
+            className={`flex w-full items-center gap-3 rounded-[14px] border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-45 ${pick === x.id ? "border-[var(--accent)] bg-[var(--accent-soft)]" : "border-[var(--border)] hover:bg-[var(--hover)]"}`}>
             <Avatar name={x.name} size={36} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 font-medium">{x.name} {x.id === r.resellerId && <Pill tone="blue">current</Pill>}</div>
@@ -306,7 +306,7 @@ function QuotePanel({ requestId, quotes, hasConversation }: { requestId: string;
             <tr key={k} className="border-t border-[var(--border)]"><td className="py-1.5">{i.name}</td><td className="text-right">{i.qty}</td><td className="text-right text-[var(--muted)]">{i.unitPrice.toLocaleString("en-IN")}</td><td className="text-right font-medium">{Math.round(i.unitPrice * (1 + m / 100)).toLocaleString("en-IN")}</td></tr>
           ))}</tbody>
         </table>
-        <div className="grid grid-cols-3 gap-2 rounded-lg bg-[var(--panel-2)] p-2.5 text-center">
+        <div className="grid grid-cols-3 gap-2 rounded-[14px] bg-[var(--panel-2)] p-2.5 text-center">
           <div><div className="text-[11px] text-[var(--muted)]">Reseller cost</div><div className="font-semibold">{rupees(cost)}</div></div>
           <div><div className="text-[11px] text-[var(--muted)]">Customer price</div><div className="font-semibold">{rupees(price)}</div></div>
           <div><div className="text-[11px] text-[var(--muted)]">Margin</div><div className="font-semibold text-[var(--accent-strong)]">{rupees(price - cost)}</div></div>
@@ -328,7 +328,7 @@ function QuotePanel({ requestId, quotes, hasConversation }: { requestId: string;
             <Button variant="ghost" onClick={() => act("quote.reject", { id: q.id }, "Marked rejected")}>Rejected</Button>
           </div>
         )}
-        {q.status === "approved" && <p className="rounded-lg bg-emerald-500/10 p-2.5 text-[12.5px] text-emerald-700 dark:text-emerald-300">Approved by customer — recorded by <b>{name(q.approvedById)}</b> on {dateTime(q.approvedAt!)} · “{q.approvalNote}”</p>}
+        {q.status === "approved" && <p className="rounded-[14px] bg-emerald-500/10 p-2.5 text-[12.5px] text-emerald-700 dark:text-emerald-300">Approved by customer — recorded by <b>{name(q.approvedById)}</b> on {dateTime(q.approvedAt!)} · “{q.approvalNote}”</p>}
         {q.sentToCustomerAt && q.status !== "approved" && <p className="text-[12px] text-[var(--muted)]">Sent to customer {dateTime(q.sentToCustomerAt)} by {name(q.sentById)}</p>}
         {q.revisions.length > 1 && (
           <details className="text-[12.5px]">

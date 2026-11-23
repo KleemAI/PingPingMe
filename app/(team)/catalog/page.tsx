@@ -33,11 +33,11 @@ export default function CatalogPage() {
           { id: "hidden", label: "Hidden / rejected", count: products.filter((p) => !live(p) && p.status !== "pending").length },
           { id: "all", label: "All", count: products.length },
         ]} />
-        <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]">
+        <div className="glass overflow-hidden rounded-[20px]">
           {list.length === 0 && <Empty icon={ShoppingBag} title="Nothing here" text={f === "pending" ? "Proposals from resellers show up here." : "Add your first product or service."} />}
           {list.map((p) => (
             <div key={p.id} className="flex flex-wrap items-center gap-3 border-b border-[var(--border)] px-4 py-3 last:border-0">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--panel-2)]">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-[14px] bg-[var(--panel-2)]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 {p.image ? <img src={`/api/files/${p.image.id}`} alt="" className="h-full w-full object-cover" /> : <ImageOff size={18} className="text-[var(--muted)]" />}
               </div>
@@ -103,7 +103,7 @@ function ProductModal({ product, onClose }: { product: Product | null; onClose: 
         <Field label="Picture">
           <div className="flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {image && <img src={`/api/files/${image.id}`} alt="" className="h-14 w-14 rounded-lg object-cover" />}
+            {image && <img src={`/api/files/${image.id}`} alt="" className="h-14 w-14 rounded-[14px] object-cover" />}
             <input type="file" accept="image/*" onChange={async (e) => { const file = e.target.files?.[0]; if (file) setImage(await upload(file).catch(() => image)); }} className="text-[13px]" />
             {image && <button type="button" onClick={() => setImage(undefined)} className="text-[12.5px] text-rose-600 underline">Remove</button>}
           </div>
@@ -122,7 +122,7 @@ function ReviewModal({ product, reseller, onClose }: { product: Product; reselle
     <Modal open onClose={onClose} title={`Review: ${product.name}`}>
       <div className="space-y-3 text-[14px]">
         <p className="text-[var(--muted)]">Proposed by <strong className="text-[var(--text)]">{reseller ?? "a reseller"}</strong>{product.resellerPrice ? <> at <strong className="text-[var(--text)]">{rupees(product.resellerPrice)}</strong> / {product.unit}</> : " without a price"}. Customers never see the reseller or their price.</p>
-        {product.description && <p className="rounded-lg bg-[var(--panel-2)] p-3 text-[13.5px]">{product.description}</p>}
+        {product.description && <p className="rounded-[14px] bg-[var(--panel-2)] p-3 text-[13.5px]">{product.description}</p>}
         <Field label="Customer price (₹)" hint="Suggested: reseller price + 10%. Leave empty for “Ask for price”."><input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" className={inputCls} /></Field>
         <Button className="w-full" onClick={() => act("product.review", { id: product.id, approve: true, price }, "Approved — now live for customers").then(onClose).catch(() => {})}>Approve &amp; publish</Button>
         <Field label="Or reject — reason (the reseller sees it)"><input value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} className={inputCls} /></Field>

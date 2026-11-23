@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useStore, type CodeSent } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { Button, Input, T } from "@/components/ui";
+import { Glows, useGlass } from "@/components/p2p/glass";
 
 const DEMO = [
   ["nisha@company.in", "Nisha · Admin"],
@@ -22,6 +23,7 @@ type Step = "email" | "password" | "signup" | "code";
 
 export default function Login() {
   const { c, dark, toggle } = useTheme();
+  const g = useGlass();
   const insets = useSafeAreaInsets();
   const { server, checkEmail, login, signup, verifyEmail, resendCode, token, state } = useStore();
   const [srv, setSrv] = useState(server);
@@ -63,7 +65,7 @@ export default function Login() {
   const create = async () => {
     setErr("");
     const n = name.trim();
-    if (n.length < 2) return setErr("Enter your name (letters only)");
+    if (n.length < 2) return setErr("Enter your name (letters only, at least 2)");
     if (password.length < PASSWORD_MIN) return setErr(`Password must be at least ${PASSWORD_MIN} characters`);
     try {
       const s = await signup(srv, n, email, password);
@@ -87,19 +89,20 @@ export default function Login() {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: dark ? c.screen : c.accent }}>
-      <Pressable onPress={toggle} hitSlop={10} style={{ position: "absolute", zIndex: 10, top: insets.top + 12, right: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.18)", alignItems: "center", justifyContent: "center" }}>
-        <Ionicons name={dark ? "sunny-outline" : "moon-outline"} size={21} color="#fff" />
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: c.screen }}>
+      <Glows />
+      <Pressable onPress={toggle} hitSlop={10} style={{ position: "absolute", zIndex: 10, top: insets.top + 12, right: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: g.field, borderWidth: 1, borderColor: g.fieldBorder, alignItems: "center", justifyContent: "center" }}>
+        <Ionicons name={dark ? "sunny-outline" : "moon-outline"} size={20} color={c.text} />
       </Pressable>
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: 20, paddingTop: insets.top + 20 }} keyboardShouldPersistTaps="handled">
         <View style={{ alignItems: "center", marginBottom: 22, gap: 8 }}>
-          <View style={{ width: 64, height: 64, borderRadius: 18, backgroundColor: dark ? c.accent : "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" }}>
-            <Ionicons name="chatbubbles" size={34} color="#fff" />
+          <View style={{ width: 68, height: 68, borderRadius: 22, backgroundImage: g.tile, borderWidth: 1, borderColor: g.border, alignItems: "center", justifyContent: "center", boxShadow: g.pillGlow }}>
+            <Ionicons name="chatbubbles" size={34} color={g.accent} />
           </View>
-          <Text style={{ color: "#fff", fontSize: 24, fontWeight: "700" }}>Business Messaging</Text>
-          <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 14 }}>Team app, reseller portal & P2P market</Text>
+          <Text style={{ color: c.text, fontSize: 26, fontWeight: "800", letterSpacing: -0.3 }}>Business Messaging</Text>
+          <Text style={{ color: g.muted, fontSize: 14 }}>Team app, reseller portal & P2P market</Text>
         </View>
-        <View style={{ backgroundColor: c.card, borderRadius: 20, padding: 20, gap: 14 }}>
+        <View style={{ backgroundColor: g.card, backgroundImage: g.sheen, borderRadius: 24, borderWidth: 1, borderColor: g.border, boxShadow: g.cardShadow, padding: 20, gap: 14 }}>
           {step === "email" ? (
             <>
               {Platform.OS !== "web" && (
@@ -114,7 +117,7 @@ export default function Login() {
                 <T muted size={12}>Demo accounts (password demo123)</T>
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
                   {DEMO.map(([em, label]) => (
-                    <Pressable key={em} onPress={() => { setEmail(em); signIn(em, "demo123"); }} style={{ backgroundColor: c.card2, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 }}>
+                    <Pressable key={em} onPress={() => { setEmail(em); signIn(em, "demo123"); }} style={{ backgroundColor: g.field, borderWidth: 1, borderColor: g.fieldBorder, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 7 }}>
                       <T size={12.5}>{label}</T>
                     </Pressable>
                   ))}
@@ -165,7 +168,7 @@ export default function Login() {
               </View>
               {!!err && <Text style={{ color: c.danger, fontSize: 13.5 }}>{err}</Text>}
               {step === "signup"
-                ? <Button title="Create account" onPress={create} disabled={!name.trim() || !password} />
+                ? <Button title="Create account" onPress={create} />
                 : <Button title="Sign in" onPress={() => signIn()} disabled={!password} />}
               {step === "signup" && <T muted size={12}>You can buy on the P2P market straight away. Selling opens once our team has verified your account.</T>}
             </>

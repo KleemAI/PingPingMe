@@ -132,6 +132,9 @@ export class FilesService {
       [JSON.stringify([{ id: fileId }]), user.id],
     );
     if (gm.length) return true;
+    // pictures of P2P listings: anyone signed in browses the market
+    const listing = await em.query(`SELECT 1 FROM p2p_ads WHERE image->>'id' = $1 LIMIT 1`, [fileId]);
+    if (listing.length) return true;
     // photos in to-do notes: whoever can see the task (its owner, or everyone for a shared task)
     const inNote = await em.query(
       `SELECT 1 FROM tasks WHERE position($1 in note_html) > 0 AND (owner_id = $2 OR audience = 'everyone') LIMIT 1`,

@@ -11,6 +11,7 @@ import { useStore } from "./store";
  * so there this quietly does nothing. See mobile/PUSH-SETUP.md.
  */
 const CHANNEL = "messages";
+const ORDERS = "orders";
 const inExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 let warned = false;
 
@@ -19,6 +20,7 @@ type Data = { type?: string; id?: string };
 /** Where a tapped notification leads, by the signed-in person's role. */
 function open(d: Data, role?: string) {
   if (d.type === "support") return router.push("/shop/support");
+  if (d.type === "p2p-order" && d.id) return router.push({ pathname: "/p2p/order/[id]", params: { id: d.id } });
   if (d.type === "pm" && d.id) return router.push({ pathname: "/people/[id]", params: { id: d.id } });
   if (d.type === "group" && d.id) return router.push({ pathname: "/people/group/[id]", params: { id: d.id } });
   if (d.type === "conv" && d.id) return router.push(`/chat/${d.id}`);
@@ -30,7 +32,13 @@ async function getToken(): Promise<string | null> {
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync(CHANNEL, {
       name: "Messages", description: "New chat messages", importance: Notifications.AndroidImportance.HIGH,
-      sound: "default", vibrationPattern: [0, 250, 250, 250], lightColor: "#00a884", lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+      sound: "default", vibrationPattern: [0, 250, 250, 250], lightColor: "#2f7fe0", lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+    });
+    // new P2P orders on your ads ring loud, like a delivery app
+    await Notifications.setNotificationChannelAsync(ORDERS, {
+      name: "New orders", description: "Someone placed an order on your listing", importance: Notifications.AndroidImportance.MAX,
+      sound: "new_order.wav", vibrationPattern: [0, 600, 400, 600], lightColor: "#2f7fe0",
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC, bypassDnd: false,
     });
   }
   const perm = await Notifications.getPermissionsAsync();

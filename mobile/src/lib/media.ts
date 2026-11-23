@@ -1,5 +1,5 @@
 import { Platform } from "react-native";
-import { File } from "expo-file-system";
+import { File, Paths } from "expo-file-system";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 
 /** Like Instagram: photos at most 1080 px wide (and 1920 px tall, so screenshots stay readable), JPEG quality 75 %. */
@@ -32,4 +32,39 @@ export async function shrinkPhoto<T extends Pick>(f: T): Promise<T> {
   } catch {
     return f;
   }
+}
+
+/**
+ * A file for FormData on the phone. Expo's fetch (the app's global fetch since SDK 52) only accepts parts it can read
+ * bytes from — the old React Native `{ uri, name, type }` object fails with "Unsupported FormDataPart implementation".
+ * This gives it the name and type we want plus a `bytes()` that reads the file (or returns bytes already in memory).
+ */
+export function formFile(src: { uri: string } | { data: Uint8Array }, name: string, type: string): Blob {
+  const part = { name, type, bytes: async () => ("data" in src ? src.data : await new File(src.uri).bytes()) };
+  return part as unknown as Blob;
+}
+
+const pics = new Map<string, Promise<string | null>>();
+/**
+ * A picture the API serves only to signed-in people (`/files/:id`), as a uri an <Image> can show.
+ * The file is fetched with the sign-in token: on the web an <Image> can't send that header, and on phones a
+ * once-refused image stays blank, so we download it ourselves (kept in the cache — file ids never change).
+ */
+export function fileUri(id: string, server: string, token: string | null): Promise<string | null> {
+  let p = pics.get(id);
+  if (!p) {
+    p = (async () => {
+      const out = Platform.OS === "web" ? null : new File(Paths.cache, `pic-${id}`);
+      if (out?.exists && out.size) return out.uri;
+      const r = await fetch(`${server.replace(/\/$/, "")}/api/v1/files/${id}`, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+      if (!r.ok) return null;
+      const data = new Uint8Array(await r.arrayBuffer());
+      if (!out) return URL.createObjectURL(new Blob([data as BlobPart], { type: r.headers.get("content-type") ?? "image/jpeg" }));
+      out.write(data);
+      return out.uri;
+    })().catch(() => null);
+    pics.set(id, p);
+    p.then((u) => { if (!u) pics.delete(id); }); // try again next time
+  }
+  return p;
 }

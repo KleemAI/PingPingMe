@@ -23,9 +23,9 @@ export function RemindersButton({ className = "p-2", label }: { className?: stri
   return (
     <>
       <button onClick={() => setOpen(true)} title="Reminders" aria-label={n ? `Reminders, ${n} upcoming` : "Reminders"}
-        className={`relative flex items-center gap-1.5 text-[var(--muted)] hover:bg-[var(--hover)] ${label ? "rounded-lg text-[12.5px] font-medium" : "rounded-full"} ${className}`}>
+        className={`relative flex items-center gap-1.5 text-[var(--muted)] hover:bg-[var(--hover)] ${label ? "rounded-[14px] text-[12.5px] font-medium" : "rounded-full"} ${className}`}>
         <AlarmClock size={17} />{label && <span>Reminders</span>}
-        {n > 0 && <span className={`${label ? "" : "absolute -top-0.5 -right-0.5 "}min-w-[16px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-bold leading-4 text-white`}>{n}</span>}
+        {n > 0 && <span className={`${label ? "" : "absolute -top-0.5 -right-0.5 "}min-w-[16px] rounded-full bg-[var(--accent)] px-1 text-center text-[10px] font-bold leading-4 text-white`}>{n}</span>}
       </button>
       {open && <RemindersPanel onClose={() => setOpen(false)} />}
     </>
@@ -63,7 +63,7 @@ function RemindersPanel({ onClose }: { onClose: () => void }) {
 
   const row = (b: Broadcast, done: boolean) => (
     <li key={b.id} className={`flex items-start gap-3 border-b border-[var(--border)] px-1 py-2.5 last:border-0 ${done ? "opacity-60" : ""}`}>
-      <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${done ? "bg-[var(--panel-2)] text-[var(--muted)]" : "bg-[var(--accent-soft)] text-[var(--accent-strong)]"}`}><AlarmClock size={16} /></span>
+      <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${done ? "bg-[var(--active)] text-[var(--muted)]" : "bg-[var(--accent-soft)] text-[var(--accent-strong)]"}`}><AlarmClock size={16} /></span>
       <div className="min-w-0 flex-1">
         <div className="text-[14px] font-semibold">{b.title}</div>
         {b.message && <p className="whitespace-pre-wrap text-[13.5px]">{b.message}</p>}
@@ -81,12 +81,12 @@ function RemindersPanel({ onClose }: { onClose: () => void }) {
       <div className="space-y-4">
         <p className="text-[13px] text-[var(--muted)]">Reminders go to everyone — our team, resellers and customers. At the time, this site shows a pop-up (if it&apos;s open) and phones get a notification.</p>
         {perm === "default" && (
-          <button onClick={async () => setPerm(await Notification.requestPermission())} className="flex w-full items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-left text-[13px] text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+          <button onClick={async () => setPerm(await Notification.requestPermission())} className="flex w-full items-center gap-2 rounded-[14px] border border-amber-300 bg-amber-50 px-3 py-2 text-left text-[13px] text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-200">
             <BellRing size={16} /> Allow browser notifications so reminders also show when this tab is in the background.
           </button>
         )}
         {isTeam && (
-          <form onSubmit={create} className="space-y-3 rounded-xl border border-[var(--border)] p-3">
+          <form onSubmit={create} className="space-y-3 rounded-[20px] border border-[var(--border)] bg-[var(--hover)] p-3">
             <div className="text-[14px] font-semibold">New reminder for everyone</div>
             <Field label="Title"><input value={f.title} onChange={(e) => { setF({ ...f, title: e.target.value }); setErr(""); }} maxLength={120} placeholder="e.g. Diwali sale starts" className={inputCls} /></Field>
             <Field label="Message (optional)"><textarea value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} rows={2} maxLength={1000} className={inputCls} /></Field>
@@ -95,7 +95,7 @@ function RemindersPanel({ onClose }: { onClose: () => void }) {
             </Field>
             <div className="flex flex-wrap gap-1.5">
               {([["In 15 min", Date.now() + 15 * 60_000], ["In 1 hour", Date.now() + 60 * 60_000], ["Tomorrow 9:00", tomorrow(9)], ["Tomorrow 18:00", tomorrow(18)]] as const).map(([l, ms]) => (
-                <button key={l} type="button" onClick={() => quick(ms)} className="rounded-full bg-[var(--panel-2)] px-3 py-1 text-[12.5px] hover:bg-[var(--hover)]">{l}</button>
+                <button key={l} type="button" onClick={() => quick(ms)} className="rounded-full border border-[var(--border-strong)] bg-[var(--input)] px-3 py-1 text-[12.5px] hover:bg-[var(--active)]">{l}</button>
               ))}
             </div>
             {err && <p role="alert" className="text-[13px] font-medium text-rose-600">{err}</p>}

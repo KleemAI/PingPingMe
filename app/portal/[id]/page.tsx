@@ -31,7 +31,7 @@ export default function PortalRequest({ params }: { params: Promise<{ id: string
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2"><span className="font-mono text-[13px] text-[var(--muted)]">{r.ref}</span><StatusPill meta={REQ_STATUS[r.status]} />{!mine && <Pill tone="gray">No longer assigned to you</Pill>}</div>
-          <h1 className="mt-1 text-[21px] font-bold">{r.title}</h1>
+          <h1 className="mt-1 text-[21px] font-bold tracking-tight">{r.title}</h1>
         </div>
       </div>
 
@@ -46,10 +46,10 @@ export default function PortalRequest({ params }: { params: Promise<{ id: string
               </div>
               <p className="flex items-center gap-1.5 text-[12px] text-[var(--muted)]"><ShieldCheck size={13} /> Our team handles all customer communication. Please don&apos;t contact the customer directly.</p>
               {canRespond && (
-                <div className="rounded-xl border border-sky-400/40 bg-sky-500/10 p-3">
+                <div className="rounded-[16px] border border-[var(--accent)]/30 bg-[var(--accent-soft)] p-3">
                   <p className="mb-2 text-[13px] font-medium">Can you take this request?{r.responseDueAt && <span className={`ml-1 font-normal ${r.responseDueAt < now ? "text-rose-500" : "text-[var(--muted)]"}`}>Please respond {relative(r.responseDueAt, now)}.</span>}</p>
                   <div className="flex flex-wrap gap-2">
-                    <Button className="!bg-sky-600" onClick={() => act("portal.respond", { requestId: r.id, response: "accepted" }, "Accepted — now submit your quote")}><Check size={15} /> Accept</Button>
+                    <Button onClick={() => act("portal.respond", { requestId: r.id, response: "accepted" }, "Accepted — now submit your quote")}><Check size={15} /> Accept</Button>
                     <Button variant="outline" onClick={() => { setReason(""); setModal("clarify"); }}><HelpCircle size={15} /> Ask a question</Button>
                     <Button variant="ghost" onClick={() => { setReason(""); setModal("decline"); }}><X size={15} /> Decline</Button>
                   </div>
@@ -78,7 +78,7 @@ export default function PortalRequest({ params }: { params: Promise<{ id: string
         </div>
 
         <Card className="flex h-[560px] flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2 text-[14px] font-semibold">
+          <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5 text-[14px] font-semibold">
             Messages with our team
             {mine && <DisappearingPicker value={r.resellerDisappearSeconds} onChange={(v) => act("portal.disappearing", { requestId: r.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />}
           </div>
@@ -129,7 +129,7 @@ function QuoteForm({ requestId, lastItems, title, qty }: { requestId: string; la
         <Field label="Notes (warranty, terms…)"><input className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
         <div className="flex items-center justify-between border-t border-[var(--border)] pt-3">
           <span className="text-[14px]">Total <b>{rupees(total)}</b></span>
-          <Button className="!bg-sky-600"><Send size={14} /> Submit quote</Button>
+          <Button><Send size={14} /> Submit quote</Button>
         </div>
       </form>
     </Card>
@@ -150,7 +150,7 @@ function FulfilCard({ o }: { o: { id: string; ref: string; status: keyof typeof 
         {next && (
           <div className="flex flex-wrap gap-2 border-t border-[var(--border)] pt-3">
             <input className={`${inputCls} min-w-0 flex-1`} value={note} onChange={(e) => setNote(e.target.value)} placeholder={next.to === "dispatched" ? "Courier & tracking number" : "Note (optional)"} />
-            <Button className="!bg-sky-600" onClick={() => act("portal.fulfil", { orderId: o.id, status: next.to, note }, "Update sent to our team").then(() => setNote("")).catch(() => {})}><Truck size={14} /> {next.label}</Button>
+            <Button onClick={() => act("portal.fulfil", { orderId: o.id, status: next.to, note }, "Update sent to our team").then(() => setNote("")).catch(() => {})}><Truck size={14} /> {next.label}</Button>
           </div>
         )}
         {o.status === "dispatched" && <p className="text-[12.5px] text-[var(--muted)]">Our team will confirm delivery with the customer.</p>}

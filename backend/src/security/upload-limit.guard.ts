@@ -31,6 +31,23 @@ export function overAllowance(a: Awaited<ReturnType<typeof uploadAllowance>>, ex
 }
 
 /**
+ * Read (and throw away) the rest of an upload before answering with an error. Answering while a phone is still sending
+ * makes Android drop the connection, and the app shows "No connection to the server" instead of the real reason.
+ * Only for uploads up to the video limit; anything bigger is cut off as before.
+ */
+function drain(req: Request) {
+  const size = Number(req.headers["content-length"] ?? 0);
+  if (!size || size > LIMITS_DRAIN_MAX || req.readableEnded) return Promise.resolve();
+  return new Promise<void>((done) => {
+    const t = setTimeout(done, 30_000);
+    req.on("end", () => { clearTimeout(t); done(); });
+    req.on("error", () => { clearTimeout(t); done(); });
+    req.resume();
+  });
+}
+const LIMITS_DRAIN_MAX = 120 * 1024 * 1024;
+
+/**
  * Runs before the file is read: at most a few uploads at once per user, and none once today's allowance is used up.
  * (The exact size is checked again after the upload in FilesService.)
  */
@@ -44,9 +61,9 @@ export class UploadLimitGuard implements CanActivate {
     const user = req.user;
     if (!user) return true;
     const err = overAllowance(await uploadAllowance(this.uow, user));
-    if (err) throw err;
+    if (err) { await drain(req); throw err; }
     const release = this.limiter.begin(`upload:${user.id}`, LIMITS.parallelUploads);
-    if (!release) throw new AppError(429, "Please wait for your other uploads to finish.");
+    if (!release) { await drain(req); throw new AppError(429, "Please wait for your other uploads to finish."); }
     res.on("close", release);
     return true;
   }

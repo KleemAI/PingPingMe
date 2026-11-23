@@ -57,7 +57,7 @@ export default function CustomersPage() {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or email" aria-label="Search customers" className={`${inputCls} pl-9`} />
         </label>
       </div>
-      <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)]">
+      <div className="glass overflow-hidden rounded-[20px]">
         {list.length === 0 && <Empty icon={UserCheck} title={f === "pending" ? "Nobody is waiting for verification" : "No customers here"} text="New sign-ups appear here straight away." />}
         {list.map((c) => (
           <div key={c.id} className="flex flex-wrap items-center gap-3 border-b border-[var(--border)] px-4 py-3 last:border-0">

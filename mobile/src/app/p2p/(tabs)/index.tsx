@@ -1,56 +1,75 @@
 import { useMemo, useState } from "react";
-import { FlatList, Pressable, View } from "react-native";
+import { FlatList, Pressable, Text, View } from "react-native";
 import { router } from "expo-router";
-import { useTheme } from "@/lib/theme";
-import { METHODS, SELL_BLOCKED, useP2P } from "@/lib/p2p";
-import { Chips, Empty, T } from "@/components/ui";
-import { AdCard } from "@/components/P2P";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { fromPrice, useP2P } from "@/lib/p2p";
+import { Empty, HeaderActions, Sheet, T } from "@/components/ui";
+import { ListingCard } from "@/components/P2P";
+import { GlassChips, GlassScreen, GlassSearch, useGlass } from "@/components/p2p/glass";
 
-type Side = "buy" | "sell";
+type Sort = "featured" | "price" | "fast" | "new";
+const SORTS: { id: Sort; label: string }[] = [
+  { id: "featured", label: "Featured first" },
+  { id: "price", label: "Lowest price" },
+  { id: "fast", label: "Fastest delivery" },
+  { id: "new", label: "Newest" },
+];
 
-/** Buy tab = people selling · Sell tab = people who want to buy. */
+/** The market: products people sell — search, category chips, glass listing cards. */
 export default function Market() {
-  const { c } = useTheme();
-  const { s, merchant, canSell, reload } = useP2P();
-  const [side, setSide] = useState<Side>("buy");
-  const [product, setProduct] = useState("All");
-  const [method, setMethod] = useState<string>("any");
+  const g = useGlass();
+  const insets = useSafeAreaInsets();
+  const { s, merchant, reload } = useP2P();
+  const [cat, setCat] = useState("All");
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState<Sort>("featured");
+  const [pick, setPick] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const products = useMemo(() => ["All", ...Array.from(new Set(s.ads.filter((a) => a.merchantId !== s.meId).map((a) => a.product))).sort()], [s.ads, s.meId]);
-  const ads = s.ads
-    .filter((a) => a.online && a.merchantId !== s.meId && a.availableQty > 0 && a.side === (side === "buy" ? "sell" : "buy"))
-    .filter((a) => product === "All" || a.product === product)
-    .filter((a) => method === "any" || a.payments.includes(method as (typeof METHODS)[number]))
-    .sort((a, b) => Number(b.featured) - Number(a.featured) || (side === "buy" ? a.price - b.price : b.price - a.price));
+  const selling = useMemo(() => s.ads.filter((a) => a.online && a.side === "sell" && a.merchantId !== s.meId && a.availableQty > 0), [s.ads, s.meId]);
+  const cats = useMemo(() => ["All", ...Array.from(new Set(selling.map((a) => a.category).filter((x): x is string => !!x))).sort()], [selling]);
+  const term = q.trim().toLowerCase();
+  const speed = (id: string) => { const m = merchant(id); return m?.sales && m.avgReleaseSec !== undefined ? m.avgReleaseSec : Infinity; };
+  const list = selling
+    .filter((a) => cat === "All" || a.category === cat)
+    .filter((a) => !term || a.product.toLowerCase().includes(term) || (a.category ?? "").toLowerCase().includes(term) || (merchant(a.merchantId)?.name ?? "").toLowerCase().includes(term))
+    .sort((a, b) =>
+      sort === "price" ? fromPrice(a) - fromPrice(b)
+      : sort === "fast" ? speed(a.merchantId) - speed(b.merchantId)
+      : sort === "new" ? b.createdAt - a.createdAt
+      : Number(b.featured) - Number(a.featured) || b.createdAt - a.createdAt);
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.screen }}>
-      <View style={{ flexDirection: "row", margin: 14, marginBottom: 4, backgroundColor: c.card2, borderRadius: 999, padding: 4 }}>
-        {(["buy", "sell"] as Side[]).map((x) => (
-          <Pressable key={x} onPress={() => setSide(x)} accessibilityRole="button" accessibilityState={{ selected: side === x }}
-            style={{ flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 999, backgroundColor: side === x ? (x === "buy" ? c.accent : c.danger) : "transparent" }}>
-            <T weight="700" color={side === x ? "#fff" : c.muted}>{x === "buy" ? "Buy" : "Sell"}</T>
-          </Pressable>
-        ))}
+    <GlassScreen>
+      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, paddingBottom: 6, flexDirection: "row", alignItems: "center" }}>
+        <Text style={{ flex: 1, color: g.text, fontSize: 32, fontWeight: "800", letterSpacing: -0.5 }}>P2P</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 2, marginRight: 6 }}>
+          <Text style={{ color: g.text, fontSize: 16, fontWeight: "600" }}>INR</Text>
+        </View>
+        <HeaderActions />
       </View>
-      <Chips items={products.map((p) => ({ id: p, label: p }))} value={product} onChange={setProduct} />
-      <Chips items={[{ id: "any", label: "Any payment" }, ...METHODS.map((m) => ({ id: m, label: m }))]} value={method} onChange={setMethod} />
+      <GlassSearch value={q} onChange={setQ} placeholder="Search products or sellers" onFilter={() => setPick(true)} filterOn={sort !== "featured"} />
+      {cats.length > 1 && <GlassChips items={cats} value={cat} onChange={setCat} />}
       <FlatList
-        data={ads}
+        data={list}
         keyExtractor={(a) => a.id}
         refreshing={busy}
         onRefresh={async () => { setBusy(true); await reload(); setBusy(false); }}
-        contentContainerStyle={{ padding: 14, paddingTop: 4, gap: 10, paddingBottom: 40 }}
-        ListHeaderComponent={side === "sell" && !canSell ? (
-          <View style={{ backgroundColor: c.note, borderColor: c.noteBorder, borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 4 }}>
-            <T size={13.5} color={c.noteText}><T weight="700" size={13.5} color={c.noteText}>Selling is locked for now. </T>{SELL_BLOCKED}</T>
-          </View>
-        ) : undefined}
-        ListEmptyComponent={<Empty icon="storefront-outline" title="No ads here yet" text={side === "buy" ? "Nobody is selling this right now. Post a Buy ad so sellers can find you." : "Nobody wants to buy this right now."} />}
-        ListFooterComponent={<Pressable onPress={() => router.push("/p2p/new-ad")} style={{ alignSelf: "center", paddingVertical: 12 }}><T color={c.accentStrong} weight="600">+ Post your own ad</T></Pressable>}
-        renderItem={({ item }) => <AdCard ad={item} m={merchant(item.merchantId)} action={side === "buy" ? "Buy" : "Sell"} />}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: cats.length > 1 ? 0 : 12, gap: 14, paddingBottom: 40 }}
+        ListEmptyComponent={<Empty icon="storefront-outline" title={term || cat !== "All" ? "Nothing matches" : "Nothing for sale yet"} text="Sell something of your own — it shows up here for everyone." />}
+        ListFooterComponent={<Pressable onPress={() => router.push("/p2p/new-ad")} style={{ alignSelf: "center", paddingVertical: 14 }}><Text style={{ color: g.accent, fontWeight: "600", fontSize: 15 }}>+ Sell a product</Text></Pressable>}
+        renderItem={({ item }) => <ListingCard ad={item} m={merchant(item.merchantId)} />}
       />
-    </View>
+
+      <Sheet open={pick} onClose={() => setPick(false)} title="Sort listings">
+        {SORTS.map((o) => (
+          <Pressable key={o.id} onPress={() => { setSort(o.id); setPick(false); }} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 }}>
+            <Ionicons name={o.id === sort ? "radio-button-on" : "radio-button-off"} size={22} color={o.id === sort ? g.accent : g.muted} />
+            <T size={16}>{o.label}</T>
+          </Pressable>
+        ))}
+      </Sheet>
+    </GlassScreen>
   );
 }

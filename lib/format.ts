@@ -36,7 +36,7 @@ export const duration = (ms: number) => {
 };
 export const initials = (n: string) => n.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
 export const colorFor = (s: string) => {
-  const c = ["#25d366", "#53bdeb", "#a78bfa", "#ff8a65", "#ffbc38", "#ec4899", "#14b8a6", "#6366f1"];
+  const c = ["#3b82f6", "#53bdeb", "#a78bfa", "#ff8a65", "#ffbc38", "#ec4899", "#14b8a6", "#6366f1"];
   let h = 0;
   for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return c[h % c.length];

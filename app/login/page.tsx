@@ -130,26 +130,25 @@ export default function Login() {
       <input ref={nextField} className={`${inputCls} h-11 pr-11`} type={show ? "text" : "password"} placeholder={placeholder} aria-label="Password"
         value={password} onChange={(e) => { setPassword(e.target.value); setErr(""); }} autoComplete={autoComplete} />
       <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? "Hide password" : "Show password"}
-        className="absolute top-1/2 right-1.5 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[var(--muted)] hover:bg-[var(--hover)]">
+        className="absolute top-1/2 right-1.5 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-[10px] text-[var(--muted)] hover:bg-[var(--hover)]">
         {show ? <EyeOff size={17} /> : <Eye size={17} />}
       </button>
     </div>
   );
   const submitBtn = (label: string) => (
-    <button disabled={busy} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent)] font-medium text-white disabled:opacity-60">
+    <button disabled={busy} className="flex h-11 w-full items-center justify-center gap-2 rounded-[14px] bg-[var(--primary)] font-semibold text-[var(--on-primary)] transition hover:brightness-90 disabled:opacity-60">
       {busy && <Loader2 size={16} className="animate-spin" />} {label}
     </button>
   );
 
   return (
-    <main className="relative flex min-h-dvh items-center justify-center bg-[var(--bg-app)] p-4">
-      <div className="absolute inset-x-0 top-0 h-56 bg-[var(--accent)] dark:hidden" />
-      <button onClick={toggleDark} title={dark ? "Light mode" : "Dark mode"} className="absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-white hover:bg-white/30 dark:bg-[var(--panel-2)] dark:text-[var(--text)]">
+    <main className="relative flex min-h-dvh items-center justify-center p-4">
+      <button onClick={toggleDark} title={dark ? "Light mode" : "Dark mode"} className="glass-pill absolute top-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-full transition hover:brightness-110">
         {dark ? <Sun size={19} /> : <Moon size={19} />}
       </button>
-      <div className="relative w-full max-w-md rounded-2xl bg-[var(--panel)] p-7 shadow-2xl">
+      <div className="glass relative w-full max-w-md rounded-[26px] p-7">
         <div className="mb-6 flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--accent)] text-white"><MessagesSquare size={22} /></span>
+          <span className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-[var(--accent)] text-white shadow-[var(--pill-glow)]"><MessagesSquare size={22} /></span>
           <div>
             <h1 className="text-xl font-bold">Business Messaging</h1>
             <p className="text-sm text-[var(--muted)]">{step === "signup" ? "Create your account" : step === "code" ? "Confirm your email" : "Sign in or create an account"}</p>
@@ -162,14 +161,14 @@ export default function Login() {
               <input ref={nextField} className={`${inputCls} mt-1 h-11`} type="email" placeholder="you@example.com" value={email}
                 onChange={(e) => { setEmail(e.target.value); setErr(""); }} autoComplete="username" />
             </label>
-            {err && <p role="alert" className="text-sm text-rose-600">{err}</p>}
+            {err && <p role="alert" className="text-sm text-[var(--danger)]">{err}</p>}
             {submitBtn("Continue")}
             <p className="text-[12.5px] text-[var(--muted)]">New here? Enter your email and we&apos;ll create your account.</p>
           </form>
         )}
 
         {step !== "email" && (
-          <div className="mb-3 flex items-center justify-between gap-2 rounded-lg bg-[var(--panel-2)] px-3 py-2 text-sm">
+          <div className="mb-3 flex items-center justify-between gap-2 rounded-[14px] border border-[var(--border)] bg-[var(--hover)] px-3.5 py-2 text-sm">
             <span className="truncate">{email}</span>
             <button type="button" onClick={back} className="flex shrink-0 items-center gap-0.5 text-[13px] font-medium text-[var(--accent-strong)]"><ChevronLeft size={15} /> Change</button>
           </div>
@@ -179,14 +178,14 @@ export default function Login() {
           <form onSubmit={login} className="space-y-3" noValidate>
             <p className="text-[13.5px] text-[var(--muted)]">Welcome back — enter your password.</p>
             {pwField("current-password", "Password")}
-            {err && <p role="alert" className="text-sm text-rose-600">{err}</p>}
+            {err && <p role="alert" className="text-sm text-[var(--danger)]">{err}</p>}
             {submitBtn("Sign in")}
           </form>
         )}
 
         {step === "code" && (
           <form onSubmit={confirm} className="space-y-3" noValidate>
-            <div className="flex items-start gap-3 rounded-lg bg-[var(--accent-soft)] p-3 text-[13.5px]">
+            <div className="flex items-start gap-3 rounded-[14px] bg-[var(--accent-soft)] p-3 text-[13.5px]">
               <MailCheck size={20} className="mt-0.5 shrink-0 text-[var(--accent-strong)]" />
               <span>We sent a <b>6-digit code</b> to your email. Enter it here to finish. It works for 15 minutes — check spam if you can&apos;t find it.</span>
             </div>
@@ -194,7 +193,7 @@ export default function Login() {
               value={code} onChange={(e) => { const d = e.target.value.replace(/\D/g, "").slice(0, 6); setCode(d); setErr(""); if (d.length === 6) confirm(undefined, d); }} />
             {sent?.devCode && <p className="text-[12px] text-[var(--muted)]">Testing: the server has no email set up, so here is the code — <b>{sent.devCode}</b></p>}
             {note && <p className="text-[13px] text-[var(--accent-strong)]">{note}</p>}
-            {err && <p role="alert" className="text-sm text-rose-600">{err}</p>}
+            {err && <p role="alert" className="text-sm text-[var(--danger)]">{err}</p>}
             {submitBtn("Confirm email")}
             <div className="flex justify-end">
               <button type="button" onClick={resend} disabled={wait > 0} className="text-[13px] font-medium text-[var(--accent-strong)] disabled:text-[var(--muted)]">
@@ -214,7 +213,7 @@ export default function Login() {
             <label className="block text-[13px] font-medium">Create a password
               <span className="mt-1 block">{pwField("new-password", `At least ${PASSWORD_MIN} characters`)}</span>
             </label>
-            {err && <p role="alert" className="text-sm text-rose-600">{err}</p>}
+            {err && <p role="alert" className="text-sm text-[var(--danger)]">{err}</p>}
             {submitBtn("Create account")}
             <p className="text-[12.5px] text-[var(--muted)]">You can buy straight away. To sell, our team verifies your account first.</p>
           </form>
@@ -225,7 +224,7 @@ export default function Login() {
           <div className="flex flex-wrap gap-1.5">
             {DEMO.map((d) => (
               <button key={d.email} onClick={() => { setEmail(d.email); setPassword("demo123"); setStep("password"); login(undefined, d.email, "demo123"); }}
-                className="rounded-full bg-[var(--panel-2)] px-3 py-1 text-[12.5px] hover:bg-[var(--active)]">{d.label}</button>
+                className="rounded-full border border-[var(--border-strong)] bg-[var(--input)] px-3 py-1 text-[12.5px] transition hover:bg-[var(--active)]">{d.label}</button>
             ))}
           </div>
         </div>

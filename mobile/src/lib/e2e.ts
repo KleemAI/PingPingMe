@@ -9,7 +9,7 @@ import { File, Paths } from "expo-file-system";
 import * as Crypto from "expo-crypto";
 import { storage } from "./storage";
 import { useStore } from "./store";
-import { shrinkPhoto } from "./media";
+import { formFile, shrinkPhoto } from "./media";
 import type { Attachment } from "./types";
 import {
   E2E_MIME, decryptFile, decryptMessage, encryptFile, encryptMessage, newDevice, publicKeyOf, setRandom,
@@ -91,11 +91,7 @@ export async function uploadEncrypted(picked: Picked, api: Api): Promise<Attachm
   const { data, key, nonce } = encryptFile(bytes);
   const fd = new FormData();
   if (Platform.OS === "web") fd.append("file", new Blob([data as BlobPart], { type: E2E_MIME }), "encrypted.bin");
-  else {
-    const tmp = new File(Paths.cache, `up-${Date.now()}.bin`);
-    tmp.write(data);
-    fd.append("file", { uri: tmp.uri, name: "encrypted.bin", type: E2E_MIME } as unknown as Blob);
-  }
+  else fd.append("file", formFile({ data }, "encrypted.bin", E2E_MIME));
   const res = await api("/api/v1/files", { method: "POST", body: fd });
   const out = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(out.error ?? "Upload failed");

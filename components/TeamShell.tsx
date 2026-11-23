@@ -51,7 +51,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
 
   if (!team || !o) {
     return (
-      <div className="flex h-dvh items-center justify-center bg-[var(--panel)]">
+      <div className="flex h-dvh items-center justify-center">
         <Loader2 className="animate-spin text-[var(--accent)]" size={32} />
       </div>
     );
@@ -88,7 +88,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
   const sidebar = (
     <nav className="flex h-full flex-col">
       <div className="flex items-center gap-2.5 px-4 py-4">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--accent)] text-white"><MessagesSquare size={19} /></span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[var(--accent)] text-white shadow-[var(--pill-glow)]"><MessagesSquare size={19} /></span>
         <div className="min-w-0">
           <div className="truncate text-[15px] font-bold">{db.settings.business.name}</div>
           <div className="text-[11.5px] text-[var(--muted)]">Business messaging</div>
@@ -97,7 +97,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
       <div className="scroll-thin flex-1 space-y-0.5 overflow-y-auto px-2">
         {nav.map(({ href, label, icon: Icon, badge }) => (
           <Link key={href} href={href}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] transition ${active(href) ? "bg-[var(--accent-soft)] font-semibold text-[var(--accent-strong)]" : "text-[var(--text)] hover:bg-[var(--hover)]"}`}>
+            className={`flex items-center gap-3 rounded-full px-3.5 py-2 text-[14px] transition ${active(href) ? "bg-[var(--active)] font-semibold text-[var(--text)]" : "text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--text)]"}`}>
             <Icon size={18} />
             <span className="flex-1">{label}</span>
             {!!badge && <span className="min-w-[20px] rounded-full bg-[var(--accent)] px-1.5 text-center text-[11px] font-semibold leading-5 text-white">{badge}</span>}
@@ -121,15 +121,15 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-[var(--bg-app)]">
-      <aside className="hidden w-60 shrink-0 border-r border-[var(--border)] bg-[var(--panel)] lg:block">{sidebar}</aside>
+    <div className="flex h-dvh overflow-hidden">
+      <aside className="glass-bar hidden w-60 shrink-0 border-r border-[var(--border)] lg:block">{sidebar}</aside>
       {drawer && (
-        <div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setDrawer(false)}>
-          <aside className="animate-slide h-full w-64 bg-[var(--panel)]" onClick={(e) => e.stopPropagation()}>{sidebar}</aside>
+        <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px] lg:hidden" onClick={() => setDrawer(false)}>
+          <aside className="animate-slide h-full w-64 border-r border-[var(--border)] bg-[var(--panel-solid)] shadow-2xl" onClick={(e) => e.stopPropagation()}>{sidebar}</aside>
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--panel)] px-3">
+        <header className="glass-bar relative z-30 flex h-12 shrink-0 items-center gap-2 border-b border-[var(--border)] px-3">
           <button onClick={() => setDrawer(true)} className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--hover)] lg:hidden">{drawer ? <X size={20} /> : <Menu size={20} />}</button>
           <span className="truncate text-sm font-medium lg:hidden">{nav.find((n) => active(n.href))?.label}</span>
           <div className="ml-auto flex items-center gap-1">
@@ -139,10 +139,10 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
             <div className="relative">
               <button onClick={() => setBell((b) => !b)} className="relative rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]" title="Alerts">
                 <Bell size={19} />
-                {alerts.length > 0 && <span className="absolute top-0.5 right-0.5 min-w-[17px] rounded-full bg-rose-500 px-1 text-center text-[10px] font-bold leading-[17px] text-white">{alerts.length}</span>}
+                {alerts.length > 0 && <span className="absolute top-0.5 right-0.5 min-w-[17px] rounded-full bg-[var(--danger)] px-1 text-center text-[10px] font-bold leading-[17px] text-white">{alerts.length}</span>}
               </button>
               {bell && (
-                <div className="animate-pop absolute right-0 z-50 mt-1 w-[min(92vw,360px)] overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)] shadow-2xl">
+                <div className="animate-pop absolute right-0 z-50 mt-1 w-[min(92vw,360px)] overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--panel-solid)] shadow-2xl">
                   <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2.5 text-sm font-semibold">
                     Needs attention
                     {typeof Notification !== "undefined" && Notification.permission === "default" && (

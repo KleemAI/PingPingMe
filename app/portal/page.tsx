@@ -33,11 +33,11 @@ export default function PortalHome() {
           const overdue = r.resellerResponse === "pending" && r.responseDueAt && r.responseDueAt < now;
           const quote = s.quotes.find((q) => q.requestId === r.id && q.status !== "superseded");
           return (
-            <Link key={r.id} href={`/portal/${r.id}`} className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--panel)] p-4 transition hover:shadow-md">
+            <Link key={r.id} href={`/portal/${r.id}`} className="glass flex items-center gap-3 rounded-[20px] p-4 transition hover:-translate-y-0.5">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-mono text-[12px] text-[var(--muted)]">{r.ref}</span>
-                  <span className="font-medium">{r.title}</span>
+                  <span className="font-semibold">{r.title}</span>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-[var(--muted)]">
                   <span className="flex items-center gap-1"><Tag size={12} />{r.category}</span>
