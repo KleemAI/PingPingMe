@@ -34,19 +34,23 @@ export const env = {
     const port = Number(process.env.SMTP_PORT ?? 587);
     return {
       host: process.env.SMTP_HOST ?? "", port, user: process.env.SMTP_USER ?? "", pass: process.env.SMTP_PASS ?? "",
-      from: process.env.MAIL_FROM ?? "Business Messaging <no-reply@localhost>",
+      // empty MAIL_FROM: send as the SMTP account itself (what Gmail does anyway)
+      from: process.env.MAIL_FROM || (process.env.SMTP_USER ? `Business Messaging <${process.env.SMTP_USER}>` : "Business Messaging <no-reply@localhost>"),
     };
   },
+  /** Email can really be sent: SMTP_HOST, SMTP_USER and SMTP_PASS are all filled in (an empty password = not yet). */
+  get mailReady() { const s = env.smtp; return !!(s.host && s.user && s.pass); },
   /**
    * New customers must confirm their email with a 6-digit code before they can sign in.
-   * Off for now (EMAIL_VERIFICATION=true turns it on — set up SMTP first).
+   * On by itself once email can be sent (SMTP host, user and password filled in); EMAIL_VERIFICATION=true/false decides
+   * it yourself.
    */
-  get emailVerification() { return bool(process.env.EMAIL_VERIFICATION, false); },
+  get emailVerification() { return bool(process.env.EMAIL_VERIFICATION, env.mailReady); },
   /**
    * Development helper: the sign-up / resend answers include the code (`devCode`) so the apps and tests can show it.
    * On by default only outside production and while SMTP isn't set.
    */
-  get emailDevCodes() { return bool(process.env.EMAIL_DEV_CODES, !env.isProd && !process.env.SMTP_HOST); },
+  get emailDevCodes() { return bool(process.env.EMAIL_DEV_CODES, !env.isProd && !env.mailReady); },
   get corsOrigins() {
     return (process.env.CORS_ORIGINS ?? process.env.WEB_ORIGIN ?? "http://localhost:3000").split(",").map((s) => s.trim()).filter(Boolean);
   },

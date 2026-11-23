@@ -20,4 +20,6 @@ export class SessionEntity {
   /** when the token runs out on its own */
   @Column({ name: "expires_at", ...TS }) expiresAt: number;
   @Column({ name: "revoked_at", ...TS_NULL }) revokedAt: number | null;
+  /** this device's public key for end-to-end encrypted chats (base64 X25519), see common/e2e.ts */
+  @Column({ name: "e2e_key", type: "varchar", length: 64, nullable: true }) e2eKey: string | null;
 }

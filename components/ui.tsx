@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Megaphone, X, Paperclip, Users } from "lucide-react";
+import { Megaphone, X, Paperclip, Users, Lock } from "lucide-react";
+import { useFileUrl } from "@/lib/client/e2e";
 import Link from "next/link";
 import type { Attachment } from "@/lib/types";
 import { colorFor, initials } from "@/lib/format";
@@ -106,7 +107,19 @@ export function Empty({ icon: Icon, title, text }: { icon: React.ComponentType<{
 
 /** A file in a chat: pictures and videos show inline, voice notes get a player, anything else is a download chip. */
 export function AttachmentChip({ a }: { a: Attachment }) {
-  const url = `/api/files/${a.id}`;
+  return a.e2e ? <EncryptedChip a={a} /> : <FileChip a={a} url={`/api/files/${a.id}`} />;
+}
+
+/** A file of an end-to-end encrypted chat: downloaded, decrypted here, then shown like any other. */
+function EncryptedChip({ a }: { a: Attachment }) {
+  const url = useFileUrl(a);
+  if (url === undefined) return <span className="mt-1 flex items-center gap-2 rounded-md bg-black/5 px-2 py-1.5 text-[12.5px] text-[var(--muted)] dark:bg-white/5"><Lock size={13} /> Opening {a.name}…</span>;
+  if (!url) return <span className="mt-1 flex items-center gap-2 rounded-md bg-black/5 px-2 py-1.5 text-[12.5px] text-[var(--muted)] dark:bg-white/5"><Lock size={13} /> Couldn&apos;t open {a.name}</span>;
+  return <FileChip a={a} url={url} />;
+}
+
+function FileChip({ a, url }: { a: Attachment; url: string }) {
+  const local = url.startsWith("blob:");
   if (a.mime.startsWith("image/")) {
     // eslint-disable-next-line @next/next/no-img-element
     return <a href={url} target="_blank" rel="noreferrer" className="mt-1 block"><img src={url} alt={a.name} loading="lazy" className="max-h-64 max-w-full rounded-md object-cover" /></a>;
@@ -123,7 +136,7 @@ export function AttachmentChip({ a }: { a: Attachment }) {
     );
   }
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="mt-1 flex max-w-full items-center gap-2 rounded-md bg-black/5 px-2 py-1.5 text-[12.5px] hover:bg-black/10 dark:bg-white/5">
+    <a href={url} target="_blank" rel="noreferrer" download={local ? a.name : undefined} className="mt-1 flex max-w-full items-center gap-2 rounded-md bg-black/5 px-2 py-1.5 text-[12.5px] hover:bg-black/10 dark:bg-white/5">
       <Paperclip size={13} className="shrink-0" />
       <span className="truncate">{a.name}</span>
       <span className="shrink-0 text-[var(--muted)]">{(a.size / 1024 / 1024).toFixed(1)} MB</span>

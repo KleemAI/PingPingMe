@@ -12,7 +12,7 @@ export class Mailer {
   private readonly log = new Logger("Mail");
   private transport: Transport | null = null;
 
-  get configured() { return !!env.smtp.host; }
+  get configured() { return env.mailReady; }
 
   private async getTransport() {
     if (this.transport) return this.transport;
@@ -25,7 +25,7 @@ export class Mailer {
 
   async send(to: string, subject: string, text: string, html?: string) {
     if (!this.configured) {
-      this.log.warn(`(not sent — SMTP_HOST is not set) to ${to}: ${subject}\n${text}`);
+      this.log.warn(`(not sent — SMTP_HOST / SMTP_USER / SMTP_PASS not all set) to ${to}: ${subject}\n${text}`);
       return false;
     }
     try {

@@ -42,6 +42,7 @@ import { PeopleService } from "./people/people.service";
 import { GroupsService } from "./people/groups.service";
 import { CommunitiesService } from "./people/communities.service";
 import { SearchController } from "./search/search.controller";
+import { E2EController } from "./e2e/e2e.controller";
 import { SearchService } from "./search/search.service";
 import { PushController } from "./push/push.controller";
 import { PushService } from "./push/push.service";
@@ -66,7 +67,7 @@ import { OpsController } from "./ops/ops.controller";
   controllers: [
     StateController, ConversationsController, MessagesController, ContactsController, RequestsController, ResellersController,
     QuotesController, OrdersController, ExportController, CasesController, WorkspaceController, SettingsController,
-    UsersController, CustomersController, PortalController, OpsController, P2PController, PeopleController, PushController, SearchController,
+    UsersController, CustomersController, PortalController, OpsController, P2PController, PeopleController, PushController, SearchController, E2EController,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

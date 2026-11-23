@@ -13,6 +13,7 @@ import { Ticks } from "@/components/Thread";
 import { plain } from "@/lib/chatFormat";
 import { fuzzyScore } from "@/lib/fuzzy";
 import { HitRowView, SEARCH_FILTERS, SearchEmpty, hitRows, useGlobalSearch, type SearchType } from "@/components/GlobalSearch";
+import { msgText, useE2E } from "@/lib/e2e";
 
 type F = "open" | "mine" | "unassigned" | "unread" | "unanswered" | "waiting_customer" | "waiting_reseller" | "resolved" | "failed" | "all";
 
@@ -54,6 +55,7 @@ export default function Inbox() {
   const fresh = useMemo(() => newChatCandidates(db, kind, term), [db, kind, term]);
   // group chats live in the Customer inbox too (customers and the team together)
   const { groups } = usePersonalChats();
+  const { me: myDev } = useE2E(me.id, []); // last line of encrypted groups
   // search filter chips: All · Business · Personal · Groups · Community · P2P
   const [stype, setStype] = useState<SearchType>("all");
   const searchingNow = term.text.replace(/\s/g, "").length >= 2;
@@ -152,7 +154,7 @@ export default function Inbox() {
                     <T size={12} color={g.unread ? c.accent : c.muted} weight={g.unread ? "600" : "400"}>{listTime(g.lastMessageAt)}</T>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <T size={14} muted numberOfLines={1} style={{ flex: 1 }}>{!last ? `${g.members.length} members` : last.system ? last.text : `${last.authorId === me.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}`}</T>
+                    <T size={14} muted numberOfLines={1} style={{ flex: 1 }}>{!last ? `${g.members.length} members` : last.system ? last.text : `${last.authorId === me.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : msgText(last, myDev) ? plain(msgText(last, myDev)) : "📎 Attachment"}`}</T>
                     {g.unread > 0 && <View style={{ backgroundColor: c.accent, borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}><T size={11} color="#fff" weight="700">{g.unread}</T></View>}
                   </View>
                   <T size={11.5} muted>Group · {g.members.length} members</T>

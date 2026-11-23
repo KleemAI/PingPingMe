@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { lockedPreview, readEnvelope } from "../common/e2e";
 import { fuzzyScore } from "../common/fuzzy";
 import { PushService, preview } from "../push/push.service";
 import { In } from "typeorm";
@@ -95,6 +96,7 @@ export class PeopleService {
             // view once: the sender never gets the file back, and after the other person opened it nobody does
             attachments: m.viewOnce && (m.viewedAt || m.authorId === user.id) ? [] : m.attachments,
             expiresAt: m.expiresAt ?? undefined, viewOnce: m.viewOnce || undefined, viewedAt: m.viewedAt ?? undefined,
+            e2e: m.e2e ?? undefined,
           })),
         };
       }),
@@ -122,17 +124,19 @@ export class PeopleService {
     const other = await tx.em.findOne(UserEntity, { where: { id: chat.userA === me.id ? chat.userB : chat.userA } });
     if (!other?.active) throw badRequest("This account is no longer active");
     const attachments = await this.files.attachments(tx, p.attachments);
-    const text = optStr(p.text, MAX_MESSAGE) ?? "";
-    if (!text && !attachments.length) throw badRequest("Type a message or attach a file");
+    // end-to-end encrypted: the server keeps only what it can't read
+    const e2e = readEnvelope(p.e2e);
+    const text = e2e ? "" : optStr(p.text, MAX_MESSAGE) ?? "";
+    if (!e2e && !text && !attachments.length) throw badRequest("Type a message or attach a file");
     const now = Date.now();
     await tx.em.insert(PersonalMessageEntity, {
       id: newId("pm"), chatId: chat.id, authorId: me.id, text, attachments, createdAt: now,
-      expiresAt: expiryFor(chat, now), viewOnce: viewOnceFlag(p.viewOnce, attachments),
+      expiresAt: expiryFor(chat, now), viewOnce: viewOnceFlag(p.viewOnce, attachments), e2e,
     });
     chat.lastMessageAt = now;
     if (chat.userA === me.id) chat.readA = now; else chat.readB = now;
     await tx.em.save(chat);
-    this.push.notify(tx, [other.id], { title: me.name, body: preview(text, attachments, !!p.viewOnce && attachments.length > 0), data: { type: "pm", id: chat.id } });
+    this.push.notify(tx, [other.id], { title: me.name, body: e2e ? lockedPreview(attachments.length) : preview(text, attachments, !!p.viewOnce && attachments.length > 0), data: { type: "pm", id: chat.id } });
     return chat.id;
   }
 

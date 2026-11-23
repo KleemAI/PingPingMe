@@ -14,12 +14,15 @@ import { compressVideo, isVideo } from "./media";
 
 const gb = (b: number) => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : `${Math.round(b / 1024 ** 2)} MB`);
 
+export const E2E_MIME = "application/x-bm-encrypted";
 export const ALLOWED_MIME = [
   "image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf", "text/plain", "text/csv",
   // videos and voice notes (browsers record webm / mp4, phones record m4a / aac / 3gp)
   "video/mp4", "video/webm", "video/quicktime", "video/3gpp",
   "audio/mpeg", "audio/ogg", "audio/webm", "audio/mp4", "audio/x-m4a", "audio/m4a", "audio/aac", "audio/wav", "audio/3gpp", "audio/amr",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  // a file of an end-to-end encrypted chat: "BME2" + ciphertext — only the people in the chat can open it
+  E2E_MIME,
 ];
 
 /** Magic-number check for binary types, so a renamed .exe can't pass as a PDF or image. */
@@ -31,6 +34,7 @@ function looksLike(mime: string, b: Buffer) {
     case "image/gif": return hex.startsWith("47494638");
     case "image/webp": return hex.startsWith("52494646") && b.subarray(8, 12).toString() === "WEBP";
     case "application/pdf": return hex.startsWith("25504446");
+    case E2E_MIME: return hex.startsWith("424d4532") && b.length > 4 + 16; // "BME2" + at least the auth tag
     case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
     case "application/vnd.openxmlformats-officedocument.wordprocessingml.document": return hex.startsWith("504b0304");
     default: return true;
@@ -43,8 +47,10 @@ export class FilesService {
 
   async upload(user: User, file?: Express.Multer.File): Promise<Attachment> {
     if (!file) throw badRequest("No file");
-    const limit = isVideo(file.mimetype) ? env.maxVideoBytes : env.maxUploadBytes;
-    if (file.size > limit) throw new AppError(413, `${isVideo(file.mimetype) ? "Video" : "File"} is larger than ${Math.round(limit / 1024 / 1024)} MB`);
+    // encrypted files may be videos the server can't shrink, so they get the video limit
+    const big = isVideo(file.mimetype) || file.mimetype === E2E_MIME;
+    const limit = big ? env.maxVideoBytes : env.maxUploadBytes;
+    if (file.size > limit) throw new AppError(413, `${big ? "Video" : "File"} is larger than ${Math.round(limit / 1024 / 1024)} MB`);
     if (!ALLOWED_MIME.includes(file.mimetype)) throw new AppError(415, `File type not allowed (${file.mimetype || "unknown"})`);
     if (!looksLike(file.mimetype, file.buffer)) throw new AppError(415, "File content does not match its type");
     let data = file.buffer;

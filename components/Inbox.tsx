@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { matches, newChatCandidates, searchTerm, type NewChat } from "@/lib/inboxSearch";
-import { GroupView, NewGroup, usePersonalChats } from "./People";
+import { GroupView, NewGroup, msgText, usePersonalChats } from "./People";
+import { useE2E } from "@/lib/client/e2e";
 import { NewCommunity } from "./Community";
 import { SearchChips, SearchResults, useGlobalSearch, type SearchHit, type SearchType } from "./GlobalSearch";
 import { fuzzyScore } from "@/lib/fuzzy";
@@ -81,6 +82,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
   const active = convs.find((c) => c.id === activeId) ?? null;
   // group chats live in the Customer inbox too (customers and the team together)
   const { groups, communities, reload: reloadGroups } = usePersonalChats();
+  const { me: myDevice } = useE2E(me.id, []); // to show the last line of encrypted group messages
   const [newGroup, setNewGroup] = useState(false);
   const [newCommunity, setNewCommunity] = useState(false);
   // search filter chips: All · Business · Personal · Groups · Community · P2P
@@ -193,7 +195,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
                         <span className={`shrink-0 text-[11.5px] ${g.unread ? "font-semibold text-[var(--accent)]" : "text-[var(--muted)]"}`}>{listTime(g.lastMessageAt)}</span>
                       </div>
                       <div className="mt-0.5 flex items-center gap-1 text-[13px] text-[var(--muted)]">
-                        <span className="truncate">{!last ? `${g.members.length} members` : last.system ? last.text : `${last.authorId === me.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}`}</span>
+                        <span className="truncate">{!last ? `${g.members.length} members` : last.system ? last.text : `${last.authorId === me.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : msgText(last, myDevice) ? plain(msgText(last, myDevice)) : "📎 Attachment"}`}</span>
                         {g.unread > 0 && <span className="ml-auto min-w-[19px] shrink-0 rounded-full bg-[var(--accent)] px-1.5 text-center text-[11px] font-semibold leading-[19px] text-white">{g.unread}</span>}
                       </div>
                       <div className="mt-1 flex items-center gap-1"><span className="rounded-full bg-[var(--panel-2)] px-2 py-0.5 text-[11px] text-[var(--muted)]">Group · {g.members.length}</span></div>

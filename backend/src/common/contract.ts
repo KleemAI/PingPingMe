@@ -62,7 +62,10 @@ export type Conversation = {
   disappearSeconds?: number; // disappearing messages timer, 0/absent = off
 };
 
-export type Attachment = { id: string; name: string; size: number; mime: string };
+export type Attachment = {
+  id: string; name: string; size: number; mime: string;
+  e2e?: { key: string; nonce: string }; // app-side only: a file of an end-to-end encrypted chat (name / mime / size are the real ones)
+};
 
 // audience decides who can EVER see a message
 // customer  = customer-facing thread (conversation)
@@ -512,9 +515,12 @@ export type LinkedDevice = { id: string; name: string; kind: "web" | "mobile" | 
 
 /** Personal chats (customers and the team): someone you can chat with. `hint` = masked phone / email, to tell people apart. */
 export type Person = { id: string; name: string; role: "customer" | "team"; hint?: string };
+/** An end-to-end encrypted message (personal chats and groups) — see backend/src/common/e2e.ts. */
+export type E2EEnvelope = { v: 1; from: string; fromKey: string; nonce: string; ct: string; keys: Record<string, string> };
 export type PersonalMessage = {
   id: string; chatId: string; authorId: string; text: string; attachments: Attachment[]; createdAt: number;
   expiresAt?: number; viewOnce?: boolean; viewedAt?: number;
+  e2e?: E2EEnvelope; // encrypted: text is empty, the app decrypts this
 };
 export type PersonalChat = { id: string; with: Person; lastMessageAt: number; unread: number; theirReadAt?: number; disappearSeconds?: number; messages: PersonalMessage[] };
 
@@ -523,6 +529,7 @@ export type GroupMember = Person & { admin: boolean };
 export type GroupMessage = {
   id: string; authorId: string; authorName: string; text: string; attachments: Attachment[]; createdAt: number; system?: boolean;
   expiresAt?: number; viewOnce?: boolean; viewedAt?: number; opened?: number; // opened = how many members opened a view-once message
+  e2e?: E2EEnvelope; // encrypted: text is empty, the app decrypts this
 };
 export type GroupChat = {
   id: string; name: string; members: GroupMember[]; admin: boolean; lastMessageAt: number; unread: number; disappearSeconds?: number; messages: GroupMessage[];

@@ -11,6 +11,7 @@ import { fuzzyScore } from "@/lib/fuzzy";
 import type { Person } from "@/lib/types";
 import { Avatar, Chips, Empty, SearchBar, T } from "./ui";
 import { HitRowView, SEARCH_FILTERS, SearchEmpty, hitRows, useGlobalSearch, type SearchType } from "./GlobalSearch";
+import { msgText, useE2E } from "@/lib/e2e";
 
 type Row = { key: string; name: string; sub: string; right?: string; unread?: number; header?: string; accent?: boolean; group?: boolean; community?: boolean; announcement?: boolean; at?: number; onPress: () => void };
 /** A chat pinned at the top (the customer's chat with our team). */
@@ -25,6 +26,7 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
   const { api, state } = useStore();
   const me = (state as { me?: { id: string } } | null)?.me;
   const { chats, groups, communities } = usePersonalChats();
+  const { me: myDev } = useE2E(me?.id, []); // to show the last line of encrypted chats
   const [q, setQ] = useState("");
   const [type, setType] = useState<SearchType>("all");
   const { hits, searching: searchingAll } = useGlobalSearch(q, type);
@@ -61,14 +63,14 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
       ...(chats ?? []).filter((ch) => !t || fuzzyScore(t, ch.with.name) >= 0.55).map((ch): Row => {
         const last = ch.messages.at(-1);
         return { key: ch.id, name: ch.with.name, unread: ch.unread, right: listTime(ch.lastMessageAt), at: ch.lastMessageAt, onPress: () => openPerson(ch.with, ch.id),
-          sub: last ? `${last.authorId === me?.id ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}` : "" };
+          sub: last ? `${last.authorId === me?.id ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : msgText(last, myDev) ? plain(msgText(last, myDev)) : "📎 Attachment"}` : "" };
       }),
       ...groups.filter((g) => !t || fuzzyScore(t, g.name) >= 0.55).map((g): Row => {
         const last = g.messages.at(-1);
         return { key: g.id, name: g.name, group: true, announcement: !!g.announcement, unread: g.unread, right: listTime(g.lastMessageAt), at: g.lastMessageAt,
           onPress: () => router.push({ pathname: "/people/group/[id]", params: { id: g.id } }),
           sub: !last ? `${g.members.length} members` : last.system ? last.text
-            : `${last.authorId === me?.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}` };
+            : `${last.authorId === me?.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : msgText(last, myDev) ? plain(msgText(last, myDev)) : "📎 Attachment"}` };
       }),
     ].sort((a, b) => (b.at ?? 0) - (a.at ?? 0)),
     ...(found ?? []).filter((p) => !(chats ?? []).some((ch) => ch.with.id === p.id))

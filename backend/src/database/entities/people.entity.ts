@@ -1,4 +1,5 @@
 import { Column, Entity, Generated, Index, PrimaryColumn } from "typeorm";
+import type { E2EEnvelope } from "../../common/contract";
 import { TS, TS_NULL } from "../transformers";
 import type { Attachment } from "../../common/contract";
 
@@ -33,6 +34,8 @@ export class PersonalMessageEntity {
   @Column({ name: "expires_at", ...TS_NULL }) expiresAt: number | null;
   /** View once: the other person can open the photo / video one time. */
   @Column({ name: "view_once", default: false }) viewOnce: boolean;
+  /** end-to-end encrypted message (text is then empty); see common/e2e.ts */
+  @Column({ type: "jsonb", nullable: true }) e2e: E2EEnvelope | null;
   @Column({ name: "viewed_at", ...TS_NULL }) viewedAt: number | null;
   @Column({ name: "viewed_by", type: "varchar", length: 40, nullable: true }) viewedBy: string | null;
 }
@@ -91,6 +94,8 @@ export class GroupMessageEntity {
   @Index() @Column({ name: "created_at", ...TS }) createdAt: number;
   @Column({ name: "expires_at", ...TS_NULL }) expiresAt: number | null;
   @Column({ name: "view_once", default: false }) viewOnce: boolean;
+  /** end-to-end encrypted message (text is then empty); see common/e2e.ts */
+  @Column({ type: "jsonb", nullable: true }) e2e: E2EEnvelope | null;
   /** view once in a group: each member may open it one time → { userId: openedAt } */
   @Column({ type: "jsonb", default: () => "'{}'" }) views: Record<string, number>;
 }

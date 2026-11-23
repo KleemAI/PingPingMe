@@ -7,6 +7,7 @@ import { usePersonalChats } from "@/lib/people";
 import type { Message, Person } from "@/lib/types";
 import { Avatar, T } from "@/components/ui";
 import { Composer, DisappearingButton, MessageList, disappearLabel } from "@/components/Thread";
+import { filesOf, msgText, openMessage, useE2E } from "@/lib/e2e";
 
 /** One personal chat (`id` = chat id, or "new" with the person found by search). */
 export default function PersonalChatScreen() {
@@ -23,15 +24,17 @@ export default function PersonalChatScreen() {
     if (chat?.unread) act("pm.read", { chatId: chat.id }).then(reload).catch(() => {});
   }, [chat?.id, chat?.unread]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // end-to-end encryption: on once both of you have a key
+  const e2e = useE2E(me?.id, person ? [person.id] : []);
   const messages: Message[] = useMemo(() => (chat?.messages ?? []).map((m) => {
     const mine = m.authorId === me?.id;
     return {
       id: m.id, audience: "customer", direction: mine ? "out" : "in", authorId: m.authorId, authorName: mine ? me?.name ?? "You" : chat!.with.name,
-      text: m.text, attachments: m.attachments, createdAt: m.createdAt,
+      text: msgText(m, e2e.me), attachments: m.e2e ? filesOf(openMessage(m.id, m.e2e, e2e.me), m.attachments) : m.attachments, createdAt: m.createdAt,
       expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
       status: mine ? (chat!.theirReadAt && chat!.theirReadAt >= m.createdAt ? "read" : "delivered") : undefined,
     } as Message;
-  }), [chat, me?.id, me?.name]);
+  }), [chat, me?.id, me?.name, e2e.me]);
 
   return (
     <View style={{ flex: 1 }}>
@@ -41,7 +44,7 @@ export default function PersonalChatScreen() {
             <Avatar name={person.name} size={36} />
             <View style={{ flexShrink: 1 }}>
               <T weight="600" numberOfLines={1}>{person.name}</T>
-              <T size={12} muted numberOfLines={1}>{person.role === "team" ? "Our team" : "Customer"}{person.hint ? ` · ${person.hint}` : ""}</T>
+              <T size={12} muted numberOfLines={1}>{e2e.enabled ? "🔒 Encrypted · " : ""}{person.role === "team" ? "Our team" : "Customer"}{person.hint ? ` · ${person.hint}` : ""}</T>
             </View>
           </View>
         ) : null,
@@ -53,9 +56,11 @@ export default function PersonalChatScreen() {
         {person && (
           <Composer
             allowViewOnce
-            modes={[{ id: "pm", kind: "customer", label: "Message", hint: `Only ${person.name.split(" ")[0]} and you see this chat` }]}
+            encrypt={e2e.enabled}
+            modes={[{ id: "pm", kind: "customer", label: "Message", hint: e2e.enabled ? `🔒 End-to-end encrypted — only ${person.name.split(" ")[0]} and you can read it` : `Only ${person.name.split(" ")[0]} and you see this chat` }]}
             onSend={async (_m, text, attachments, opts) => {
-              const id = (await act("pm.send", { ...(chat ? { chatId: chat.id } : { userId: person.id }), text, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce })) as string;
+              const sealed = await e2e.sealFor(text, attachments);
+              const id = (await act("pm.send", { ...(chat ? { chatId: chat.id } : { userId: person.id }), ...sealed, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce })) as string;
               setChatId(id);
               await reload();
             }}

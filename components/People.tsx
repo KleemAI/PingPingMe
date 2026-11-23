@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, Crown, Info, Loader2, LogOut, Megaphone, MessagesSquare, Pencil, Search, UserMinus, UserPlus, Users, X } from "lucide-react";
+import { ArrowLeft, Check, Crown, Info, Loader2, Lock, LogOut, Megaphone, MessagesSquare, Pencil, Search, UserMinus, UserPlus, Users, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/client/store";
-import type { Community, GroupChat, Message, Person, PersonalChat } from "@/lib/types";
+import type { Attachment, Community, GroupChat, Message, Person, PersonalChat } from "@/lib/types";
 import { listTime } from "@/lib/format";
 import { plain } from "@/lib/chatFormat";
 import { Avatar, Button, Empty, Modal, inputCls } from "./ui";
@@ -12,7 +12,28 @@ import { Composer, DisappearingPicker, MessageList, disappearLabel } from "./Thr
 import { CommunityInfo, NewCommunity } from "./Community";
 import { SearchChips, SearchResults, useGlobalSearch, type SearchHit, type SearchType } from "./GlobalSearch";
 import { fuzzyScore } from "@/lib/fuzzy";
+import { LOCKED_TEXT, filesOf, openMessage, useE2E } from "@/lib/client/e2e";
+import type { MyDevice } from "@/lib/e2eCore";
 
+/**
+ * What to send: encrypted ({ e2e }) when the chat is encrypted, else plain ({ text }). Files uploaded encrypted can
+ * only go in an encrypted message — if that isn't possible right now, stop instead of sending unreadable files.
+ */
+async function sealFor(e2e: ReturnType<typeof useE2E>, text: string, attachments: Attachment[]): Promise<{ text: string } | { e2e: NonNullable<Awaited<ReturnType<ReturnType<typeof useE2E>["seal"]>>> }> {
+  const files = attachments.filter((a) => a.e2e).map((a) => ({ id: a.id, key: a.e2e!.key, nonce: a.e2e!.nonce, name: a.name, mime: a.mime, size: a.size }));
+  if (!e2e.enabled && !files.length) return { text };
+  const env = await e2e.seal({ text, files });
+  if (env) return { e2e: env };
+  if (files.length) throw new Error("Couldn't encrypt this message — try again");
+  return { text };
+}
+
+/** Text of a chat message for lists and bubbles — encrypted ones are opened on this device. */
+export function msgText(m: { id: string; text: string; e2e?: Parameters<typeof openMessage>[1] }, dev: MyDevice | null) {
+  if (!m.e2e) return m.text;
+  const b = openMessage(m.id, m.e2e, dev);
+  return b ? b.text : dev ? LOCKED_TEXT : "🔒 Encrypted message";
+}
 const versionOf = (s: unknown) => (s as { db?: { version?: number }; version?: number } | null)?.db?.version ?? (s as { version?: number } | null)?.version ?? 0;
 const MAX_GROUP = 256;
 
@@ -70,6 +91,8 @@ export default function People() {
   const [open, setOpen] = useState<Open | null>(null);
   const [newGroup, setNewGroup] = useState(false);
   const [newCommunity, setNewCommunity] = useState(false);
+  // end-to-end encryption for the open personal chat
+  const e2e = useE2E(me?.id, open?.kind === "pm" ? [open.person.id] : []);
   const [communityId, setCommunityId] = useState<string | null>(null);
   const community = communities.find((c) => c.id === communityId) ?? null;
 
@@ -115,7 +138,7 @@ export default function People() {
       const last = c.messages.at(-1);
       return {
         key: c.id, name: c.with.name, at: c.lastMessageAt, unread: c.unread, group: false, active: chat?.id === c.id,
-        sub: last ? `${last.authorId === me?.id ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}` : "",
+        sub: last ? `${last.authorId === me?.id ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : msgText(last, e2e.me) ? plain(msgText(last, e2e.me)) : "📎 Attachment"}` : "",
         onClick: () => setOpen({ kind: "pm", chatId: c.id, person: c.with }),
       };
     }),
@@ -124,7 +147,7 @@ export default function People() {
       return {
         key: g.id, name: g.name, at: g.lastMessageAt, unread: g.unread, group: true, announcement: !!g.announcement, active: group?.id === g.id,
         sub: !last ? `${g.members.length} members` : last.system ? last.text
-          : `${last.authorId === me?.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : last.text ? plain(last.text) : "📎 Attachment"}`,
+          : `${last.authorId === me?.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : msgText(last, e2e.me) ? plain(msgText(last, e2e.me)) : "📎 Attachment"}`,
         onClick: () => setOpen({ kind: "group", id: g.id }),
       };
     }),
@@ -135,20 +158,22 @@ export default function People() {
     if (chat) {
       return chat.messages.map((m) => {
         const mine = m.authorId === me?.id;
+        const body = m.e2e ? openMessage(m.id, m.e2e, e2e.me) : null;
         return {
           id: m.id, audience: "customer", direction: mine ? "out" : "in", authorId: m.authorId, authorName: mine ? me?.name ?? "You" : chat.with.name,
-          text: m.text, attachments: m.attachments, createdAt: m.createdAt, expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
+          text: msgText(m, e2e.me), attachments: m.e2e ? filesOf(body, m.attachments) : m.attachments, createdAt: m.createdAt, expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
           status: mine ? (chat.theirReadAt && chat.theirReadAt >= m.createdAt ? "read" : "delivered") : undefined,
         } as Message;
       });
     }
     return [];
-  }, [chat, me?.id, me?.name]);
+  }, [chat, me?.id, me?.name, e2e.me]);
 
-  const sendPm = async (text: string, attachments: { id: string }[], viewOnce?: boolean) => {
+  const sendPm = async (text: string, attachments: Attachment[], viewOnce?: boolean) => {
     if (open?.kind !== "pm") return;
     const target = chat ? { chatId: chat.id } : { userId: open.person.id };
-    const id = (await act("pm.send", { ...target, text, attachments: attachments.map((a) => a.id), viewOnce })) as string;
+    const sealed = await sealFor(e2e, text, attachments);
+    const id = (await act("pm.send", { ...target, ...sealed, attachments: attachments.map((a) => a.id), viewOnce })) as string;
     setOpen((o) => (o?.kind === "pm" ? { ...o, chatId: id } : o));
     await reload();
   };
@@ -233,12 +258,14 @@ export default function People() {
                 <div className="truncate text-[15px] font-medium">{header.name}</div>
                 <div className="truncate text-[12px] text-[var(--muted)]">{header.sub}</div>
               </div>
+              {e2e.enabled && <span title="End-to-end encrypted: only the two of you can read these messages" className="flex items-center gap-1 rounded-full bg-[var(--accent)]/10 px-2 py-1 text-[11.5px] text-[var(--accent-strong)]"><Lock size={12} /> Encrypted</span>}
               {chat && <DisappearingPicker value={chat.disappearSeconds} onChange={(v) => act("pm.disappearing", { chatId: chat.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />}
             </header>
             <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="pm.open" />
             <Composer
               allowViewOnce
-              modes={[{ id: "pm", kind: "customer", label: "Message", hint: `Only ${header.name.split(" ")[0]} and you can see this chat` }]}
+              encrypt={e2e.enabled}
+              modes={[{ id: "pm", kind: "customer", label: "Message", hint: e2e.enabled ? `🔒 End-to-end encrypted — only ${header.name.split(" ")[0]} and you can read it` : `Only ${header.name.split(" ")[0]} and you can see this chat` }]}
               onSend={(_m, text, attachments, opts) => sendPm(text, attachments, opts?.viewOnce)}
             />
           </>
@@ -299,6 +326,7 @@ export function GroupView({ group, meId, onBack, reload, communities = [], group
   const { act } = useStore();
   const [info, setInfo] = useState(false);
   const [showCommunity, setShowCommunity] = useState(false);
+  const e2e = useE2E(meId, group.members.map((m) => m.id));
   const community = communities.find((c) => c.id === group.communityId) ?? null;
   const openInfo = () => (group.announcement && community ? setShowCommunity(true) : setInfo(true));
   useEffect(() => {
@@ -306,9 +334,9 @@ export function GroupView({ group, meId, onBack, reload, communities = [], group
   }, [group.id, group.unread]); // eslint-disable-line react-hooks/exhaustive-deps
   const messages: Message[] = useMemo(() => group.messages.map((m) => ({
     id: m.id, audience: "customer", direction: m.authorId === meId ? "out" : "in", authorId: m.authorId, authorName: m.authorName,
-    text: m.text, attachments: m.attachments, createdAt: m.createdAt, expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
+    text: msgText(m, e2e.me), attachments: m.e2e ? filesOf(m.e2e ? openMessage(m.id, m.e2e, e2e.me) : null, m.attachments) : m.attachments, createdAt: m.createdAt, expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
     opened: m.opened, system: m.system,
-  } as Message)), [group, meId]);
+  } as Message)), [group, meId, e2e.me]);
   return (
     <>
       <header className="flex min-h-[60px] shrink-0 items-center gap-3 border-b border-[var(--border)] bg-[var(--panel-2)] px-3 py-2">
@@ -324,14 +352,20 @@ export function GroupView({ group, meId, onBack, reload, communities = [], group
           </div>
         </button>
         {group.canSend !== false && <DisappearingPicker value={group.disappearSeconds} onChange={(v) => act("group.disappearing", { groupId: group.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />}
+        {e2e.enabled && <span title="End-to-end encrypted: only the members can read these messages" className="flex items-center gap-1 rounded-full bg-[var(--accent)]/10 px-2 py-1 text-[11.5px] text-[var(--accent-strong)]"><Lock size={12} /> Encrypted</span>}
         <button onClick={openInfo} title="Group info" aria-label="Group info" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><Info size={19} /></button>
       </header>
       <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="group.open" />
       <Composer
         allowViewOnce
         disabled={group.canSend === false ? "Only community admins can send messages" : undefined}
-        modes={[{ id: "group", kind: "customer", label: "Message", hint: `Everyone in ${group.name} sees this` }]}
-        onSend={async (_m, text, attachments, opts) => { await act("group.send", { groupId: group.id, text, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce }); await reload(); }}
+        encrypt={e2e.enabled}
+        modes={[{ id: "group", kind: "customer", label: "Message", hint: e2e.enabled ? `🔒 End-to-end encrypted — only members of ${group.name} can read it` : `Everyone in ${group.name} sees this` }]}
+        onSend={async (_m, text, attachments, opts) => {
+          const sealed = await sealFor(e2e, text, attachments);
+          await act("group.send", { groupId: group.id, ...sealed, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce });
+          await reload();
+        }}
       />
       {info && <GroupInfo group={group} meId={meId} onClose={() => setInfo(false)} onLeft={() => { setInfo(false); onBack(); reload(); }} reload={reload}
         onCommunity={community ? () => { setInfo(false); setShowCommunity(true); } : undefined} />}

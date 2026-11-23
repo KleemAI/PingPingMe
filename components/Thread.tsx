@@ -6,6 +6,7 @@ import type { Attachment, Message, SavedReply } from "@/lib/types";
 import { dayDivider, time } from "@/lib/format";
 import { AttachmentChip } from "./ui";
 import { useStore } from "@/lib/client/store";
+import { uploadEncrypted, useFileUrl } from "@/lib/client/e2e";
 import { VoiceRecorder } from "./VoiceRecorder";
 import { EmojiPanel, FormatBar, RichText, isBare } from "./RichText";
 import { MAX_MESSAGE, wrapSelection } from "@/lib/chatFormat";
@@ -55,12 +56,18 @@ function ViewOnceViewer({ items, onClose }: { items: Attachment[]; onClose: () =
     <div className="fixed inset-0 z-[90] flex flex-col items-center justify-center gap-3 bg-black/90 p-4" onContextMenu={(e) => e.preventDefault()}>
       <button onClick={onClose} aria-label="Close" className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"><X size={20} /></button>
       <div className="flex items-center gap-1.5 text-[13px] text-white/80"><CircleDot size={14} /> View once — closing this ends it</div>
-      {items.map((a) => a.mime.startsWith("video/")
-        ? <video key={a.id} src={`/api/files/${a.id}`} autoPlay controls controlsList="nodownload" className="max-h-[80vh] max-w-full rounded-md" />
-        // eslint-disable-next-line @next/next/no-img-element
-        : <img key={a.id} src={`/api/files/${a.id}`} alt="" draggable={false} className="max-h-[80vh] max-w-full rounded-md object-contain" />)}
+      {items.map((a) => <ViewOnceItem key={a.id} a={a} />)}
     </div>
   );
+}
+
+function ViewOnceItem({ a }: { a: Attachment }) {
+  const url = useFileUrl(a); // encrypted chats: decrypted in the browser
+  if (!url) return <div className="text-[13px] text-white/70">{url === undefined ? "Opening…" : "Couldn't open it"}</div>;
+  return a.mime.startsWith("video/")
+    ? <video src={url} autoPlay controls controlsList="nodownload" className="max-h-[80vh] max-w-full rounded-md" />
+    // eslint-disable-next-line @next/next/no-img-element
+    : <img src={url} alt="" draggable={false} className="max-h-[80vh] max-w-full rounded-md object-contain" />;
 }
 
 /** The view-once part of a bubble: "Open" for the receiver, "Opened" / "Not opened yet" otherwise. */
@@ -108,7 +115,7 @@ export function MessageList({ messages: all, side, onRetry, wallpaper = true, vi
   const openViewOnce = async (m: Message) => {
     try {
       const r = (await act(openAction, { messageId: m.id })) as { attachments?: Attachment[] } | null;
-      const media = (r?.attachments ?? []).filter(isMedia);
+      const media = (r?.attachments ?? []).map((x) => m.attachments.find((y) => y.id === x.id) ?? x).filter(isMedia);
       if (media.length) setViewing(media);
     } catch { /* the error was shown as a toast */ }
   };
@@ -202,15 +209,17 @@ const MODE_STYLE = {
 };
 
 /** Composer that makes the recipient explicit BEFORE sending (brief: communication clarity). */
-export function Composer({ modes, onSend, savedReplies = [], disabled, allowViewOnce }: {
+export function Composer({ modes, onSend, savedReplies = [], disabled, allowViewOnce, encrypt }: {
   modes: ComposerMode[];
   onSend: (modeId: string, text: string, attachments: Attachment[], opts?: { viewOnce?: boolean }) => Promise<unknown>;
   savedReplies?: SavedReply[];
   disabled?: string;
   /** show the "view once" switch for photos / videos (not for internal notes) */
   allowViewOnce?: boolean;
+  /** end-to-end encrypted chat: files are encrypted in the browser before upload */
+  encrypt?: boolean;
 }) {
-  const { upload } = useStore();
+  const { upload, toast } = useStore();
   const [modeId, setModeId] = useState(modes[0].id);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Attachment[]>([]);
@@ -231,7 +240,10 @@ export function Composer({ modes, onSend, savedReplies = [], disabled, allowView
   const [uploading, setUploading] = useState(false);
   const addFile = async (f: File) => {
     setUploading(true);
-    try { const a = await upload(f); setFiles((x) => [...x, a]); } catch {} finally { setUploading(false); }
+    try {
+      const a = encrypt ? await uploadEncrypted(f).catch((e) => { toast(e instanceof Error ? e.message : "Upload failed", "error"); throw e; }) : await upload(f);
+      setFiles((x) => [...x, a]);
+    } catch {} finally { setUploading(false); }
   };
   const canSend = !!text.trim() || files.length > 0;
   // view once: only photos / videos, never on internal notes

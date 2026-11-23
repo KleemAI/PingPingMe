@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { lockedPreview, readEnvelope } from "../common/e2e";
 import { In } from "typeorm";
 import type { GroupChat, GroupMember, User } from "../common/contract";
 import { badRequest, conflict, forbidden, notFound } from "../common/errors";
@@ -67,6 +68,7 @@ export class GroupsService {
             // view once: each member may open it one time; the sender never gets the file back
             attachments: m.viewOnce && (mineMsg || viewedAt) ? [] : m.attachments,
             viewedAt, opened: m.viewOnce ? Object.keys(m.views ?? {}).length : undefined,
+            e2e: m.e2e ?? undefined,
           };
         }),
       };
@@ -166,20 +168,22 @@ export class GroupsService {
       if (!c?.admins.includes(tx.user.id)) throw forbidden("Only community admins can post announcements");
     }
     const attachments = await this.files.attachments(tx, p.attachments);
-    const text = optStr(p.text, MAX_MESSAGE) ?? "";
-    if (!text && !attachments.length) throw badRequest("Type a message or attach a file");
+    // end-to-end encrypted: the server keeps only what it can't read
+    const e2e = readEnvelope(p.e2e);
+    const text = e2e ? "" : optStr(p.text, MAX_MESSAGE) ?? "";
+    if (!e2e && !text && !attachments.length) throw badRequest("Type a message or attach a file");
     const now = Date.now();
     const viewOnce = viewOnceFlag(p.viewOnce, attachments);
     await tx.em.insert(GroupMessageEntity, {
       id: newId("gm"), groupId: g.id, authorId: tx.user.id, text, attachments, system: false, createdAt: now,
-      expiresAt: expiryFor(g, now), viewOnce, views: {},
+      expiresAt: expiryFor(g, now), viewOnce, views: {}, e2e,
     });
     g.lastMessageAt = now;
     await tx.em.save(g);
     me.readAt = now;
     await tx.em.save(me);
     const others = await tx.em.find(GroupMemberEntity, { where: { groupId: g.id }, select: { userId: true } });
-    this.push.notify(tx, others.map((m) => m.userId), { title: g.name, body: `${tx.user.name}: ${preview(text, attachments, viewOnce)}`, data: { type: "group", id: g.id } });
+    this.push.notify(tx, others.map((m) => m.userId), { title: g.name, body: `${tx.user.name}: ${e2e ? lockedPreview(attachments.length) : preview(text, attachments, viewOnce)}`, data: { type: "group", id: g.id } });
     return g.id;
   }
 

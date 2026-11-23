@@ -9,6 +9,7 @@ import { usePersonalChats } from "@/lib/people";
 import type { Message } from "@/lib/types";
 import { Avatar, Empty, T } from "@/components/ui";
 import { Composer, DisappearingButton, MessageList, disappearLabel } from "@/components/Thread";
+import { filesOf, msgText, openMessage, useE2E } from "@/lib/e2e";
 
 /** A group chat. Tap the title for group info (members, add / remove, admins, rename, leave). */
 export default function GroupChatScreen() {
@@ -24,11 +25,12 @@ export default function GroupChatScreen() {
     if (group?.unread) act("group.read", { groupId: group.id }).then(reload).catch(() => {});
   }, [group?.id, group?.unread]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const e2e = useE2E(me?.id, group?.members.map((m) => m.id) ?? []);
   const messages: Message[] = useMemo(() => (group?.messages ?? []).map((m) => ({
     id: m.id, audience: "customer", direction: m.authorId === me?.id ? "out" : "in", authorId: m.authorId, authorName: m.authorName,
-    text: m.text, attachments: m.attachments, createdAt: m.createdAt, expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
+    text: msgText(m, e2e.me), attachments: m.e2e ? filesOf(openMessage(m.id, m.e2e, e2e.me), m.attachments) : m.attachments, createdAt: m.createdAt, expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
     opened: m.opened, system: m.system,
-  } as Message)), [group, me?.id]);
+  } as Message)), [group, me?.id, e2e.me]);
 
   if (!group) return chats ? <Empty icon="people-outline" title="Group not found" text="You may have left it or been removed." /> : null;
   // the announcements of a community open the community; other groups open group info
@@ -43,7 +45,7 @@ export default function GroupChatScreen() {
             <Avatar name={group.name} size={36} icon={group.announcement ? "megaphone" : "people"} />
             <View style={{ flexShrink: 1 }}>
               <T weight="600" numberOfLines={1}>{group.name}</T>
-              <T size={12} muted numberOfLines={1}>{group.communityName ? `${group.communityName} · ` : ""}{group.announcement ? `${group.members.length} members` : group.members.map((m) => (m.id === me?.id ? "You" : m.name.split(" ")[0])).join(", ")}</T>
+              <T size={12} muted numberOfLines={1}>{e2e.enabled ? "🔒 " : ""}{group.communityName ? `${group.communityName} · ` : ""}{group.announcement ? `${group.members.length} members` : group.members.map((m) => (m.id === me?.id ? "You" : m.name.split(" ")[0])).join(", ")}</T>
             </View>
           </Pressable>
         ),
@@ -56,9 +58,11 @@ export default function GroupChatScreen() {
         <Composer
           allowViewOnce
           disabled={group.canSend === false ? "Only community admins can send messages" : undefined}
-          modes={[{ id: "group", kind: "customer", label: "Message", hint: `Everyone in ${group.name} sees this` }]}
+          encrypt={e2e.enabled}
+          modes={[{ id: "group", kind: "customer", label: "Message", hint: e2e.enabled ? `🔒 End-to-end encrypted — only members of ${group.name} can read it` : `Everyone in ${group.name} sees this` }]}
           onSend={async (_m, text, attachments, opts) => {
-            await act("group.send", { groupId: group.id, text, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce });
+            const sealed = await e2e.sealFor(text, attachments);
+            await act("group.send", { groupId: group.id, ...sealed, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce });
             await reload();
           }}
         />

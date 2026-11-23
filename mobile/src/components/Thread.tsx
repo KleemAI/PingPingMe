@@ -8,6 +8,8 @@ import { useTheme } from "@/lib/theme";
 import { useStore } from "@/lib/store";
 import { Sheet, T } from "./ui";
 import { MediaAttachment, VoiceRecordButton, type PickedFile } from "./Media";
+import { decryptedUri, uploadEncrypted, useDecryptedUri } from "@/lib/e2e";
+import * as Sharing from "expo-sharing";
 import { EmojiPanel, FormatBar, RichText, isBare } from "./RichText";
 import { MAX_MESSAGE, wrapSelection } from "@/lib/chatFormat";
 
@@ -74,13 +76,20 @@ function ViewOnceViewer({ items, onClose }: { items: Attachment[]; onClose: () =
           <Ionicons name="close" size={22} color="#fff" />
         </Pressable>
         <Text style={{ color: "rgba(255,255,255,0.8)", marginBottom: 12 }}>View once — closing this ends it</Text>
-        {items.map((a) => (
+        {items.map((a) => a.e2e ? <ViewOnceLocked key={a.id} a={a} /> : (
           <Image key={a.id} source={{ uri: `${server.replace(/\/$/, "")}/api/v1/files/${a.id}`, headers: { Authorization: `Bearer ${token ?? ""}` } }}
             style={{ width: "100%", flex: 1 }} resizeMode="contain" />
         ))}
       </View>
     </Modal>
   );
+}
+
+/** A view-once photo of an encrypted chat, decrypted on the phone. */
+function ViewOnceLocked({ a }: { a: Attachment }) {
+  const uri = useDecryptedUri(a);
+  if (!uri) return <Text style={{ color: "rgba(255,255,255,0.7)" }}>{uri === undefined ? "Opening…" : "Couldn't open it"}</Text>;
+  return <Image source={{ uri }} style={{ width: "100%", flex: 1 }} resizeMode="contain" />;
 }
 
 /** The view-once part of a bubble: "Tap to open" for the receiver, "Opened" / "Not opened yet" otherwise. */
@@ -118,7 +127,7 @@ export function MessageList({ messages: all, side, onRetry, viewer = "team", wal
   openAction?: string;
 }) {
   const { c } = useTheme();
-  const { act, openFile } = useStore(); // openAction: "pm.open" in personal chats
+  const { act, openFile, server, token } = useStore(); // openAction: "pm.open" in personal chats
   const ref = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [viewing, setViewing] = useState<Attachment[] | null>(null);
   // disappearing messages leave the screen when their time is up (the server stops sending them too)
@@ -133,11 +142,16 @@ export function MessageList({ messages: all, side, onRetry, viewer = "team", wal
   const openViewOnce = async (m: Message) => {
     try {
       const r = (await act(openAction, { messageId: m.id })) as { attachments?: Attachment[] } | null;
-      const media = (r?.attachments ?? []).filter(isMedia);
+      // encrypted chats: keep the file keys from the message
+      const media = (r?.attachments ?? []).map((x) => m.attachments.find((y) => y.id === x.id) ?? x).filter(isMedia);
       const photos = media.filter((a) => a.mime.startsWith("image/"));
       if (photos.length) setViewing(photos);
       // no in-app video player: videos open with the phone's player
-      for (const v of media.filter((a) => a.mime.startsWith("video/"))) await openFile(v);
+      for (const v of media.filter((a) => a.mime.startsWith("video/"))) {
+        if (!v.e2e) { await openFile(v); continue; }
+        const uri = await decryptedUri(v, server, token);
+        if (uri && (await Sharing.isAvailableAsync())) await Sharing.shareAsync(uri, { mimeType: v.mime });
+      }
     } catch { /* the error was shown as a toast */ }
   };
   return (
@@ -221,16 +235,18 @@ export function MessageList({ messages: all, side, onRetry, viewer = "team", wal
 export type ComposerMode = { id: string; label: string; hint: string; kind: "customer" | "reseller" | "internal" };
 
 /** Composer that shows WHO will receive the message before sending. */
-export function Composer({ modes, onSend, savedReplies = [], disabled, allowViewOnce }: {
+export function Composer({ modes, onSend, savedReplies = [], disabled, allowViewOnce, encrypt }: {
   modes: ComposerMode[];
   onSend: (modeId: string, text: string, attachments: Attachment[], opts?: { viewOnce?: boolean }) => Promise<unknown>;
   savedReplies?: SavedReply[];
   disabled?: string;
   /** show the "view once" switch for photos / videos (customer chats) */
   allowViewOnce?: boolean;
+  /** end-to-end encrypted chat: files are encrypted on the phone before upload */
+  encrypt?: boolean;
 }) {
   const { c } = useTheme();
-  const { upload } = useStore();
+  const { upload, api, toast } = useStore();
   const [modeId, setModeId] = useState(modes[0]?.id);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<Attachment[]>([]);
@@ -265,7 +281,10 @@ export function Composer({ modes, onSend, savedReplies = [], disabled, allowView
   const viewOnceOk = !!allowViewOnce && !!mode && mode.kind !== "internal" && files.length > 0 && files.every(isMedia);
   const addFile = async (f: PickedFile) => {
     setBusy(true);
-    try { const up = await upload(f); setFiles((x) => [...x, up]); } catch {} finally { setBusy(false); }
+    try {
+      const up = encrypt ? await uploadEncrypted(f, api).catch((e) => { toast(e instanceof Error ? e.message : "Upload failed", "error"); throw e; }) : await upload(f);
+      setFiles((x) => [...x, up]);
+    } catch {} finally { setBusy(false); }
   };
   const send = async () => {
     if (!canSend || busy) return;
