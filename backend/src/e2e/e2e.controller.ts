@@ -9,6 +9,8 @@ import { canChat } from "../people/people.service";
 import { RateLimiter } from "../security/rate-limiter.service";
 
 const KEY = /^[A-Za-z0-9+/]{43}=$/; // 32-byte X25519 public key, base64
+/** People per GET /e2e/keys call (keeps the URL short): clients ask for bigger groups (up to 1,000) in batches of this. */
+export const KEYS_PER_CALL = 300;
 
 /**
  * Device keys for end-to-end encrypted personal chats and groups (see common/e2e.ts).
@@ -39,11 +41,15 @@ export class E2EController {
     return { deviceId: sid ?? null, publicKey: s?.e2eKey ?? undefined };
   }
 
-  /** GET /e2e/keys?users=a,b,c → { keys: { userId: [{ id, key }] } } — the signed-in devices of these people. */
+  /**
+   * GET /e2e/keys?users=a,b,c&per=4 → { keys: { userId: [{ id, key }] } } — the signed-in devices of these people (up to
+   * KEYS_PER_CALL; ask in batches). `per`: at most this many devices per person, the most recently used first — a big
+   * group asks for MAX_E2E_DEVICES / members, so one message never needs more sealed keys than the server takes.
+   */
   @Get("keys")
-  async keys(@CurrentUser() user: User, @Query("users") users?: string) {
+  async keys(@CurrentUser() user: User, @Query("users") users?: string, @Query("per") per?: string) {
     if (!canChat(user)) throw forbidden("Encrypted chats are for customers and our team");
-    const ids = [...new Set(String(users ?? "").split(",").map((x) => x.trim()).filter((x) => /^[A-Za-z0-9_-]{1,40}$/.test(x)))].slice(0, 300);
+    const ids = [...new Set(String(users ?? "").split(",").map((x) => x.trim()).filter((x) => /^[A-Za-z0-9_-]{1,40}$/.test(x)))].slice(0, KEYS_PER_CALL);
     if (!ids.length) return { keys: {} };
     const em = this.uow.manager;
     const people = await em.find(UserEntity, { where: { id: In(ids) }, select: { id: true, role: true, active: true } });
@@ -51,10 +57,12 @@ export class E2EController {
     if (!allowed.length) return { keys: {} };
     const sessions = await em.find(SessionEntity, {
       where: { userId: In(allowed), revokedAt: IsNull(), expiresAt: MoreThan(Date.now()) },
-      select: { id: true, userId: true, e2eKey: true },
+      select: { id: true, userId: true, e2eKey: true, lastSeenAt: true },
+      order: { lastSeenAt: "DESC" },
     });
+    const cap = Math.floor(Number(per)) >= 1 ? Math.floor(Number(per)) : Infinity;
     const keys: Record<string, { id: string; key: string }[]> = Object.fromEntries(allowed.map((id) => [id, []]));
-    for (const s of sessions) if (s.e2eKey) keys[s.userId].push({ id: s.id, key: s.e2eKey });
+    for (const s of sessions) if (s.e2eKey && keys[s.userId].length < cap) keys[s.userId].push({ id: s.id, key: s.e2eKey });
     return { keys };
   }
 }

@@ -428,7 +428,15 @@ export type GroupChat = {
   id: string; name: string; members: GroupMember[]; admin: boolean; lastMessageAt: number; unread: number; disappearSeconds?: number; messages: GroupMessage[];
   communityId?: string; communityName?: string; announcement?: boolean; // announcement group of a community
   canSend: boolean; // false in an announcement group unless you're a community admin
+  /**
+   * memberCount = the real number of members. Groups of up to E2E_GROUP_LIMIT (1,000) list every member in `members` and are
+   * end-to-end encrypted; above that the group is `large`: `members` is only a page (admins + the first 200), messages are
+   * not end-to-end encrypted (send { text }, never e2e) and only the last 200 are listed. Find others with GroupMembersPage.
+   */
+  memberCount: number; large?: boolean;
 };
+/** GET /people/groups/:id/members?q=&offset= → 50 members at a time (admins first), matching a name / phone; next = the offset for more. */
+export type GroupMembersPage = { members: GroupMember[]; next?: number };
 /** A community: groups under one roof + an announcement group. `groups` lists all of them (member = you're in it). */
 export type Community = {
   id: string; name: string; description?: string; admin: boolean; announcementGroupId: string; memberCount: number;

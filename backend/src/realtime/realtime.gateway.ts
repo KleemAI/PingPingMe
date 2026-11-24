@@ -36,6 +36,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   private alertSub?: Subscription;
   private pending?: NodeJS.Timeout;
   private latest = 0;
+  /** what changed since the last push: everything (any ordinary write), or only things of these groups / people */
+  private pendingAll = false;
+  private pendingGroups = new Set<string>();
+  private pendingUsers = new Set<string>();
 
   constructor(private readonly auth: AuthService, private readonly bus: ChangeBus, private readonly uow: UnitOfWork, private readonly limiter: RateLimiter, private readonly alerts: AlertBus) {}
 
@@ -52,14 +56,41 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       this.server?.to(`user:${userId}`).emit(event, payload);
     });
     // Coalesce bursts of writes into one push every ~150 ms.
-    this.sub = this.bus.changes.subscribe(({ version }) => {
+    this.sub = this.bus.changes.subscribe(({ version, scope }) => {
       this.latest = Math.max(this.latest, version);
+      if (!scope) this.pendingAll = true;
+      else {
+        for (const g of scope.groups) this.pendingGroups.add(g);
+        for (const u of scope.users) this.pendingUsers.add(u);
+      }
       if (this.pending) return;
       this.pending = setTimeout(() => {
         this.pending = undefined;
-        this.server?.to("users").emit("changed", { version: this.latest });
+        void this.flush().catch((e) => this.log.warn(`live update failed: ${e?.message ?? e}`));
       }, 150);
     });
+  }
+
+  /**
+   * A scoped write (a message in a group of up to 200,000, a read) reaches only the people it matters to who are online
+   * here: one query per push, instead of every connected user refetching GET /people.
+   */
+  private async flush() {
+    const version = this.latest, all = this.pendingAll, groups = [...this.pendingGroups], users = new Set(this.pendingUsers);
+    this.pendingAll = false;
+    this.pendingGroups.clear();
+    this.pendingUsers.clear();
+    if (!this.server) return;
+    if (all) { this.server.to("users").emit("changed", { version }); return; }
+    if (groups.length) {
+      const online = [...new Set([...this.server.sockets.sockets.values()].map((s) => (s.data?.user as { id?: string } | undefined)?.id).filter((x): x is string => !!x))];
+      const rows: { user_id: string }[] = online.length
+        ? await this.uow.manager.query(
+          `SELECT DISTINCT user_id FROM group_members WHERE group_id = ANY($1::text[]) AND user_id = ANY($2::text[])`, [groups, online])
+        : [];
+      for (const r of rows) users.add(r.user_id);
+    }
+    if (users.size) this.server.to([...users].map((u) => `user:${u}`)).emit("changed", { version });
   }
 
   onModuleDestroy() {

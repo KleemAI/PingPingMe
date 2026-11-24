@@ -44,13 +44,28 @@ export function myDevice(userId: string): Promise<MyDevice | null> {
   return p;
 }
 
-/** The signed-in devices of these people (fresh from the server). */
+/** Groups with more members than this are "large": not end-to-end encrypted (the server refuses envelopes). */
+export const E2E_GROUP_LIMIT = 1_000;
+const KEYS_PER_CALL = 300; // the server's cap per /e2e/keys call (also keeps the URL short)
+/** The server takes an envelope sealed for up to this many devices: a big group asks for fewer devices per person (most recent first). */
+const MAX_E2E_DEVICES = 5_000;
+
+/** The signed-in devices of these people (fresh from the server), fetched 300 at a time. null = couldn't get them all. */
 export async function devicesOf(userIds: string[]): Promise<Record<string, DeviceKey[]> | null> {
   const ids = [...new Set(userIds)].filter(Boolean);
   if (!ids.length) return {};
-  const r = await fetch(`/api/e2e/keys?users=${encodeURIComponent(ids.join(","))}`, { cache: "no-store" }).catch(() => null);
-  if (!r?.ok) return null;
-  return (await r.json()).keys ?? {};
+  if (ids.length > E2E_GROUP_LIMIT + 1) return null; // a large group: never encrypted
+  const per = Math.max(1, Math.floor(MAX_E2E_DEVICES / ids.length));
+  const parts: string[][] = [];
+  for (let i = 0; i < ids.length; i += KEYS_PER_CALL) parts.push(ids.slice(i, i + KEYS_PER_CALL));
+  const got = await Promise.all(parts.map(async (part) => {
+    const r = await fetch(`/api/e2e/keys?users=${encodeURIComponent(part.join(","))}&per=${per}`, { cache: "no-store" }).catch(() => null);
+    if (!r?.ok) return null;
+    const d = await r.json().catch(() => null);
+    return d ? (d.keys ?? {}) as Record<string, DeviceKey[]> : null;
+  }));
+  if (got.some((k) => !k)) return null;
+  return Object.assign({}, ...got) as Record<string, DeviceKey[]>;
 }
 
 const opened = new Map<string, E2EBody | null>();
@@ -119,6 +134,7 @@ export function useFileUrl(a: Attachment): string | null | undefined {
 /**
  * Encryption for one chat: `enabled` once this browser has its key and every other person in the chat has at least
  * one device with a key (otherwise messages go as before, without the lock). `seal` encrypts for all their devices.
+ * Pass [] for a large group (more than E2E_GROUP_LIMIT members): no keys are fetched and nothing is encrypted.
  */
 export function useE2E(meId: string | undefined, people: string[]) {
   const [me, setMe] = useState<MyDevice | null>(null);
@@ -127,6 +143,7 @@ export function useE2E(meId: string | undefined, people: string[]) {
   useEffect(() => { if (meId) myDevice(meId).then(setMe); }, [meId]);
   const load = useCallback(async () => {
     if (!meId) return null;
+    if (!others.length) { setKeys({}); return {}; } // nobody to encrypt for (or a large group): no key fetch
     const k = await devicesOf([meId, ...others]);
     setKeys(k);
     return k;
@@ -134,7 +151,7 @@ export function useE2E(meId: string | undefined, people: string[]) {
   useEffect(() => { load(); }, [load]);
   const enabled = !!me && !!keys && others.length > 0 && others.every((id) => (keys[id]?.length ?? 0) > 0);
   const seal = useCallback(async (body: E2EBody): Promise<E2EEnvelope | null> => {
-    if (!me) return null;
+    if (!me || !others.length) return null;
     const k = await load(); // fresh: a new phone of theirs gets this message too
     if (!k || !others.every((id) => (k[id]?.length ?? 0) > 0)) return null;
     return encryptMessage(body, me, Object.values(k).flat());

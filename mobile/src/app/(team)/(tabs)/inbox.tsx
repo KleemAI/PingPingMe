@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { matches, newChatCandidates, searchTerm, type NewChat } from "@/lib/inboxSearch";
-import { usePersonalChats } from "@/lib/people";
+import { membersLabel, usePersonalChats } from "@/lib/people";
 import { Ionicons } from "@expo/vector-icons";
 import { useTeam } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
@@ -63,7 +63,7 @@ export default function Inbox() {
   const serverOnly = searchingNow && stype !== "all" && stype !== "business";
   const extra = searchingNow && stype === "all" ? (hits ?? []).filter((h) => h.type === "personal" || h.type === "community" || h.type === "p2p" || (h.type === "group" && h.id.startsWith("m:"))) : [];
   const shownGroups = kind !== "customer" || (searchingNow && stype === "business") ? [] : groups.filter((g) => term.text
-    ? fuzzyScore(term.text, g.name) >= 0.55 || g.members.some((m) => fuzzyScore(term.text, m.name) >= 0.6)
+    ? fuzzyScore(term.text, g.name) >= 0.55 || g.members.some((m) => fuzzyScore(term.text, m.name) >= 0.6) /* large groups list only a page of members */
     : filter === "open" || filter === "all" || (filter === "unread" && g.unread > 0));
   type Item = { id: string; at: number; cv?: Conversation; g?: GroupChat };
   const rows: Item[] = [...list.map((cv) => ({ id: cv.id, at: cv.lastMessageAt, cv })), ...shownGroups.map((g) => ({ id: g.id, at: g.lastMessageAt, g }))].sort((a, b) => b.at - a.at);
@@ -154,10 +154,10 @@ export default function Inbox() {
                     <T size={12} color={g.unread ? c.accent : c.muted} weight={g.unread ? "600" : "400"}>{listTime(g.lastMessageAt)}</T>
                   </View>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <T size={14} muted numberOfLines={1} style={{ flex: 1 }}>{!last ? `${g.members.length} members` : last.system ? last.text : `${last.authorId === me.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : msgText(last, myDev) ? plain(msgText(last, myDev)) : "📎 Attachment"}`}</T>
+                    <T size={14} muted numberOfLines={1} style={{ flex: 1 }}>{!last ? membersLabel(g) : last.system ? last.text : `${last.authorId === me.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : msgText(last, myDev) ? plain(msgText(last, myDev)) : "📎 Attachment"}`}</T>
                     {g.unread > 0 && <View style={{ backgroundColor: c.accent, borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}><T size={11} color="#fff" weight="700">{g.unread}</T></View>}
                   </View>
-                  <T size={11.5} muted>Group · {g.members.length} members</T>
+                  <T size={11.5} muted>Group · {membersLabel(g)}</T>
                 </View>
               </Pressable>
             );

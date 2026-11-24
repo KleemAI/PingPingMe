@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { matches, newChatCandidates, searchTerm, type NewChat } from "@/lib/inboxSearch";
-import { GroupView, NewGroup, msgText, usePersonalChats } from "./People";
+import { GroupView, NewGroup, memberCountOf, msgText, usePersonalChats } from "./People";
 import { useE2E } from "@/lib/client/e2e";
 import { NewCommunity } from "./Community";
 import { SearchChips, SearchResults, useGlobalSearch, type SearchHit, type SearchType } from "./GlobalSearch";
@@ -102,6 +102,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
     else if (t.kind === "p2p") router.push(`/p2p/order/${t.orderId}`);
   };
   const activeGroup = kind === "customer" ? groups.find((g) => g.id === params.get("g")) ?? null : null;
+  // member names: in a large group only the listed page (admins + first 200) is matched
   const shownGroups = kind !== "customer" || (term.text && stype === "business") ? [] : groups.filter((g) => term.text
     ? fuzzyScore(term.text, g.name) >= 0.55 || g.members.some((m) => fuzzyScore(term.text, m.name) >= 0.6)
     : filter === "open" || filter === "all" || (filter === "unread" && g.unread > 0));
@@ -195,10 +196,10 @@ export default function Inbox({ kind }: { kind: ContactType }) {
                         <span className={`shrink-0 text-[11.5px] ${g.unread ? "font-semibold text-[var(--accent)]" : "text-[var(--muted)]"}`}>{listTime(g.lastMessageAt)}</span>
                       </div>
                       <div className="mt-0.5 flex items-center gap-1 text-[13px] text-[var(--muted)]">
-                        <span className="truncate">{!last ? `${g.members.length} members` : last.system ? last.text : `${last.authorId === me.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : msgText(last, myDevice) ? plain(msgText(last, myDevice)) : "📎 Attachment"}`}</span>
+                        <span className="truncate">{!last ? `${memberCountOf(g).toLocaleString("en-US")} members` : last.system ? last.text : `${last.authorId === me.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : msgText(last, myDevice) ? plain(msgText(last, myDevice)) : "📎 Attachment"}`}</span>
                         {g.unread > 0 && <span className="ml-auto min-w-[19px] shrink-0 rounded-full bg-[var(--accent)] px-1.5 text-center text-[11px] font-semibold leading-[19px] text-white">{g.unread}</span>}
                       </div>
-                      <div className="mt-1 flex items-center gap-1"><span className="rounded-full border border-[var(--border)] bg-[var(--input)] px-2 py-0.5 text-[11px] text-[var(--muted)]">Group · {g.members.length}</span></div>
+                      <div className="mt-1 flex items-center gap-1"><span className="rounded-full border border-[var(--border)] bg-[var(--input)] px-2 py-0.5 text-[11px] text-[var(--muted)]">Group · {memberCountOf(g).toLocaleString("en-US")}</span></div>
                     </div>
                   </button>
                 </li>

@@ -7,9 +7,9 @@ import type { Person } from "@/lib/types";
 import { Avatar, SearchBar, T } from "./ui";
 
 /** Search people (name, email or phone) and tick them — used by "New group" and "Add members". */
-export function PeoplePicker({ picked, setPicked, exclude = [] }: { picked: Person[]; setPicked: (p: Person[]) => void; exclude?: string[] }) {
+export function PeoplePicker({ picked, setPicked, exclude = [], max }: { picked: Person[]; setPicked: (p: Person[]) => void; exclude?: string[]; max?: number }) {
   const { c } = useTheme();
-  const { api } = useStore();
+  const { api, toast } = useStore();
   const [q, setQ] = useState("");
   const [found, setFound] = useState<Person[] | null>(null);
   const [searching, setSearching] = useState(false);
@@ -25,7 +25,11 @@ export function PeoplePicker({ picked, setPicked, exclude = [] }: { picked: Pers
     }, 300);
     return () => clearTimeout(id);
   }, [q, api]);
-  const toggle = (p: Person) => setPicked(picked.some((x) => x.id === p.id) ? picked.filter((x) => x.id !== p.id) : [...picked, p]);
+  const toggle = (p: Person) => {
+    if (picked.some((x) => x.id === p.id)) return setPicked(picked.filter((x) => x.id !== p.id));
+    if (max && picked.length >= max) return toast(`Add up to ${max.toLocaleString("en-US")} people at a time`, "error"); // the server's cap per request
+    setPicked([...picked, p]);
+  };
   const list = (found ?? []).filter((p) => !exclude.includes(p.id));
   return (
     <View style={{ flex: 1 }}>

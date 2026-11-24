@@ -10,6 +10,7 @@ import * as Crypto from "expo-crypto";
 import { storage } from "./storage";
 import { useStore } from "./store";
 import { formFile, shrinkPhoto } from "./media";
+import { E2E_GROUP_LIMIT } from "./people";
 import type { Attachment } from "./types";
 import {
   E2E_MIME, decryptFile, decryptMessage, encryptFile, encryptMessage, newDevice, publicKeyOf, setRandom,
@@ -51,12 +52,24 @@ export function myDevice(userId: string, api: Api, session = ""): Promise<MyDevi
 /** Forget the cached device (after signing out the session changes). */
 export const resetE2E = () => devices.clear();
 
+/** The server answers up to 300 people per call (and keeps the address short), so bigger groups ask in chunks. */
+const KEYS_PER_CALL = 300;
+const MAX_E2E_DEVICES = 5_000;
+
 export async function devicesOf(userIds: string[], api: Api): Promise<Record<string, DeviceKey[]> | null> {
   const ids = [...new Set(userIds)].filter(Boolean);
   if (!ids.length) return {};
-  const r = await api(`/api/v1/e2e/keys?users=${encodeURIComponent(ids.join(","))}`).catch(() => null);
-  if (!r?.ok) return null;
-  return (await r.json()).keys ?? {};
+  if (ids.length > E2E_GROUP_LIMIT) return null; // a large group (you + others over the limit): not encrypted
+  // the server takes an envelope sealed for up to 5,000 devices: a big group asks for fewer per person (most recent first)
+  const per = Math.max(1, Math.floor(MAX_E2E_DEVICES / ids.length));
+  const out: Record<string, DeviceKey[]> = {};
+  for (let i = 0; i < ids.length; i += KEYS_PER_CALL) {
+    const part = ids.slice(i, i + KEYS_PER_CALL);
+    const r = await api(`/api/v1/e2e/keys?users=${encodeURIComponent(part.join(","))}&per=${per}`).catch(() => null);
+    if (!r?.ok) return null; // all or nothing: a missing chunk would leave people out
+    Object.assign(out, (await r.json().catch(() => ({}))).keys ?? {});
+  }
+  return out;
 }
 
 const opened = new Map<string, E2EBody | null>();
@@ -145,7 +158,7 @@ export function useDecryptedUri(a: Attachment): string | null | undefined {
   return uri;
 }
 
-/** Encryption for one chat — see the web version (lib/client/e2e.ts). */
+/** Encryption for one chat — see the web version (lib/client/e2e.ts). Pass [] for a large group (not encrypted, no key fetch). */
 export function useE2E(meId: string | undefined, people: string[]) {
   const { api, token } = useStore();
   const [me, setMe] = useState<MyDevice | null>(null);

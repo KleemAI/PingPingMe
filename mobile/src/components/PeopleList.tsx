@@ -6,7 +6,7 @@ import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { listTime } from "@/lib/format";
 import { plain } from "@/lib/chatFormat";
-import { usePersonalChats } from "@/lib/people";
+import { membersLabel, usePersonalChats } from "@/lib/people";
 import { fuzzyScore } from "@/lib/fuzzy";
 import type { Person } from "@/lib/types";
 import { Avatar, Chips, Empty, SearchBar, T } from "./ui";
@@ -69,7 +69,7 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
         const last = g.messages.at(-1);
         return { key: g.id, name: g.name, group: true, announcement: !!g.announcement, unread: g.unread, right: listTime(g.lastMessageAt), at: g.lastMessageAt,
           onPress: () => router.push({ pathname: "/people/group/[id]", params: { id: g.id } }),
-          sub: !last ? `${g.members.length} members` : last.system ? last.text
+          sub: !last ? membersLabel(g) : last.system ? last.text
             : `${last.authorId === me?.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : msgText(last, myDev) ? plain(msgText(last, myDev)) : "📎 Attachment"}` };
       }),
     ].sort((a, b) => (b.at ?? 0) - (a.at ?? 0)),

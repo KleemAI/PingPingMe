@@ -125,13 +125,15 @@ export class FilesService {
       if (pg?.expires_at && new Date(pg.expires_at).getTime() <= now) return false;
       if (pg?.view_once) return pg.viewed_by === user.id && !!pg.viewed_at && now - new Date(pg.viewed_at).getTime() < VIEW_ONCE_WINDOW;
       // and in groups (each member opens a view-once file one time)
-      const [gg]: { view_once: boolean; views: Record<string, number> | null; expires_at: Date | null }[] = await em.query(
-        `SELECT view_once, views, expires_at FROM group_messages
-          WHERE attachments @> $1::jsonb AND (view_once OR expires_at IS NOT NULL) LIMIT 1`,
-        [JSON.stringify([{ id: fileId }])],
+      // only your own open (group_message_views: one row per member, up to 200,000)
+      const [gg]: { view_once: boolean; viewed: Date | null; expires_at: Date | null }[] = await em.query(
+        `SELECT m.view_once, v.viewed_at AS viewed, m.expires_at FROM group_messages m
+           LEFT JOIN group_message_views v ON v.message_id = m.id AND v.user_id = $2::text
+          WHERE m.attachments @> $1::jsonb AND (m.view_once OR m.expires_at IS NOT NULL) LIMIT 1`,
+        [JSON.stringify([{ id: fileId }]), user.id],
       );
       if (gg?.expires_at && new Date(gg.expires_at).getTime() <= now) return false;
-      if (gg?.view_once) { const at = gg.views?.[user.id]; return !!at && now - Number(at) < VIEW_ONCE_WINDOW; }
+      if (gg?.view_once) { const at = gg.viewed; return !!at && now - new Date(at).getTime() < VIEW_ONCE_WINDOW; }
     }
     if (isTeam(user)) return true;
     const own = await em.count(FileEntity, { where: { id: fileId, uploadedBy: user.id } });

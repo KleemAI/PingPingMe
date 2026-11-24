@@ -4,7 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
-import { usePersonalChats } from "@/lib/people";
+import { ADD_BATCH, LARGE_GROUP_TEXT, membersLabel, useGroupMembers, usePersonalChats } from "@/lib/people";
 import type { GroupMember, Person } from "@/lib/types";
 import { Avatar, Button, Card, Empty, Input, Sheet, T } from "@/components/ui";
 import { PeoplePicker } from "@/components/PeoplePicker";
@@ -24,8 +24,13 @@ export default function GroupInfo() {
   const [adding, setAdding] = useState(false);
   const [picked, setPicked] = useState<Person[]>([]);
   const [member, setMember] = useState<GroupMember | null>(null);
+  const [q, setQ] = useState("");
+  // a large group lists only a page of members: find the rest on the server (also for remove / make admin)
+  const large = !!group?.large;
+  const found = useGroupMembers(group?.id, q, large);
   if (!group) return <Empty icon="people-outline" title="Group not found" />;
-  const run = (type: string, payload: Record<string, unknown>, ok?: string) => act(type, { groupId: group.id, ...payload }, ok).then(reload).catch(() => {});
+  const run = (type: string, payload: Record<string, unknown>, ok?: string) => act(type, { groupId: group.id, ...payload }, ok).then(() => { reload(); if (large) found.refresh(); }).catch(() => {});
+  const shown = large ? found.members ?? group.members : group.members;
 
   return (
     <View style={{ flex: 1 }}>
@@ -46,7 +51,8 @@ export default function GroupInfo() {
               </View>
             </View>
           )}
-          <T muted>Group · {group.members.length} members</T>
+          <T muted>Group · {membersLabel(group)}</T>
+          {large && <T size={12} muted style={{ textAlign: "center" }}>{LARGE_GROUP_TEXT}</T>}
         </View>
 
         {!!group.communityId && (
@@ -58,14 +64,20 @@ export default function GroupInfo() {
           </Pressable>
         )}
 
-        <Card title={`${group.members.length} members`} icon="people-outline">
+        <Card title={membersLabel(group)} icon="people-outline">
           {group.admin && (
             <Pressable onPress={() => setAdding(true)} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 10 }}>
               <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.accent, alignItems: "center", justifyContent: "center" }}><Ionicons name="person-add" size={19} color="#fff" /></View>
               <T weight="600">Add members</T>
             </Pressable>
           )}
-          {group.members.map((m) => (
+          {large && (
+            <View style={{ paddingHorizontal: 14, paddingVertical: 8, borderTopWidth: group.admin ? 1 : 0, borderColor: c.border }}>
+              <Input value={q} onChangeText={setQ} placeholder="Search members by name or phone" autoCorrect={false} />
+            </View>
+          )}
+          {large && found.members?.length === 0 && !found.busy && <T muted size={13} style={{ paddingHorizontal: 14, paddingVertical: 10 }}>No members found</T>}
+          {shown.map((m) => (
             <Pressable key={m.id} disabled={!group.admin || m.id === me?.id} onPress={() => setMember(m)}
               style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 9, borderTopWidth: 1, borderColor: c.border }}>
               <Avatar name={m.name} size={40} />
@@ -76,6 +88,11 @@ export default function GroupInfo() {
               {m.admin && <T size={11.5} weight="700" color={c.accentStrong}>Admin</T>}
             </Pressable>
           ))}
+          {large && found.hasMore && (
+            <Pressable onPress={found.more} disabled={found.busy} style={{ padding: 12, alignItems: "center", borderTopWidth: 1, borderColor: c.border }}>
+              <T weight="600" color={c.accentStrong}>{found.busy ? "Loading…" : "Show more"}</T>
+            </Pressable>
+          )}
         </Card>
 
         <Button variant="danger" icon="log-out-outline" title="Leave group" onPress={async () => {
@@ -86,9 +103,9 @@ export default function GroupInfo() {
 
       <Sheet open={adding} onClose={() => { setAdding(false); setPicked([]); }} title="Add members">
         <View style={{ height: 420 }}>
-          <PeoplePicker picked={picked} setPicked={setPicked} exclude={group.members.map((m) => m.id)} />
+          <PeoplePicker picked={picked} setPicked={setPicked} exclude={group.members.map((m) => m.id)} max={ADD_BATCH} />
         </View>
-        <Button icon="person-add" title={`Add ${picked.length || ""}`} disabled={!picked.length} onPress={() => run("group.addMembers", { userIds: picked.map((p) => p.id) }, "Added").then(() => { setAdding(false); setPicked([]); })} />
+        <Button icon="person-add" title={`Add ${picked.length || ""}`} disabled={!picked.length || picked.length > ADD_BATCH} onPress={() => run("group.addMembers", { userIds: picked.map((p) => p.id) }, "Added").then(() => { setAdding(false); setPicked([]); })} />
       </Sheet>
 
       <Sheet open={!!member} onClose={() => setMember(null)} title={member?.name ?? ""}>

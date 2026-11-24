@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { router } from "expo-router";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
-import { MAX_GROUP } from "@/lib/people";
+import { ADD_BATCH, MAX_GROUP } from "@/lib/people";
 import type { Person } from "@/lib/types";
 import { Button, Input, T } from "@/components/ui";
 import { PeoplePicker } from "@/components/PeoplePicker";
@@ -20,9 +20,9 @@ export default function NewGroup() {
       <View style={{ paddingHorizontal: 14, paddingTop: 10 }}>
         <Input label="Group name" value={name} onChangeText={setName} maxLength={80} placeholder="e.g. Diwali order" />
       </View>
-      <PeoplePicker picked={picked} setPicked={setPicked} />
+      <PeoplePicker picked={picked} setPicked={setPicked} max={ADD_BATCH} />
       <View style={{ padding: 14, gap: 6, borderTopWidth: 1, borderColor: c.border }}>
-        <T muted size={12}>Up to {MAX_GROUP} members. You'll be the group admin.</T>
+        <T muted size={12}>Up to {MAX_GROUP.toLocaleString("en-US")} members. You'll be the group admin.</T>
         <Button icon="people" title={busy ? "Creating…" : `Create group (${picked.length + 1})`} disabled={!name.trim() || !picked.length || busy} onPress={async () => {
           setBusy(true);
           try {

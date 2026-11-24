@@ -5,7 +5,7 @@ import { badRequest, forbidden, notFound } from "../common/errors";
 import { newId, optStr, str, type Payload } from "../common/util";
 import { CommunityEntity, GroupChatEntity, GroupMemberEntity, GroupMessageEntity } from "../database/entities";
 import { UnitOfWork, type Tx } from "../database/unit-of-work.service";
-import { GroupsService } from "./groups.service";
+import { GroupsService, memberCounts } from "./groups.service";
 import { canChat } from "./people.service";
 
 /**
@@ -28,9 +28,7 @@ export class CommunitiesService {
       em.find(CommunityEntity, { where: { id: In(ids) }, order: { name: "ASC" } }),
       em.find(GroupChatEntity, { where: { communityId: In(ids) }, order: { announcement: "DESC", name: "ASC" } }),
     ]);
-    const counts: { group_id: string; n: string }[] = groups.length
-      ? await em.query(`SELECT group_id, count(*) AS n FROM group_members WHERE group_id = ANY($1) GROUP BY group_id`, [groups.map((g) => g.id)]) : [];
-    const n = new Map(counts.map((c) => [c.group_id, Number(c.n)]));
+    const n = await memberCounts(em, groups); // the stored member_count (an announcement group can pass 200,000)
     const memberOf = new Set(mine.map((m) => m.groupId));
     return communities.map((c) => ({
       id: c.id, name: c.name, description: c.description ?? undefined, admin: c.admins.includes(user.id), announcementGroupId: c.announcementGroupId,
@@ -72,7 +70,7 @@ export class CommunitiesService {
     for (const id of groupIds) groups.push(await this.ownGroup(tx, id));
     const now = Date.now();
     const id = newId("cm");
-    const ann = tx.em.create(GroupChatEntity, { id: newId("gc"), name: `${name} · Announcements`, createdBy: tx.user.id, createdAt: now, lastMessageAt: now, disappearSeconds: 0, communityId: id, announcement: true });
+    const ann = tx.em.create(GroupChatEntity, { id: newId("gc"), name: `${name} · Announcements`, createdBy: tx.user.id, createdAt: now, lastMessageAt: now, disappearSeconds: 0, communityId: id, announcement: true, memberCount: 0 });
     await tx.em.save(ann);
     await tx.em.insert(CommunityEntity, { id, name, description, createdBy: tx.user.id, createdAt: now, admins: [tx.user.id], announcementGroupId: ann.id });
     for (const g of groups) {
@@ -140,7 +138,7 @@ export class CommunitiesService {
     for (const m of mine) {
       const g = groups.find((x) => x.id === m.groupId)!;
       if (g.announcement) continue;
-      await this.groups.leave(tx, { groupId: g.id });
+      await this.groups.leave(tx, { groupId: g.id }, false); // one community sync at the end
     }
     if (c.admins.includes(tx.user.id)) {
       c.admins = c.admins.filter((x) => x !== tx.user.id);

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, Crown, Info, Loader2, Lock, LogOut, Megaphone, MessagesSquare, Pencil, Search, UserMinus, UserPlus, Users, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/client/store";
-import type { Attachment, Community, GroupChat, Message, Person, PersonalChat } from "@/lib/types";
+import type { Attachment, Community, GroupChat, GroupMember, GroupMembersPage, Message, Person, PersonalChat } from "@/lib/types";
 import { listTime } from "@/lib/format";
 import { plain } from "@/lib/chatFormat";
 import { Avatar, Button, Empty, Modal, inputCls } from "./ui";
@@ -12,7 +12,7 @@ import { Composer, DisappearingPicker, MessageList, disappearLabel } from "./Thr
 import { CommunityInfo, NewCommunity } from "./Community";
 import { SearchChips, SearchResults, useGlobalSearch, type SearchHit, type SearchType } from "./GlobalSearch";
 import { fuzzyScore } from "@/lib/fuzzy";
-import { LOCKED_TEXT, filesOf, openMessage, useE2E } from "@/lib/client/e2e";
+import { E2E_GROUP_LIMIT, LOCKED_TEXT, filesOf, openMessage, useE2E } from "@/lib/client/e2e";
 import type { MyDevice } from "@/lib/e2eCore";
 import { ask } from "@/components/Confirm";
 
@@ -36,7 +36,14 @@ export function msgText(m: { id: string; text: string; e2e?: Parameters<typeof o
   return b ? b.text : dev ? LOCKED_TEXT : "🔒 Encrypted message";
 }
 const versionOf = (s: unknown) => (s as { db?: { version?: number }; version?: number } | null)?.db?.version ?? (s as { version?: number } | null)?.version ?? 0;
-const MAX_GROUP = 256;
+/** Groups can have up to 200,000 members (like Telegram); above E2E_GROUP_LIMIT they are "large" and not encrypted. */
+export const MAX_GROUP = 200_000;
+const ADD_BATCH = 1_000; // the server takes at most 1,000 people per create / add request
+const num = (n: number) => n.toLocaleString("en-US");
+/** The real member count (`members` is only a page in a large group). */
+export const memberCountOf = (g: GroupChat) => g.memberCount ?? g.members.length;
+export const isLargeGroup = (g: GroupChat) => !!g.large || memberCountOf(g) > E2E_GROUP_LIMIT;
+export const LARGE_GROUP_TEXT = "Large group · messages are not end-to-end encrypted";
 
 /** Your personal chats and groups, refreshed whenever anything changes (live updates bump the state version). */
 export function usePersonalChats() {
@@ -147,7 +154,7 @@ export default function People() {
       const last = g.messages.at(-1);
       return {
         key: g.id, name: g.name, at: g.lastMessageAt, unread: g.unread, group: true, announcement: !!g.announcement, active: group?.id === g.id,
-        sub: !last ? `${g.members.length} members` : last.system ? last.text
+        sub: !last ? `${num(memberCountOf(g))} members` : last.system ? last.text
           : `${last.authorId === me?.id ? "You" : last.authorName.split(" ")[0]}: ${last.viewOnce ? "📷 View-once photo" : msgText(last, e2e.me) ? plain(msgText(last, e2e.me)) : "📎 Attachment"}`,
         onClick: () => setOpen({ kind: "group", id: g.id }),
       };
@@ -280,10 +287,11 @@ export default function People() {
 }
 
 /** Pick people (search + tick) — used by "New group" and "Add members". */
-function PeoplePicker({ picked, setPicked, exclude = [] }: { picked: Person[]; setPicked: (p: Person[]) => void; exclude?: string[] }) {
+function PeoplePicker({ picked, setPicked, exclude = [], max = ADD_BATCH }: { picked: Person[]; setPicked: (p: Person[]) => void; exclude?: string[]; max?: number }) {
   const [q, setQ] = useState("");
   const { found, searching } = usePeopleSearch(q);
-  const toggle = (p: Person) => setPicked(picked.some((x) => x.id === p.id) ? picked.filter((x) => x.id !== p.id) : [...picked, p]);
+  // at most `max` people per request (the server takes 1,000 at a time)
+  const toggle = (p: Person) => setPicked(picked.some((x) => x.id === p.id) ? picked.filter((x) => x.id !== p.id) : picked.length >= max ? picked : [...picked, p]);
   return (
     <div>
       {picked.length > 0 && (
@@ -296,6 +304,7 @@ function PeoplePicker({ picked, setPicked, exclude = [] }: { picked: Person[]; s
           ))}
         </div>
       )}
+      {picked.length >= max && <p className="mb-2 text-[12px] text-[var(--muted)]">You can add up to {num(max)} people at a time.</p>}
       <label className="flex items-center gap-2 rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2 focus-within:border-[var(--accent)]">
         {searching ? <Loader2 size={15} className="animate-spin text-[var(--muted)]" /> : <Search size={15} className="text-[var(--muted)]" />}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or phone number" className="w-full bg-transparent text-sm outline-none" autoFocus />
@@ -327,7 +336,10 @@ export function GroupView({ group, meId, onBack, reload, communities = [], group
   const { act } = useStore();
   const [info, setInfo] = useState(false);
   const [showCommunity, setShowCommunity] = useState(false);
-  const e2e = useE2E(meId, group.members.map((m) => m.id));
+  const large = isLargeGroup(group);
+  // a large group is not end-to-end encrypted: no device-key fetch, messages go plain
+  const memberIds = useMemo(() => (large ? [] : group.members.map((m) => m.id)), [large, group.members]);
+  const e2e = useE2E(meId, memberIds);
   const community = communities.find((c) => c.id === group.communityId) ?? null;
   const openInfo = () => (group.announcement && community ? setShowCommunity(true) : setInfo(true));
   useEffect(() => {
@@ -348,11 +360,12 @@ export function GroupView({ group, meId, onBack, reload, communities = [], group
             <div className="truncate text-[15px] font-medium">{group.name}</div>
             <div className="truncate text-[12px] text-[var(--muted)]">
               {group.communityName && <span className="font-medium text-[var(--accent-strong)]">{group.communityName} · </span>}
-              {group.announcement ? `${group.members.length} members` : group.members.map((m) => (m.id === meId ? "You" : m.name.split(" ")[0])).join(", ")}
+              {group.announcement || large ? `${num(memberCountOf(group))} members` : group.members.map((m) => (m.id === meId ? "You" : m.name.split(" ")[0])).join(", ")}
             </div>
           </div>
         </button>
         {group.canSend !== false && <DisappearingPicker value={group.disappearSeconds} onChange={(v) => act("group.disappearing", { groupId: group.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />}
+        {large && <span title={LARGE_GROUP_TEXT} className="shrink-0 rounded-full bg-[var(--panel-2)] px-2 py-1 text-[11.5px] text-[var(--muted)]">Large group · not encrypted</span>}
         {e2e.enabled && <span title="End-to-end encrypted: only the members can read these messages" className="flex items-center gap-1 rounded-full bg-[var(--accent)]/10 px-2 py-1 text-[11.5px] text-[var(--accent-strong)]"><Lock size={12} /> Encrypted</span>}
         <button onClick={openInfo} title="Group info" aria-label="Group info" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><Info size={19} /></button>
       </header>
@@ -361,10 +374,11 @@ export function GroupView({ group, meId, onBack, reload, communities = [], group
         allowViewOnce
         disabled={group.canSend === false ? "Only community admins can send messages" : undefined}
         encrypt={e2e.enabled}
-        modes={[{ id: "group", kind: "customer", label: "Message", hint: e2e.enabled ? `🔒 End-to-end encrypted — only members of ${group.name} can read it` : `Everyone in ${group.name} sees this` }]}
+        modes={[{ id: "group", kind: "customer", label: "Message", hint: large ? LARGE_GROUP_TEXT : e2e.enabled ? `🔒 End-to-end encrypted — only members of ${group.name} can read it` : `Everyone in ${group.name} sees this` }]}
         onSend={async (_m, text, attachments, opts) => {
           const sealed = await sealFor(e2e, text, attachments);
-          await act("group.send", { groupId: group.id, ...sealed, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce });
+          // plain: this app knows the message isn't encrypted (the server turns away plain text from old apps in bigger groups)
+          await act("group.send", { groupId: group.id, ...sealed, plain: "text" in sealed || undefined, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce });
           await reload();
         }}
       />
@@ -386,7 +400,7 @@ export function NewGroup({ onClose, onCreated }: { onClose: () => void; onCreate
       <div className="space-y-3">
         <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} maxLength={80} placeholder="Group name" aria-label="Group name" />
         <PeoplePicker picked={picked} setPicked={setPicked} />
-        <p className="text-[12px] text-[var(--muted)]">Up to {MAX_GROUP} members. You&apos;ll be the group admin.</p>
+        <p className="text-[12px] text-[var(--muted)]">Up to {num(MAX_GROUP)} members. You&apos;ll be the group admin.</p>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={!name.trim() || !picked.length || busy} onClick={async () => {
@@ -399,13 +413,53 @@ export function NewGroup({ onClose, onCreated }: { onClose: () => void; onCreate
   );
 }
 
+/** Members of a large group from the server, 50 at a time (admins first), filtered by name / phone. null groupId = off. */
+function useGroupMembers(groupId: string | null, tick: number) {
+  const [q, setQ] = useState("");
+  const [members, setMembers] = useState<GroupMember[] | null>(null);
+  const [next, setNext] = useState<number | undefined>(undefined);
+  const [loading, setLoading] = useState(false);
+  const fetchPage = useCallback(async (offset: number) => {
+    if (!groupId) return null;
+    const sp = new URLSearchParams({ offset: String(offset) });
+    if (q.trim()) sp.set("q", q.trim());
+    const r = await fetch(`/api/people/groups/${encodeURIComponent(groupId)}/members?${sp}`, { cache: "no-store" }).catch(() => null);
+    return r?.ok ? (await r.json().catch(() => null)) as GroupMembersPage | null : null;
+  }, [groupId, q]);
+  useEffect(() => {
+    if (!groupId) return;
+    let live = true;
+    setLoading(true);
+    const id = setTimeout(async () => {
+      const p = await fetchPage(0);
+      if (!live) return;
+      if (p) { setMembers(p.members); setNext(p.next); }
+      setLoading(false);
+    }, q ? 300 : 0);
+    return () => { live = false; clearTimeout(id); };
+  }, [fetchPage, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const more = async () => {
+    if (next === undefined || loading) return;
+    setLoading(true);
+    const p = await fetchPage(next);
+    if (p) { setMembers((m) => [...(m ?? []), ...p.members.filter((x) => !m?.some((y) => y.id === x.id))]); setNext(p.next); }
+    setLoading(false);
+  };
+  return { q, setQ, members, next, loading, more };
+}
+
 function GroupInfo({ group, meId, onClose, onLeft, reload, onCommunity }: { group: GroupChat; meId?: string; onClose: () => void; onLeft: () => void; reload: () => Promise<void>; onCommunity?: () => void }) {
   const { act } = useStore();
   const [name, setName] = useState(group.name);
   const [renaming, setRenaming] = useState(false);
   const [adding, setAdding] = useState(false);
   const [picked, setPicked] = useState<Person[]>([]);
-  const run = (type: string, payload: Record<string, unknown>, ok?: string) => act(type, { groupId: group.id, ...payload }, ok).then(reload).catch(() => {});
+  const large = isLargeGroup(group);
+  const count = memberCountOf(group);
+  const [tick, setTick] = useState(0); // refetch the member page after an admin action
+  const run = (type: string, payload: Record<string, unknown>, ok?: string) => act(type, { groupId: group.id, ...payload }, ok).then(reload).then(() => setTick((n) => n + 1)).catch(() => {});
+  const page = useGroupMembers(large ? group.id : null, tick);
+  const members = large ? page.members ?? group.members : group.members;
   return (
     <Modal open onClose={onClose} title="Group info">
       <div className="space-y-4">
@@ -420,7 +474,7 @@ function GroupInfo({ group, meId, onClose, onLeft, reload, onCommunity }: { grou
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 text-[17px] font-semibold">{group.name}
                 {group.admin && <button onClick={() => setRenaming(true)} title="Rename" className="text-[var(--muted)]"><Pencil size={14} /></button>}</div>
-              <div className="text-[12.5px] text-[var(--muted)]">{group.members.length} members</div>
+              <div className="text-[12.5px] text-[var(--muted)]">{num(count)} members</div>
             </div>
           )}
         </div>
@@ -433,7 +487,7 @@ function GroupInfo({ group, meId, onClose, onLeft, reload, onCommunity }: { grou
 
         {group.admin && (adding ? (
           <div className="rounded-[20px] border border-[var(--border)] bg-[var(--panel)] p-3">
-            <PeoplePicker picked={picked} setPicked={setPicked} exclude={group.members.map((m) => m.id)} />
+            <PeoplePicker picked={picked} setPicked={setPicked} exclude={group.members.map((m) => m.id)} max={Math.max(0, Math.min(ADD_BATCH, MAX_GROUP - count))} />
             <div className="mt-2 flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => { setAdding(false); setPicked([]); }}>Cancel</Button>
               <Button size="sm" disabled={!picked.length} onClick={() => run("group.addMembers", { userIds: picked.map((p) => p.id) }, "Added").then(() => { setAdding(false); setPicked([]); })}><UserPlus size={14} /> Add {picked.length || ""}</Button>
@@ -441,8 +495,18 @@ function GroupInfo({ group, meId, onClose, onLeft, reload, onCommunity }: { grou
           </div>
         ) : <Button variant="outline" size="sm" onClick={() => setAdding(true)}><UserPlus size={14} /> Add members</Button>)}
 
+        {large && (
+          <div className="space-y-2">
+            <p className="flex items-center gap-1.5 rounded-[14px] bg-[var(--panel-2)] px-3 py-2 text-[12.5px] text-[var(--muted)]"><Users size={14} className="shrink-0" /> {LARGE_GROUP_TEXT}</p>
+            <label className="flex items-center gap-2 rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2 focus-within:border-[var(--accent)]">
+              {page.loading ? <Loader2 size={15} className="animate-spin text-[var(--muted)]" /> : <Search size={15} className="text-[var(--muted)]" />}
+              <input value={page.q} onChange={(e) => page.setQ(e.target.value)} placeholder="Search members by name or phone" aria-label="Search members" className="w-full bg-transparent text-sm outline-none" />
+            </label>
+          </div>
+        )}
         <ul className="scroll-thin max-h-72 divide-y divide-[var(--border)] overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--panel)]">
-          {group.members.map((m) => (
+          {large && page.members && !page.members.length && !page.loading && <li className="px-3 py-3 text-[13px] text-[var(--muted)]">Nobody found.</li>}
+          {members.map((m) => (
             <li key={m.id} className="flex items-center gap-3 px-3 py-2">
               <Avatar name={m.name} size={34} />
               <div className="min-w-0 flex-1">
@@ -458,6 +522,9 @@ function GroupInfo({ group, meId, onClose, onLeft, reload, onCommunity }: { grou
               )}
             </li>
           ))}
+          {large && page.next !== undefined && (
+            <li><button onClick={page.more} disabled={page.loading} className="w-full px-3 py-2 text-center text-[13px] text-[var(--accent)]">{page.loading ? "Loading…" : "Show more"}</button></li>
+          )}
         </ul>
 
         <div className="flex justify-between">

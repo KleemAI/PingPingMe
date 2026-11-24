@@ -40,7 +40,10 @@ export class PersonalMessageEntity {
   @Column({ name: "viewed_by", type: "varchar", length: 40, nullable: true }) viewedBy: string | null;
 }
 
-/** Group chats (customers and the team). Up to MAX_GROUP_MEMBERS members; admins manage members and the name. */
+/**
+ * Group chats (customers and the team). Up to MAX_GROUP_MEMBERS (200,000) members; admins manage members and the name.
+ * Groups over E2E_GROUP_LIMIT (1,000) members are "large": their messages are not end-to-end encrypted.
+ */
 @Entity("group_chats")
 export class GroupChatEntity {
   @PrimaryColumn({ type: "varchar", length: 40 }) id: string;
@@ -53,6 +56,11 @@ export class GroupChatEntity {
   @Index() @Column({ name: "community_id", type: "varchar", length: 40, nullable: true }) communityId: string | null;
   /** a community's announcement group: everyone in the community, only community admins post */
   @Column({ default: false }) announcement: boolean;
+  /**
+   * Members, kept up to date by every insert / delete of group_members (raw SQL; `update: false` so a `save()` of a
+   * stale entity never overwrites it). Spares a count(*) over up to 200,000 rows per GET /people. NULL = not counted yet.
+   */
+  @Column({ name: "member_count", type: "int", nullable: true, update: false }) memberCount: number | null;
 }
 
 /** Communities (like WhatsApp): groups under one roof, with an announcement group for everyone in them. */
@@ -70,6 +78,7 @@ export class CommunityEntity {
 
 @Entity("group_members")
 @Index(["groupId", "userId"], { unique: true })
+@Index(["groupId", "role", "joinedAt"]) // the first admins / members of a big group, in order
 export class GroupMemberEntity {
   @PrimaryColumn({ type: "varchar", length: 40 }) id: string;
   @Index() @Column({ name: "group_id", type: "varchar", length: 40 }) groupId: string;
@@ -82,6 +91,7 @@ export class GroupMemberEntity {
 }
 
 @Entity("group_messages")
+@Index(["groupId", "createdAt", "seq"]) // a group's latest messages / unread, without reading the whole group
 export class GroupMessageEntity {
   @PrimaryColumn({ type: "varchar", length: 40 }) id: string;
   @Column({ type: "bigint" }) @Generated("increment") seq: string;
@@ -96,6 +106,16 @@ export class GroupMessageEntity {
   @Column({ name: "view_once", default: false }) viewOnce: boolean;
   /** end-to-end encrypted message (text is then empty); see common/e2e.ts */
   @Column({ type: "jsonb", nullable: true }) e2e: E2EEnvelope | null;
-  /** view once in a group: each member may open it one time → { userId: openedAt } */
+  /** legacy view-once opens { userId: openedAt }: moved to group_message_views at boot, then left empty */
   @Column({ type: "jsonb", default: () => "'{}'" }) views: Record<string, number>;
+  /** view once: how many members opened it (one row each in group_message_views) */
+  @Column({ type: "int", default: 0 }) opened: number;
+}
+
+/** View once in a group: each member may open it one time (a row each — up to 200,000 per message). */
+@Entity("group_message_views")
+export class GroupMessageViewEntity {
+  @PrimaryColumn({ name: "message_id", type: "varchar", length: 40 }) messageId: string;
+  @PrimaryColumn({ name: "user_id", type: "varchar", length: 40 }) userId: string;
+  @Column({ name: "viewed_at", ...TS }) viewedAt: number;
 }

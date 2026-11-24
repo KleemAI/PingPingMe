@@ -20,7 +20,7 @@ function GroupTicks({ groups, picked, setPicked }: { groups: GroupChat[]; picked
           <li key={g.id}>
             <button type="button" onClick={() => setPicked(on ? picked.filter((x) => x !== g.id) : [...picked, g.id])} className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-[var(--hover)]">
               <Avatar name={g.name} size={34} group />
-              <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{g.name}</div><div className="text-[12px] text-[var(--muted)]">{g.members.length} members</div></div>
+              <div className="min-w-0 flex-1"><div className="truncate text-[14px]">{g.name}</div><div className="text-[12px] text-[var(--muted)]">{(g.memberCount ?? g.members.length).toLocaleString("en-US")} members</div></div>
               <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${on ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border-strong)]"}`}>{on && <Check size={13} />}</span>
             </button>
           </li>

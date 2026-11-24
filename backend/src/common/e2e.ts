@@ -11,7 +11,12 @@ import type { E2EEnvelope } from "./contract";
  */
 const B64 = /^[A-Za-z0-9+/]+={0,2}$/;
 const ID = /^[A-Za-z0-9_-]{1,40}$/;
-export const MAX_E2E_DEVICES = 3000;
+/**
+ * Devices one envelope may be sealed for. Groups are encrypted only up to E2E_GROUP_LIMIT (1,000) members
+ * (people/groups.service.ts); apps ask GET /e2e/keys for at most MAX_E2E_DEVICES / people devices per person (`per`), so a
+ * full group still fits. ~140 B per key keeps it well inside the 1 MB body limit.
+ */
+export const MAX_E2E_DEVICES = 5000;
 
 export function readEnvelope(v: unknown): E2EEnvelope | null {
   if (v === undefined || v === null) return null;
@@ -22,7 +27,8 @@ export function readEnvelope(v: unknown): E2EEnvelope | null {
   if (!e.keys || typeof e.keys !== "object" || Array.isArray(e.keys)) throw badRequest("Bad encrypted message");
   const keys: Record<string, string> = {};
   const entries = Object.entries(e.keys as Record<string, unknown>);
-  if (!entries.length || entries.length > MAX_E2E_DEVICES) throw badRequest("Bad encrypted message");
+  if (!entries.length) throw badRequest("Bad encrypted message");
+  if (entries.length > MAX_E2E_DEVICES) throw badRequest("Too many devices to encrypt for — update the app and try again");
   for (const [d, k] of entries) {
     if (!ID.test(d) || !s(k, 200)) throw badRequest("Bad encrypted message");
     keys[d] = k as string;
