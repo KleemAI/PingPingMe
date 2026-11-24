@@ -122,4 +122,4 @@ Keep in mind:
 
 - Closing the link window or restarting the computer creates a **new link**. The old one stops working.
 - To stop the computer going to sleep, set Sleep to **Never** in Settings → Power.
-- For a permanent link (without this computer), the server has to be put online (for example on Render). A `render.yaml` for that is already in the project.
+- For a permanent link (without this computer), the server has to be put online on a hosting service.
