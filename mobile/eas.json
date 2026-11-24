@@ -15,7 +15,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://jeffrey-extensions-detroit-nickname.trycloudflare.com"
+        "EXPO_PUBLIC_API_URL": "https://listings-extensive-simultaneously-upc.trycloudflare.com"
       }
     },
     "production": {
