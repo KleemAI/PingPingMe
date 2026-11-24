@@ -63,7 +63,7 @@ type Ctx = {
   refresh: () => Promise<void>;
   act: (type: string, payload?: Record<string, unknown>, okText?: string) => Promise<unknown>;
   toast: (text: string, kind?: Toast["kind"]) => void;
-  upload: (file: { uri: string; name: string; mimeType?: string; size?: number; file?: Blob }) => Promise<Attachment>;
+  upload: (file: { uri: string; name: string; mimeType?: string; size?: number; file?: Blob }, opts?: { raw?: boolean }) => Promise<Attachment>;
   openFile: (a: Attachment) => Promise<void>;
 };
 
@@ -259,8 +259,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     return data.result;
   }, [call, refresh, toast]);
 
-  const upload = useCallback(async (picked: { uri: string; name: string; mimeType?: string; size?: number; file?: Blob }) => {
-    const f = await shrinkPhoto(picked); // photos: 1080 px JPEG before they leave the phone
+  const upload = useCallback(async (picked: { uri: string; name: string; mimeType?: string; size?: number; file?: Blob }, opts?: { raw?: boolean }) => {
+    // photos: 1080 px JPEG before they leave the phone — except raw files (a product sold for download keeps its full quality)
+    const f = opts?.raw ? picked : await shrinkPhoto(picked);
     const fd = new FormData();
     if (Platform.OS === "web" && f.file) fd.append("file", f.file, f.name);
     else fd.append("file", formFile({ uri: f.uri }, f.name, f.mimeType ?? "application/octet-stream"));

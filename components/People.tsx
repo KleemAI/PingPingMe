@@ -14,6 +14,7 @@ import { SearchChips, SearchResults, useGlobalSearch, type SearchHit, type Searc
 import { fuzzyScore } from "@/lib/fuzzy";
 import { LOCKED_TEXT, filesOf, openMessage, useE2E } from "@/lib/client/e2e";
 import type { MyDevice } from "@/lib/e2eCore";
+import { ask } from "@/components/Confirm";
 
 /**
  * What to send: encrypted ({ e2e }) when the chat is encrypted, else plain ({ text }). Files uploaded encrypted can
@@ -452,7 +453,7 @@ function GroupInfo({ group, meId, onClose, onLeft, reload, onCommunity }: { grou
               {group.admin && m.id !== meId && (
                 <div className="flex gap-1">
                   <Button size="sm" variant="ghost" title={m.admin ? "Remove as admin" : "Make admin"} onClick={() => run("group.setAdmin", { userId: m.id, admin: !m.admin })}><Crown size={14} /></Button>
-                  <Button size="sm" variant="ghost" title="Remove from group" onClick={() => confirm(`Remove ${m.name} from the group?`) && run("group.removeMember", { userId: m.id }, "Removed")}><UserMinus size={14} /></Button>
+                  <Button size="sm" variant="ghost" title="Remove from group" onClick={async () => (await ask({ title: `Remove ${m.name} from the group?`, ok: "Remove", danger: true })) && run("group.removeMember", { userId: m.id }, "Removed")}><UserMinus size={14} /></Button>
                 </div>
               )}
             </li>
@@ -460,7 +461,7 @@ function GroupInfo({ group, meId, onClose, onLeft, reload, onCommunity }: { grou
         </ul>
 
         <div className="flex justify-between">
-          <Button variant="danger" size="sm" onClick={() => { if (confirm(`Leave "${group.name}"?`)) act("group.leave", { groupId: group.id }, "You left the group").then(onLeft).catch(() => {}); }}><LogOut size={14} /> Leave group</Button>
+          <Button variant="danger" size="sm" onClick={async () => { if (await ask({ title: `Leave "${group.name}"?`, ok: "Leave", danger: true })) act("group.leave", { groupId: group.id }, "You left the group").then(onLeft).catch(() => {}); }}><LogOut size={14} /> Leave group</Button>
           <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Platform, ScrollView, View } from "react-native";
+import { Linking, Platform, Pressable, ScrollView, Share, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
@@ -22,7 +22,7 @@ const ask = (title: string, msg: string, ok: string, fn: () => unknown, destruct
 export default function OrderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
-  const { upload, openFile } = useStore();
+  const { upload, openFile, toast } = useStore();
   const { order, merchant, myRole, now, run } = useP2P();
   const [proof, setProof] = useState<{ uri: string; name: string; mimeType?: string; file?: Blob } | null>(null);
   const [appealOpen, setAppealOpen] = useState(false);
@@ -53,6 +53,14 @@ export default function OrderScreen() {
     const f = r.assets[0];
     setProof({ uri: f.uri, name: f.name, mimeType: f.mimeType, file: (f as unknown as { file?: Blob }).file });
   };
+  // no clipboard module in the app: the web copies, phones open the share sheet (it has "Copy")
+  const copy = async (text: string) => {
+    try {
+      if (Platform.OS === "web") { await globalThis.navigator?.clipboard?.writeText(text); toast("Copied"); }
+      else await Share.share({ message: text });
+    } catch { /* closed */ }
+  };
+  const openLink = (url: string) => { Linking.openURL(url).catch(() => toast("Couldn't open the link", "error")); };
   const markPaid = async () => {
     const att = proof ? await upload(proof) : undefined;
     await run("p2p.paid", { id: o.id, proof: att?.id }, "Seller notified");
@@ -89,9 +97,47 @@ export default function OrderScreen() {
             <KV k="Quantity" v={`${o.qty} units × ${inr(o.price)}`} />
             <KV k={role === "buyer" ? "You pay" : "You receive"} v={<T weight="700" size={17} color={c.accentStrong}>{inr(o.amount)}</T>} />
             <KV k="Payment" v={o.paymentMethod} />
+            {!!o.buyerEmail && (role === "seller"
+              ? <KV k="Activate on" v={
+                  <Pressable onPress={() => copy(o.buyerEmail!)} accessibilityLabel={`Copy ${o.buyerEmail}`} hitSlop={6} style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
+                    <T weight="700" size={14} style={{ userSelect: "text", flexShrink: 1 }} numberOfLines={1}>{o.buyerEmail}</T>
+                    <Ionicons name="copy-outline" size={16} color={c.accentStrong} />
+                  </Pressable>
+                } />
+              : <KV k="Your email" v={<T size={14} style={{ userSelect: "text" }}>{o.buyerEmail}</T>} />)}
             {other && <View style={{ borderTopWidth: 1, borderColor: c.border, paddingTop: 10, marginTop: 2 }}><MerchantLine m={other} size={34} /></View>}
           </View>
         </Card>
+
+        {o.delivery && (role === "seller" || o.status === "completed") && (
+          <Card title={role === "buyer" ? "Your product" : "Automatic delivery"} icon={role === "buyer" ? "gift-outline" : "flash-outline"}>
+            <View style={{ padding: 14, gap: 10 }}>
+              {!!o.delivery.link && (
+                <View style={{ backgroundColor: c.card2, borderRadius: 12, padding: 12, gap: 8 }}>
+                  <T muted size={12}>Link</T>
+                  <T size={14} style={{ userSelect: "text" }} numberOfLines={3}>{o.delivery.link}</T>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <Button style={{ flex: 1 }} small icon="open-outline" title="Open" onPress={() => openLink(o.delivery!.link!)} />
+                    <Button style={{ flex: 1 }} small variant="outline" icon="copy-outline" title="Copy" onPress={() => copy(o.delivery!.link!)} />
+                  </View>
+                </View>
+              )}
+              {!!o.delivery.file && (
+                <Button variant={o.delivery.link ? "outline" : "primary"} icon="download-outline" title={`Download ${o.delivery.file.name}`} onPress={() => openFile(o.delivery!.file!)} />
+              )}
+              {role === "seller" && <T muted size={12.5}>{o.status === "completed" ? "The buyer has it now." : "The buyer gets this as soon as you release the order."}</T>}
+            </View>
+          </Card>
+        )}
+
+        {role === "buyer" && o.autoDelivery && !o.delivery && o.status !== "cancelled" && (
+          <Card>
+            <View style={{ padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Ionicons name="flash-outline" size={20} color={c.accentStrong} />
+              <T size={13.5} style={{ flex: 1 }}>Delivered automatically once the seller confirms your payment.</T>
+            </View>
+          </Card>
+        )}
 
         {role === "buyer" && o.status === "pending_payment" && (
           <Card title="Pay the seller" icon="wallet-outline">

@@ -85,6 +85,7 @@ export class ActionsService {
       "p2p.message": (t, p) => p2p.message(t, p),
       "p2p.ad.create": (t, p) => p2p.createAd(t, p),
       "p2p.ad.toggle": (t, p) => p2p.toggleAd(t, p),
+      "p2p.ad.options": (t, p) => p2p.updateAdOptions(t, p),
       "p2p.payTo": (t, p) => p2p.setPayTo(t, p),
     };
     this.team = {

@@ -6,6 +6,7 @@ import { Scale } from "lucide-react";
 import { inr, STATUS, useP2P } from "@/lib/p2p/store";
 import type { P2POrder } from "@/lib/p2p/types";
 import { AttachmentChip, Button, Card, Empty, Pill, inputCls } from "@/components/ui";
+import { ask } from "@/components/Confirm";
 
 /** Team only: P2P orders in appeal. Read both sides' chat and the payment proof, then decide. A decision never moves money. */
 export default function P2PAppeals() {
@@ -33,7 +34,9 @@ function AppealCard({ o }: { o: P2POrder }) {
 
   const decide = async (outcome: "release" | "cancel") => {
     if (note.trim().length < 5) return setErr("Write a short note — both sides will see it in their chat");
-    if (!confirm(outcome === "release" ? `Release ${o.qty} × ${o.product} to ${buyer?.name}? This can't be undone.` : `Cancel ${o.ref} and return the stock to ${seller?.name}?`)) return;
+    if (!(await ask(outcome === "release"
+      ? { title: `Release ${o.qty} × ${o.product} to ${buyer?.name}?`, message: "This can't be undone.", ok: "Release" }
+      : { title: `Cancel ${o.ref}?`, message: `The stock goes back to ${seller?.name}.`, ok: "Cancel order", cancel: "Back", danger: true }))) return;
     setBusy(true);
     const r = await resolveAppeal(o.id, outcome, note.trim());
     setBusy(false);

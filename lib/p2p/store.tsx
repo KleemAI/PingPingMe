@@ -21,13 +21,18 @@ export type Result = { ok: true; id?: string } | { ok: false; error: string };
 
 /** Team members and resellers can sell; a customer only once our team has verified them. */
 export const canSellAs = (m: Merchant) => m.verification === "verified";
-export const SELL_BLOCKED = "Selling opens once our team has verified your account. You can buy right away.";
+export const SELL_BLOCKED = "Selling unlocks after verification is complete.";
 
 /** "97.60%", or "—" while there is nothing to measure yet (new members). */
 export const completionText = (m: Merchant) => (m.trades + m.cancelled ? pct((m.trades / (m.trades + m.cancelled)) * 100) : "—");
 export const positiveText = (m: Merchant) => (m.ratingsTotal ? pct((m.ratingsPos / m.ratingsTotal) * 100) : "—");
 
-export type NewAd = Pick<P2PAd, "side" | "product" | "price" | "totalQty" | "minAmount" | "maxAmount" | "payments" | "payWindowMin" | "terms">;
+/** Sell ads only: ask the buyer for an email, and automatic delivery (a link and/or a file: a new File to upload, or the id of the one already set). */
+export type AdOptions = { askEmail: boolean; delivery: "manual" | "auto"; deliveryLink?: string; deliveryFile?: File | string };
+export type NewAd = Pick<P2PAd, "side" | "product" | "price" | "totalQty" | "minAmount" | "maxAmount" | "payments" | "payWindowMin" | "terms"> & Partial<AdOptions>;
+
+/** A rough shape check — the server has the final say. */
+export const isEmail = (v: string) => v.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
 type Ctx = {
   s: P2PState;
@@ -40,7 +45,7 @@ type Ctx = {
   canSell: boolean;
   isCustomer: boolean;
   isTeam: boolean;
-  placeOrder: (adId: string, qty: number, method: PaymentMethod) => Promise<Result>;
+  placeOrder: (adId: string, qty: number, method: PaymentMethod, email?: string) => Promise<Result>;
   markPaid: (orderId: string, proof?: File) => Promise<Result>;
   release: (orderId: string) => Promise<Result>;
   cancel: (orderId: string, reason?: string) => Promise<Result>;
@@ -49,6 +54,7 @@ type Ctx = {
   send: (orderId: string, text: string, attachments?: string[]) => Promise<Result>;
   createAd: (a: NewAd) => Promise<Result>;
   toggleAd: (adId: string) => Promise<Result>;
+  adOptions: (adId: string, o: AdOptions) => Promise<Result>; // replaces both options of your ad
   setPayTo: (p: PayTo) => Promise<Result>;
   resolveAppeal: (orderId: string, outcome: "release" | "cancel", note: string) => Promise<Result>; // team only
 };
@@ -106,6 +112,12 @@ export function P2PProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refresh]);
 
+  // a picked delivery file is uploaded first; the action gets its id
+  const withFile = useCallback(async <T extends Partial<AdOptions>>(a: T): Promise<{ ok: true; v: Omit<T, "deliveryFile"> & { deliveryFile?: string } } | { ok: false; error: string }> => {
+    if (!(a.deliveryFile instanceof File)) return { ok: true, v: { ...a, deliveryFile: a.deliveryFile as string | undefined } };
+    try { return { ok: true, v: { ...a, deliveryFile: (await upload(a.deliveryFile)).id } }; } catch (e) { return { ok: false, error: (e as Error).message || "Upload failed" }; }
+  }, [upload]);
+
   const value = useMemo<Ctx | null>(() => {
     if (!s) return null;
     const merchant = (id: string) => s.merchants.find((m) => m.id === id);
@@ -119,7 +131,7 @@ export function P2PProvider({ children }: { children: React.ReactNode }) {
       canSell: canSellAs(me),
       isCustomer: me.kind === "customer",
       isTeam: me.kind === "team",
-      placeOrder: (adId, qty, method) => run("p2p.order", { adId, qty, paymentMethod: method }),
+      placeOrder: (adId, qty, method, email) => run("p2p.order", { adId, qty, paymentMethod: method, email }),
       markPaid: async (id, file) => {
         let proof: string | undefined;
         if (file) {
@@ -132,12 +144,13 @@ export function P2PProvider({ children }: { children: React.ReactNode }) {
       appeal: (id, reason) => run("p2p.appeal", { id, reason }),
       rate: (id, positive) => run("p2p.rate", { id, positive }),
       send: (id, text, attachments) => run("p2p.message", { id, text, attachments }),
-      createAd: (a) => run("p2p.ad.create", a),
+      createAd: async (a) => { const r = await withFile(a); return r.ok ? run("p2p.ad.create", r.v) : r; },
       toggleAd: (id) => run("p2p.ad.toggle", { id }),
+      adOptions: async (id, o) => { const r = await withFile(o); return r.ok ? run("p2p.ad.options", { id, ...r.v }) : r; },
       setPayTo: (p) => run("p2p.payTo", p),
       resolveAppeal: (id, outcome, note) => run("p2p.resolveAppeal", { id, outcome, note }),
     };
-  }, [s, now, run, upload]);
+  }, [s, now, run, upload, withFile]);
 
   if (!value) {
     return (

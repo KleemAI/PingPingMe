@@ -24,6 +24,11 @@ export class P2PAdEntity {
   @Column({ type: "jsonb", nullable: true }) image: Attachment | null;
   @Column({ type: "varchar", length: 30, nullable: true }) unit: string | null;
   @Column({ type: "jsonb", default: () => "'[]'" }) plans: { id: string; label: string; price: number; soldOut?: boolean }[];
+  /** sell ads only: the buyer must give an email (e.g. for activation) when ordering */
+  @Column({ name: "ask_email", default: false }) askEmail: boolean;
+  /** sell ads only: automatic digital delivery (a link and/or a file). Never sent to other users, only "autoDelivery: true". */
+  @Column({ name: "delivery_link", type: "text", nullable: true }) deliveryLink: string | null;
+  @Column({ name: "delivery_file", type: "jsonb", nullable: true }) deliveryFile: Attachment | null;
   @Column({ default: false }) featured: boolean;
   @Index() @Column({ default: true }) online: boolean;
   @Column({ name: "created_at", ...TS }) createdAt: number;
@@ -57,6 +62,11 @@ export class P2POrderEntity {
   @Column({ name: "appeal_by", type: "varchar", length: 40, nullable: true }) appealBy: string | null;
   @Column({ name: "appeal_resolution", type: "text", nullable: true }) appealResolution: string | null;
   @Column({ type: "varchar", length: 10, nullable: true }) rating: string | null;
+  /** given by the buyer when the ad asks for it */
+  @Column({ name: "buyer_email", type: "varchar", length: 254, nullable: true }) buyerEmail: string | null;
+  /** copied from the ad when the order is placed; shown to the buyer only once the order is completed */
+  @Column({ name: "delivery_link", type: "text", nullable: true }) deliveryLink: string | null;
+  @Column({ name: "delivery_file", type: "jsonb", nullable: true }) deliveryFile: Attachment | null;
 }
 
 /** The chat on one order (buyer, seller and system notes). It is the record our team uses for appeals. */

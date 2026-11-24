@@ -170,7 +170,7 @@ export default function Login() {
               {step === "signup"
                 ? <Button title="Create account" onPress={create} />
                 : <Button title="Sign in" onPress={() => signIn()} disabled={!password} />}
-              {step === "signup" && <T muted size={12}>You can buy on the P2P market straight away. Selling opens once our team has verified your account.</T>}
+              {step === "signup" && <T muted size={12}>You can buy on the P2P market straight away. Selling unlocks after verification is complete.</T>}
             </>
           )}
         </View>

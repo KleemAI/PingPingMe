@@ -17,7 +17,7 @@ export default function MyAds() {
     <ScrollPad>
       {!canSell && (
         <View style={{ backgroundColor: c.note, borderColor: c.noteBorder, borderWidth: 1, borderRadius: 12, padding: 12 }}>
-          <T size={13.5} color={c.noteText}><T weight="700" size={13.5} color={c.noteText}>Selling is locked for now. </T>You can post Buy ads. {SELL_BLOCKED}</T>
+          <T size={13.5} weight="600" color={c.noteText}>{SELL_BLOCKED}</T>
         </View>
       )}
       {toRelease.map((o) => (
@@ -38,6 +38,12 @@ export default function MyAds() {
             <T weight="700" size={18}>{inr(a.price)} <T muted size={12.5}>/ unit</T></T>
             <T muted size={12.5}>{a.availableQty} of {a.totalQty} available · {held(a.id)} held by open orders</T>
             <T muted size={12.5}>Limit {inr(a.minAmount)} – {inr(a.maxAmount)} · {a.payments.join(", ")} · pay within {a.payWindowMin} min</T>
+            {a.side === "sell" && (
+              <>
+                <T muted size={12.5}>{a.delivery ? "Automatic delivery" : "You deliver yourself"}{a.askEmail ? " · asks the buyer for an email" : ""}</T>
+                <Button variant="outline" icon="create-outline" title="Email & delivery" onPress={() => router.push({ pathname: "/p2p/new-ad", params: { edit: a.id } })} />
+              </>
+            )}
           </View>
         </Card>
       ))}

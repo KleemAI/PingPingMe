@@ -6,6 +6,7 @@ import { useStore } from "@/lib/client/store";
 import { dateTime, relative } from "@/lib/format";
 import type { Broadcast } from "@/lib/types";
 import { Button, Field, Modal, inputCls } from "./ui";
+import { ask } from "@/components/Confirm";
 
 const SHOWN_KEY = "bm-reminders-shown";
 const LATE_MS = 10 * 60_000; // a reminder that rang while the site was closed still pops up if it's under 10 minutes late
@@ -70,7 +71,7 @@ function RemindersPanel({ onClose }: { onClose: () => void }) {
         <div className="text-[12px] text-[var(--muted)]">{dateTime(b.dueAt)} · {relative(b.dueAt, now)} · by {b.createdByName}</div>
       </div>
       {!done && canCancel(b) && (
-        <button onClick={() => { if (confirm(`Cancel “${b.title}” for everyone?`)) act("broadcast.cancel", { id: b.id }, "Reminder cancelled").catch(() => {}); }}
+        <button onClick={async () => { if (await ask({ title: `Cancel “${b.title}” for everyone?`, ok: "Cancel reminder", cancel: "Keep", danger: true })) act("broadcast.cancel", { id: b.id }, "Reminder cancelled").catch(() => {}); }}
           title="Cancel for everyone" aria-label="Cancel reminder" className="rounded-full p-1.5 text-rose-600 hover:bg-[var(--hover)]"><Trash2 size={16} /></button>
       )}
     </li>

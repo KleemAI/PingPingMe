@@ -102,3 +102,12 @@ export function SellerHandle({ m }: { m: Merchant }) {
     </Link>
   );
 }
+
+/** "Instant delivery" — the ad delivers a link / file automatically once the seller releases. */
+export function InstantBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-2 py-px text-[11.5px] font-semibold text-emerald-800 dark:text-emerald-200">
+      <Zap size={12} className="shrink-0" /> Instant delivery
+    </span>
+  );
+}

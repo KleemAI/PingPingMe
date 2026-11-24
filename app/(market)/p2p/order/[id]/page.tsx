@@ -3,15 +3,44 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
-import { ChevronLeft, Copy, Paperclip, ThumbsDown, ThumbsUp, AlertTriangle, CheckCircle2, XCircle, Scale, Timer } from "lucide-react";
+import { ChevronLeft, Copy, Download, ExternalLink, Gift, Mail, Paperclip, Zap, ThumbsDown, ThumbsUp, AlertTriangle, CheckCircle2, XCircle, Scale, Timer } from "lucide-react";
 import { inr, mmss, STATUS, useP2P, type Result } from "@/lib/p2p/store";
 import type { P2POrder } from "@/lib/p2p/types";
 import { AttachmentChip, Button, Card, Pill, inputCls } from "@/components/ui";
 import { Composer } from "@/components/Thread";
 import { MerchantLine } from "../../_components/bits";
 import { RichText, isBare } from "@/components/RichText";
+import { ask } from "@/components/Confirm";
 
 const time = (t: number) => new Date(t).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+const kb = (n: number) => (n >= 1_048_576 ? `${(n / 1_048_576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+/** The automatic delivery: the buyer sees it once the order is completed, the seller always. */
+function DeliveryCard({ o, role }: { o: P2POrder; role: "buyer" | "seller" }) {
+  const d = o.delivery;
+  if (!d) return null;
+  const buyer = role === "buyer";
+  return (
+    <Card className={`space-y-3 p-5 ${buyer ? "!border-emerald-400/50" : ""}`}>
+      <div>
+        <h2 className="flex items-center gap-2 text-[16px] font-semibold"><Gift size={18} className="text-[var(--accent)]" /> {buyer ? "Your product" : "Automatic delivery"}</h2>
+        <p className="mt-0.5 text-[13px] text-[var(--muted)]">{buyer ? "Delivered by the seller. Keep it safe." : o.status === "completed" ? "The buyer can now open this." : "The buyer gets this as soon as you release."}</p>
+      </div>
+      {d.link && (
+        <div className="flex items-center justify-between gap-3 rounded-[14px] border border-[var(--border)] bg-[var(--hover)] px-3 py-2.5">
+          <div className="min-w-0"><div className="text-[12px] text-[var(--muted)]">Link</div><div className="truncate font-semibold">{d.link}</div></div>
+          <a href={d.link} target="_blank" rel="noopener noreferrer" className="glass-pill flex h-9 shrink-0 items-center gap-1 rounded-full px-3.5 text-[12.5px] font-semibold hover:brightness-110"><ExternalLink size={13} /> Open</a>
+        </div>
+      )}
+      {d.file && (
+        <div className="flex items-center justify-between gap-3 rounded-[14px] border border-[var(--border)] bg-[var(--hover)] px-3 py-2.5">
+          <div className="min-w-0"><div className="text-[12px] text-[var(--muted)]">File · {kb(d.file.size)}</div><div className="truncate font-semibold">{d.file.name}</div></div>
+          <a href={`/api/files/${d.file.id}`} download={d.file.name} className="glass-pill flex h-9 shrink-0 items-center gap-1 rounded-full px-3.5 text-[12.5px] font-semibold hover:brightness-110"><Download size={13} /> Download</a>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 function Steps({ o }: { o: P2POrder }) {
   const reached = o.status === "completed" ? 4 : o.status === "paid" || o.status === "appeal" ? 3 : o.status === "pending_payment" ? 2 : 1;
@@ -50,6 +79,7 @@ export default function OrderPage() {
   const [reason, setReason] = useState("");
   const [err, setErr] = useState("");
   const [copied, setCopied] = useState(false);
+  const [copiedEmail, setCopiedEmail] = useState(false);
 
   if (!o) return <p className="text-[14px]">Order not found. <Link href="/p2p/orders" className="text-[var(--accent-strong)] underline">My orders</Link></p>;
   const role = myRole(o);
@@ -108,7 +138,21 @@ export default function OrderPage() {
               <div className="mb-2 text-[12.5px] text-[var(--muted)]">{role === "buyer" ? "Seller" : "Buyer"}</div>
               <MerchantLine m={other} size={34} />
             </div>
+            {o.buyerEmail && (
+              <div className="flex items-center justify-between gap-3 rounded-[14px] border border-[var(--border)] bg-[var(--hover)] px-3 py-2.5">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <Mail size={17} className="shrink-0 text-[var(--accent)]" />
+                  <div className="min-w-0"><div className="text-[12px] text-[var(--muted)]">{role === "seller" ? "Activate on" : "Your email for activation"}</div><div className="truncate font-semibold">{o.buyerEmail}</div></div>
+                </div>
+                {role === "seller" && <button type="button" aria-label="Copy email" onClick={() => { navigator.clipboard?.writeText(o.buyerEmail ?? ""); setCopiedEmail(true); setTimeout(() => setCopiedEmail(false), 1500); }} className="glass-pill flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-[12.5px] font-semibold hover:brightness-110"><Copy size={13} /> {copiedEmail ? "Copied" : "Copy"}</button>}
+              </div>
+            )}
           </Card>
+
+          <DeliveryCard o={o} role={role} />
+          {role === "buyer" && o.autoDelivery && !o.delivery && o.status !== "cancelled" && (
+            <p className="flex items-start gap-2 rounded-[14px] border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-[13.5px] text-emerald-800 dark:text-emerald-200"><Zap size={15} className="mt-0.5 shrink-0" /> Delivered automatically once the seller confirms your payment.</p>
+          )}
 
           {/* ---------- buyer: pay ---------- */}
           {role === "buyer" && o.status === "pending_payment" && (
@@ -131,7 +175,7 @@ export default function OrderPage() {
               {err && <p role="alert" className="text-[13.5px] font-medium text-[var(--danger)]">{err}</p>}
               <div className="flex flex-wrap gap-3">
                 <button onClick={() => run(p2p.markPaid(o.id, proof ?? undefined))} className="min-h-11 rounded-[14px] bg-[var(--primary)] px-5 text-[15px] font-semibold text-[var(--on-primary)] hover:brightness-90">I have paid — notify seller</button>
-                <Button variant="outline" className="!h-11" onClick={() => { if (confirm("Cancel this order? Don't cancel if you already paid.")) run(p2p.cancel(o.id)); }}>Cancel order</Button>
+                <Button variant="outline" className="!h-11" onClick={async () => { if (await ask({ title: "Cancel this order?", message: "Don't cancel if you already paid.", ok: "Cancel order", cancel: "Back", danger: true })) run(p2p.cancel(o.id)); }}>Cancel order</Button>
               </div>
               <p className="flex items-start gap-2 rounded-[14px] border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[12.5px] text-amber-900 dark:text-amber-200"><AlertTriangle size={15} className="mt-0.5 shrink-0" /> Only tap “I have paid” after the money has left your account. False payment claims can get your account suspended.</p>
             </Card>
@@ -205,7 +249,7 @@ export default function OrderPage() {
           {o.status === "completed" && (
             <Card className="space-y-3 p-5">
               <h2 className="flex items-center gap-2 text-[16px] font-semibold"><CheckCircle2 size={19} className="text-emerald-500" /> Released {o.releasedAt ? `at ${time(o.releasedAt)}` : ""}</h2>
-              <p className="text-[14px] text-[var(--muted)]">{role === "buyer" ? `${seller.name} confirmed your payment and released ${o.qty} units.` : `You released ${o.qty} units to ${other.name}. Ship them as per your terms.`}</p>
+              <p className="text-[14px] text-[var(--muted)]">{role === "buyer" ? `${seller.name} confirmed your payment and released ${o.qty} units.` : o.autoDelivery ? `You released ${o.qty} units to ${other.name}. They got the product automatically.` : `You released ${o.qty} units to ${other.name}. Ship them as per your terms.`}</p>
               {role === "buyer" && !o.rating && (
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="text-[14px] font-medium">How was this seller?</span>

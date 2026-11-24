@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
 import { In } from "typeorm";
-import type { Attachment, P2PAd, P2PMerchant, P2POrder, P2PPaymentMethod, P2PState, User } from "../common/contract";
+import type { Attachment, P2PAd, P2PDelivery, P2PMerchant, P2POrder, P2PPaymentMethod, P2PState, User } from "../common/contract";
 import { badRequest, conflict, forbidden, notFound } from "../common/errors";
 import { Payload, clean, newId, oneOf, optStr, str, MAX_MESSAGE } from "../common/util";
 import { SYSTEM_USER } from "../common/system-user";
@@ -8,7 +8,7 @@ import { isTeam } from "../auth/decorators";
 import { FilesService } from "../files/files.service";
 import { PushService } from "../push/push.service";
 import { AlertBus } from "../realtime/alerts.service";
-import { P2PAdEntity, P2PMessageEntity, P2POrderEntity, P2PProfileEntity, UserEntity } from "../database/entities";
+import { FileEntity, P2PAdEntity, P2PMessageEntity, P2POrderEntity, P2PProfileEntity, UserEntity } from "../database/entities";
 import { nextCounter, UnitOfWork, type Tx } from "../database/unit-of-work.service";
 
 const MIN = 60_000;
@@ -18,12 +18,17 @@ const ACTIVE = ["pending_payment", "paid", "appeal"];
 const MAX_ADS = 20; // per user, online + offline
 const MAX_OPEN_BUYS = 5; // unpaid orders a buyer may hold at once (stops people locking up stock)
 const UPI_RE = /^[\w.-]{2,}@[a-zA-Z][\w]{1,}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const READY_NOTE = "Your product is ready — see 'Your product' above.";
 
-export const SELL_BLOCKED = "Selling opens once our team has verified your account. You can buy right away.";
+export const SELL_BLOCKED = "Selling unlocks after verification is complete.";
 
 /** Team and resellers can always sell; a customer only after our team has verified them (Team → Customers). */
 export const canSell = (u: { role: string; verified?: boolean | null }) => u.role !== "customer" || !!u.verified;
 const kindOf = (role: string) => (role === "reseller" ? "reseller" : role === "customer" ? "customer" : "team") as P2PMerchant["kind"];
+/** The automatic delivery of an ad or order, or undefined when it has none. */
+const deliveryOf = (x: { deliveryLink: string | null; deliveryFile: Attachment | null }): P2PDelivery | undefined =>
+  x.deliveryLink || x.deliveryFile ? clean({ link: x.deliveryLink ?? undefined, file: x.deliveryFile ?? undefined }) as P2PDelivery : undefined;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const num = (v: unknown, field: string) => {
   const n = typeof v === "string" ? Number(v.replace(/[^\d.]/g, "")) : Number(v);
@@ -118,12 +123,16 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
       list.push({ id: m.id, from: m.from as "buyer" | "seller" | "system", text: m.text, attachments: m.attachments ?? [], at: m.at });
       msgs.set(m.orderId, list);
     }
+    // automatic delivery: the seller always sees it, the buyer only once the order is completed
+    const showDelivery = (o: P2POrderEntity) => o.sellerId === me || (o.buyerId === me && o.status === "completed");
     const toOrder = (o: P2POrderEntity): P2POrder => clean({
       id: o.id, ref: o.ref, adId: o.adId, buyerId: o.buyerId, sellerId: o.sellerId, product: o.product, qty: o.qty, price: o.price, amount: o.amount,
       paymentMethod: o.paymentMethod as P2PPaymentMethod, status: o.status as P2POrder["status"], createdAt: o.createdAt, expiresAt: o.expiresAt,
       paidAt: o.paidAt ?? undefined, proof: o.proof ?? undefined, proofName: o.proof?.name, releasedAt: o.releasedAt ?? undefined,
       cancelledAt: o.cancelledAt ?? undefined, cancelReason: o.cancelReason ?? undefined, appealReason: o.appealReason ?? undefined,
-      appealResolution: o.appealResolution ?? undefined, rating: (o.rating as P2POrder["rating"]) ?? undefined, messages: msgs.get(o.id) ?? [],
+      appealResolution: o.appealResolution ?? undefined, rating: (o.rating as P2POrder["rating"]) ?? undefined,
+      buyerEmail: o.buyerEmail ?? undefined, autoDelivery: o.deliveryLink || o.deliveryFile ? true : undefined,
+      delivery: showDelivery(o) ? deliveryOf(o) : undefined, messages: msgs.get(o.id) ?? [],
     }) as P2POrder;
 
     return {
@@ -136,6 +145,9 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
         payWindowMin: a.payWindowMin, terms: a.terms ?? undefined, featured: a.featured, online: a.online, createdAt: a.createdAt,
         category: a.category ?? undefined, image: a.image ?? undefined, unit: a.unit ?? undefined, plans: a.plans?.length ? a.plans : undefined,
         ratingsPos: rated.get(a.id)?.pos ?? 0, ratingsTotal: rated.get(a.id)?.total ?? 0,
+        // other users only learn that the ad delivers automatically, never the link or file
+        askEmail: a.askEmail || undefined, autoDelivery: a.deliveryLink || a.deliveryFile ? true : undefined,
+        delivery: a.merchantId === me ? deliveryOf(a) : undefined,
       }) as P2PAd),
       orders: orders.map(toOrder),
       appeals: appeals.map(toOrder),
@@ -160,6 +172,25 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
   }
 
   // ------------------------------------------------------------------ helpers
+
+  /** create / update ad: { askEmail?, delivery?: "manual" | "auto", deliveryLink?, deliveryFile?: fileId } — sell ads only. */
+  private async adOptions(tx: Tx, p: Payload, side: "sell" | "buy") {
+    if (side !== "sell") return { askEmail: false, deliveryLink: null, deliveryFile: null };
+    const askEmail = p.askEmail === true;
+    const mode = p.delivery === undefined || p.delivery === null ? "manual" : oneOf(p.delivery, ["manual", "auto"] as const, "delivery");
+    if (mode === "manual") return { askEmail, deliveryLink: null, deliveryFile: null };
+    const deliveryLink = optStr(p.deliveryLink, 2000);
+    if (deliveryLink) {
+      let u: URL | null = null;
+      try { u = new URL(deliveryLink); } catch { /* not a URL */ }
+      if (!u || (u.protocol !== "http:" && u.protocol !== "https:")) throw badRequest("The delivery link must start with http:// or https://");
+    }
+    const [deliveryFile = null] = p.deliveryFile ? await this.files.attachments(tx, [String(p.deliveryFile)]) : [];
+    // the product file must be the seller's own upload — even for team accounts (attachments() lets the team reuse any file)
+    if (deliveryFile && !(await tx.em.count(FileEntity, { where: { id: deliveryFile.id, uploadedBy: tx.user.id } }))) throw forbidden("Upload the product file yourself");
+    if (!deliveryLink && !deliveryFile) throw badRequest("Add a link or a file for automatic delivery");
+    return { askEmail, deliveryLink, deliveryFile };
+  }
 
   private sys(tx: Tx, orderId: string, text: string) {
     return tx.em.insert(P2PMessageEntity, { id: newId("pm"), orderId, from: "system", authorId: null, text, attachments: [], at: Date.now() });
@@ -238,10 +269,20 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
     const open = await tx.em.count(P2POrderEntity, { where: { buyerId, status: "pending_payment" } });
     if (open >= MAX_OPEN_BUYS) throw conflict(iBuy ? "Pay or cancel your unpaid orders first" : "This buyer has too many unpaid orders right now");
 
+    // sell ads may ask the buyer for an email (e.g. for activation); otherwise any email sent is ignored
+    let buyerEmail: string | null = null;
+    if (iBuy && a.askEmail) {
+      buyerEmail = (typeof p.email === "string" ? p.email : "").trim().toLowerCase();
+      if (!buyerEmail) throw badRequest("Enter the email for activation");
+      if (buyerEmail.length > 254 || !EMAIL_RE.test(buyerEmail)) throw badRequest("Enter a valid email for activation");
+    }
+
     const now = Date.now();
     const o = tx.em.create(P2POrderEntity, {
       id: newId("po"), ref: `P2P-${1000 + (await nextCounter(tx.em, "P2P"))}`, adId: a.id, buyerId, sellerId, product, qty, price, amount,
-      paymentMethod: method, status: "pending_payment", createdAt: now, expiresAt: now + a.payWindowMin * MIN,
+      paymentMethod: method, status: "pending_payment", createdAt: now, expiresAt: now + a.payWindowMin * MIN, buyerEmail,
+      // automatic delivery is copied now, so later edits of the ad don't change what this buyer gets
+      deliveryLink: iBuy ? a.deliveryLink : null, deliveryFile: iBuy ? a.deliveryFile : null,
     });
     await tx.em.save(o);
     a.availableQty -= qty;
@@ -286,6 +327,7 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
     if (wasAppeal) o.appealResolution = "The seller released the goods";
     await tx.em.save(o);
     await this.sys(tx, o.id, "Seller confirmed the payment and released the goods. Order completed.");
+    if (o.deliveryLink || o.deliveryFile) await this.sys(tx, o.id, READY_NOTE);
   }
 
   /** p2p.cancel { id, reason? } — buyer cancels before paying; the stock goes back to the ad. */
@@ -341,6 +383,7 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
       o.releasedAt = Date.now();
       await tx.em.save(o);
       await this.sys(tx, o.id, `Our team resolved the appeal: the goods are released to the buyer. ${note}`);
+      if (o.deliveryLink || o.deliveryFile) await this.sys(tx, o.id, READY_NOTE);
     } else {
       await this.cancelOrder(tx, o, "team", "Cancelled by our team after an appeal", `Our team resolved the appeal: the order is cancelled and the stock returned. ${note}`);
     }
@@ -385,13 +428,23 @@ export class P2PService implements OnModuleInit, OnModuleDestroy {
       return { id: `pl${i + 1}`, label, price: pp, ...(o.soldOut ? { soldOut: true } : {}) };
     });
     if (plans.length && plans.every((x) => x.soldOut)) throw badRequest("At least one plan must be available");
+    const options = await this.adOptions(tx, p, side);
     if ((await tx.em.count(P2PAdEntity, { where: { merchantId: tx.user.id } })) >= MAX_ADS) throw conflict(`You can have up to ${MAX_ADS} ads — remove or reuse an old one`);
     const id = newId("pa");
     await tx.em.insert(P2PAdEntity, {
       id, merchantId: tx.user.id, side, product, price, totalQty, availableQty: totalQty, minAmount, maxAmount, payments, payWindowMin,
-      terms: optStr(p.terms, 500), featured: false, online: true, createdAt: Date.now(), category, unit, image, plans,
+      terms: optStr(p.terms, 500), featured: false, online: true, createdAt: Date.now(), category, unit, image, plans, ...options,
     });
     return id;
+  }
+
+  /** p2p.ad.options { id, askEmail?, delivery?, deliveryLink?, deliveryFile? } — change the email / delivery options of your ad.
+   *  Replaces both options; open orders keep the delivery they were placed with. */
+  async updateAdOptions(tx: Tx, p: Payload) {
+    const a = await tx.em.findOne(P2PAdEntity, { where: { id: String(p.id ?? ""), merchantId: tx.user.id } });
+    if (!a) throw notFound("Ad");
+    Object.assign(a, await this.adOptions(tx, p, a.side as "sell" | "buy"));
+    await tx.em.save(a);
   }
 
   /** p2p.ad.toggle { id } — take your ad off the market or put it back. */

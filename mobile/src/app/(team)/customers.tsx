@@ -59,7 +59,7 @@ export default function Customers() {
             }} />
             {u.verified
               ? <Button small variant="outline" title="Remove" onPress={() => setVerified(u, false)} />
-              : <Button small icon="checkmark" title="Verify" onPress={() => setVerified(u, true)} />}
+              : <Button small icon="lock-open-outline" title="Unlock" onPress={() => setVerified(u, true)} />}
           </View>
         )}
       />

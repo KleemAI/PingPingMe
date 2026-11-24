@@ -453,6 +453,8 @@ export type P2PMerchant = {
   payTo?: P2PPayTo; // only your own, and the seller's on your open purchases
 };
 
+/** Automatic (digital) delivery of a sell ad: a link and/or one file. */
+export type P2PDelivery = { link?: string; file?: Attachment };
 /** One option of a listing, e.g. "3 months" at its own price. */
 export type P2PPlan = { id: string; label: string; price: number; soldOut?: boolean };
 export type P2PAd = {
@@ -474,6 +476,9 @@ export type P2PAd = {
   plans?: P2PPlan[]; // options with their own price (e.g. 1 month · 3 months); the order picks one
   ratingsPos?: number; // buyers' ratings of this product (👍 out of all ratings on its orders)
   ratingsTotal?: number;
+  askEmail?: boolean; // sell ads: the buyer gives an email (e.g. for activation) when ordering
+  autoDelivery?: boolean; // sell ads: the product is delivered automatically once the seller releases
+  delivery?: P2PDelivery; // the ad owner only (to edit it); never sent to other users
   featured: boolean;
   online: boolean;
   createdAt: number;
@@ -505,6 +510,9 @@ export type P2POrder = {
   appealReason?: string;
   appealResolution?: string;
   rating?: "positive" | "negative";
+  buyerEmail?: string; // when the ad asked for one
+  autoDelivery?: boolean; // the ad delivers automatically
+  delivery?: P2PDelivery; // the seller always; the buyer only once the order is completed
   messages: P2PMessage[];
 };
 

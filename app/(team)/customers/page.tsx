@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { BadgeCheck, MessageCircle, Search, ShieldAlert, UserCheck } from "lucide-react";
 import { useTeam } from "@/lib/client/store";
 import { Avatar, Button, Empty, PageHeader, Pill, Tabs, inputCls } from "@/components/ui";
+import { ask } from "@/components/Confirm";
 
 type F = "pending" | "verified" | "all";
 
@@ -31,7 +32,7 @@ export default function CustomersPage() {
   ];
 
   const setVerified = async (id: string, name: string, verified: boolean) => {
-    if (!verified && !confirm(`Remove verification for ${name}? They will no longer be able to sell.`)) return;
+    if (!verified && !(await ask({ title: `Remove verification for ${name}?`, message: "They will no longer be able to sell.", ok: "Remove", danger: true }))) return;
     setBusy(id);
     try { await act("customer.verify", { id, verified }, verified ? `${name} is verified — can now sell` : `Verification removed for ${name}`); }
     catch { /* toast already shown */ }
@@ -74,7 +75,7 @@ export default function CustomersPage() {
             </Button>
             {c.verified
               ? <Button variant="outline" size="sm" disabled={busy === c.id} onClick={() => setVerified(c.id, c.name, false)}>Remove verification</Button>
-              : <Button size="sm" disabled={busy === c.id} onClick={() => setVerified(c.id, c.name, true)}><BadgeCheck size={14} /> Verify</Button>}
+              : <Button size="sm" disabled={busy === c.id} onClick={() => setVerified(c.id, c.name, true)}><BadgeCheck size={14} /> Unlock</Button>}
           </div>
         ))}
       </div>

@@ -6,6 +6,7 @@ import { useTeam } from "@/lib/client/store";
 import type { Settings } from "@/lib/types";
 import { dateTime } from "@/lib/format";
 import { Avatar, Button, Card, Field, Modal, PageHeader, Pill, Tabs, inputCls } from "@/components/ui";
+import { ask } from "@/components/Confirm";
 
 type T = "team" | "channels" | "notifications" | "profile" | "rules" | "replies" | "audit";
 
@@ -190,7 +191,7 @@ function Rules() {
         <Field label="Product categories (comma-separated)"><input disabled={!isAdmin} className={inputCls} value={cats} onChange={(e) => setCats(e.target.value)} /></Field>
         <Field label="Service regions (comma-separated)"><input disabled={!isAdmin} className={inputCls} value={areas} onChange={(e) => setAreas(e.target.value)} /></Field>
         {isAdmin && <div className="flex justify-between gap-2">
-          <Button type="button" variant="ghost" onClick={async () => { if (confirm("Reset ALL data to the demo data?")) { await fetch("/api/dev/reset", { method: "POST" }); location.href = "/"; } }}><RefreshCcw size={14} /> Reset demo data</Button>
+          <Button type="button" variant="ghost" onClick={async () => { if (await ask({ title: "Reset ALL data to the demo data?", message: "Everything you added will be replaced.", ok: "Reset", danger: true })) { await fetch("/api/dev/reset", { method: "POST" }); location.href = "/"; } }}><RefreshCcw size={14} /> Reset demo data</Button>
           <Button>Save rules</Button>
         </div>}
       </form>

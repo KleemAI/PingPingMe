@@ -53,6 +53,9 @@ export type P2PAd = {
   plans?: P2PPlan[]; // options with their own price (e.g. 1 month · 3 months); the order picks one
   ratingsPos?: number; // buyers' ratings of this product (👍 out of all ratings on its orders)
   ratingsTotal?: number;
+  askEmail?: boolean; // sell ads: the buyer gives an email (e.g. for activation) when ordering
+  autoDelivery?: boolean; // sell ads: the product is delivered automatically once the seller releases
+  delivery?: P2PDelivery; // your own ads only (to edit it); never sent to other users
   featured: boolean;
   online: boolean;
   createdAt: number;
@@ -63,6 +66,9 @@ export type P2POrderStatus = "pending_payment" | "paid" | "completed" | "cancell
 export type P2PMessage = { id: string; from: "buyer" | "seller" | "system"; text: string; attachments: P2PAttachment[]; at: number };
 
 export type P2PAttachment = { id: string; name: string; size: number; mime: string };
+
+/** Automatic (digital) delivery of a sell ad: a link and/or one file. */
+export type P2PDelivery = { link?: string; file?: P2PAttachment };
 
 export type P2POrder = {
   id: string;
@@ -87,6 +93,9 @@ export type P2POrder = {
   appealReason?: string;
   appealResolution?: string;
   rating?: "positive" | "negative";
+  buyerEmail?: string; // when the ad asked for one
+  autoDelivery?: boolean; // the ad delivers automatically
+  delivery?: P2PDelivery; // the seller always; the buyer only once the order is completed
   messages: P2PMessage[];
 };
 

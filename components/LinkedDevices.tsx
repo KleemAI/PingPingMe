@@ -5,6 +5,7 @@ import { Globe, Laptop, Loader2, LogOut, MonitorSmartphone, Smartphone } from "l
 import type { LinkedDevice } from "@/lib/types";
 import { relative } from "@/lib/format";
 import { Button, Modal } from "./ui";
+import { ask } from "@/components/Confirm";
 
 /** Same limit as the server: signing in on one more device signs out the one used longest ago. */
 const MAX_DEVICES = 50;
@@ -40,7 +41,7 @@ function LinkedDevices({ onClose }: { onClose: () => void }) {
   useEffect(() => { load(); }, [load]);
 
   const signOut = async (id: string) => {
-    if (id === "others" && !confirm("Sign out every other device? They'll need to sign in again.")) return;
+    if (id === "others" && !(await ask({ title: "Sign out every other device?", message: "They'll need to sign in again.", ok: "Sign out", danger: true }))) return;
     setBusy(id);
     try {
       const res = await fetch(`/api/auth/devices/${encodeURIComponent(id)}/logout`, { method: "POST" });

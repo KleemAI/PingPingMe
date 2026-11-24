@@ -5,6 +5,7 @@ import { Check, Loader2, LogOut, Megaphone, Pencil, Plus, X } from "lucide-react
 import { useStore } from "@/lib/client/store";
 import type { Community, GroupChat } from "@/lib/types";
 import { Avatar, Button, Modal, inputCls } from "./ui";
+import { ask } from "@/components/Confirm";
 
 /** Groups you run that aren't in a community yet — the ones you can bring into one. */
 const freeGroups = (groups: GroupChat[]) => groups.filter((g) => g.admin && !g.communityId && !g.announcement);
@@ -98,7 +99,7 @@ export function CommunityInfo({ community: c, groups, onClose, onOpenGroup, relo
               </div>
               {g.member && <Button size="sm" variant="outline" onClick={() => onOpenGroup(g.id)}>Open</Button>}
               {c.admin && !g.announcement && (
-                <Button size="sm" variant="ghost" title="Remove from community" onClick={() => confirm(`Remove "${g.name}" from the community? The group itself stays.`) && run("community.removeGroup", { groupId: g.id }, "Group removed").catch(() => {})}><X size={14} /></Button>
+                <Button size="sm" variant="ghost" title="Remove from community" onClick={async () => (await ask({ title: `Remove "${g.name}" from the community?`, message: "The group itself stays.", ok: "Remove", danger: true })) && run("community.removeGroup", { groupId: g.id }, "Group removed").catch(() => {})}><X size={14} /></Button>
               )}
             </li>
           ))}
@@ -118,7 +119,7 @@ export function CommunityInfo({ community: c, groups, onClose, onOpenGroup, relo
         ) : <Button variant="outline" size="sm" onClick={() => setAdding(true)}><Plus size={14} /> Add groups</Button>)}
 
         <div className="flex justify-between">
-          <Button variant="danger" size="sm" onClick={() => { if (confirm(`Leave "${c.name}"? You'll leave all its groups.`)) act("community.leave", { communityId: c.id }, "You left the community").then(reload).then(onClose).catch(() => {}); }}><LogOut size={14} /> Leave community</Button>
+          <Button variant="danger" size="sm" onClick={async () => { if (await ask({ title: `Leave "${c.name}"?`, message: "You'll leave all its groups.", ok: "Leave", danger: true })) act("community.leave", { communityId: c.id }, "You left the community").then(reload).then(onClose).catch(() => {}); }}><LogOut size={14} /> Leave community</Button>
           <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
         </div>
       </div>

@@ -7,6 +7,7 @@ import type { Task, TaskPerson } from "@/lib/types";
 import { REPEAT_LABEL, UNITS, repeatText, type Repeat, type RepeatUnit } from "@/lib/recurrence";
 import { byDue, dueText, isOverdue, localDate, planTaskNotifications, repeatLabel, SECTION_TITLE, sectionOf, timeText, tz, type Section } from "@/lib/tasks";
 import { Button, Field, Modal, inputCls } from "./ui";
+import { ask } from "@/components/Confirm";
 
 type Filter = "all" | "today" | "default" | "given" | string;
 const ORDER: Section[] = ["overdue", "today", "tomorrow", "later", "nodate"];
@@ -82,7 +83,7 @@ function TodoPanel({ onClose }: { onClose: () => void }) {
     if (r?.next) toast(`Done — next on ${dueText({ ...t, dueDate: r.next })}`);
   };
   const respond = (t: Task, accept: boolean) => act("task.respond", { id: t.id, accept }, accept ? "Accepted — it's in your to-do" : "Declined").catch(() => {});
-  const takeBack = (t: Task) => { if (confirm(`Take “${t.title}” back from ${t.ownerName}?`)) act("task.delete", { id: t.id }, "Taken back").catch(() => {}); };
+  const takeBack = async (t: Task) => { if (await ask({ title: `Take “${t.title}” back?`, message: `It will be removed from ${t.ownerName}'s list.`, ok: "Take back", danger: true })) act("task.delete", { id: t.id }, "Taken back").catch(() => {}); };
   const addQuick = async (e: React.FormEvent) => {
     e.preventDefault();
     const title = quick.trim();
@@ -97,8 +98,8 @@ function TodoPanel({ onClose }: { onClose: () => void }) {
     if (typeof id === "string") setFilter(id);
     setNewList(null);
   };
-  const deleteList = () => { if (confirm(`Delete the list “${listName(filter)}”? Its tasks move to Default.`)) act("list.delete", { id: filter }, "List deleted").then(() => setFilter("all")).catch(() => {}); };
-  const clearDone = () => { if (confirm("Delete your completed tasks?")) act("task.clearDone", {}, "Completed tasks cleared").catch(() => {}); };
+  const deleteList = async () => { if (await ask({ title: `Delete the list “${listName(filter)}”?`, message: "Its tasks move to Default.", ok: "Delete", danger: true })) act("list.delete", { id: filter }, "List deleted").then(() => setFilter("all")).catch(() => {}); };
+  const clearDone = async () => { if (await ask({ title: "Delete your completed tasks?", ok: "Delete", danger: true })) act("task.clearDone", {}, "Completed tasks cleared").catch(() => {}); };
 
   const taskRow = (t: Task) => {
     const late = isOverdue(t, now);
@@ -248,7 +249,7 @@ function TaskEditor({ task, list, today, onClose }: { task?: Task; list: string;
     } catch { /* toast shown */ } finally { setBusy(false); }
   };
   const remove = async () => {
-    if (!task || !confirm("Delete this task?")) return;
+    if (!task || !(await ask({ title: "Delete this task?", ok: "Delete", danger: true }))) return;
     await act("task.delete", { id: task.id }, "Task deleted").then(onClose).catch(() => {});
   };
 

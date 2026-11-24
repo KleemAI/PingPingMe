@@ -84,9 +84,27 @@ export class FilesService {
   /**
    * Team: any file. Everyone: their own uploads, and the payment proof on a P2P order they are part of.
    * Reseller: also files attached to the reseller thread of a request they can see.
+   * P2P automatic-delivery files are the exception: only the uploader, the ad owner / seller, and the buyer of a completed order.
    */
   async canSee(user: User, fileId: string) {
     const em = this.uow.manager;
+    // automatic delivery of a P2P sell ad: this decides on its own (no team or other rule grants access)
+    const ref = JSON.stringify({ id: fileId });
+    const isDelivery = await em.query(
+      `SELECT 1 FROM p2p_ads WHERE delivery_file @> $1::jsonb UNION ALL SELECT 1 FROM p2p_orders WHERE delivery_file @> $1::jsonb LIMIT 1`,
+      [ref],
+    );
+    if (isDelivery.length) {
+      if (await em.count(FileEntity, { where: { id: fileId, uploadedBy: user.id } })) return true;
+      const allowed = await em.query(
+        `SELECT 1 FROM p2p_ads WHERE delivery_file @> $1::jsonb AND merchant_id = $2
+         UNION ALL
+         SELECT 1 FROM p2p_orders WHERE delivery_file @> $1::jsonb AND (seller_id = $2 OR (buyer_id = $2 AND status = 'completed'))
+         LIMIT 1`,
+        [ref, user.id],
+      );
+      return allowed.length > 0;
+    }
     // disappearing / view-once chat files: gone after the time runs out; a view-once file opens only for the person
     // who just tapped "Open" (message.open). Admins keep access for the audit trail.
     if (user.role !== "admin") {

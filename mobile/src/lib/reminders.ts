@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
-import { Alert, Platform } from "react-native";
+import { Platform } from "react-native";
 import { router } from "expo-router";
 import * as Notifications from "expo-notifications";
 import type { Broadcast, Task } from "./types";
 import { planTaskNotifications } from "./tasks";
+import { confirm } from "@/components/Confirm";
 
 /**
  * Tasks and reminders → local phone notifications.
@@ -122,10 +123,8 @@ export function useReminderNotifications(broadcasts: Broadcast[] | undefined, si
     const received = Notifications.addNotificationReceivedListener((n) => {
       const d = n.request.content.data ?? {};
       if (!ours(d)) return;
-      Alert.alert(String(d.title ?? n.request.content.title ?? "Reminder"), String(d.message ?? n.request.content.body ?? ""), [
-        { text: "OK", style: "cancel" },
-        { text: "Open", onPress: () => router.push(screen(d)) },
-      ]);
+      confirm({ title: String(d.title ?? n.request.content.title ?? "Reminder"), message: String(d.message ?? n.request.content.body ?? ""), ok: "Open", cancel: "OK", icon: "alarm-outline" })
+        .then((open) => { if (open) router.push(screen(d)); });
     });
     return () => { tapped.remove(); received.remove(); };
   }, []);

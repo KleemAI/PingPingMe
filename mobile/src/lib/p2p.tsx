@@ -35,7 +35,7 @@ export const fromPrice = (a: { price: number; plans?: { price: number; soldOut?:
   const open = (a.plans ?? []).filter((x) => !x.soldOut);
   return open.length ? Math.min(...open.map((x) => x.price)) : a.price;
 };
-export const SELL_BLOCKED = "Selling opens once our team has verified your account. You can buy right away.";
+export const SELL_BLOCKED = "Selling unlocks after verification is complete.";
 export const METHODS = ["UPI", "IMPS", "Bank transfer"] as const;
 
 export const STATUS: Record<P2POrder["status"], { label: string; tone: "amber" | "blue" | "green" | "gray" | "red" }> = {

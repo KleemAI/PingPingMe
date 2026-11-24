@@ -130,12 +130,13 @@ export function Select<V extends string>({ label, value, options, onChange, disa
 
 export function Sheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   const { c } = useTheme();
+  const g = useGlass();
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)" }} onPress={onClose} />
-        <View style={{ backgroundColor: c.card, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderWidth: 1, borderBottomWidth: 0, borderColor: c.border, maxHeight: "88%", paddingBottom: insets.bottom + 10 }}>
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onPress={onClose} />
+        <View style={{ backgroundColor: c.card, backgroundImage: g.sheen, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderWidth: 1, borderBottomWidth: 0, borderColor: g.border, maxHeight: "88%", paddingBottom: insets.bottom + 10, boxShadow: "0px -10px 30px rgba(0,0,0,0.35)" }}>
           <View style={{ alignItems: "center", paddingTop: 8 }}><View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: c.borderStrong }} /></View>
           <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 18, paddingVertical: 10 }}>
             <T weight="700" size={17} style={{ flex: 1 }}>{title}</T>

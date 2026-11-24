@@ -41,6 +41,7 @@ export function AdCard({ ad, m, action }: { ad: P2PAd; m?: Merchant; action?: "B
           <View style={{ flexDirection: "row", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
             <T weight="600" size={15.5}>{ad.product}</T>
             {ad.featured && <Pill tone="amber" label="Featured" />}
+            {ad.autoDelivery && <Pill tone="green" label="Instant delivery" />}
           </View>
           <T size={20} weight="700">{inr(ad.price)} <T muted size={12.5}>/ unit</T></T>
           <T muted size={12.5}>{ad.availableQty} available · {inr(ad.minAmount)} – {inr(ad.maxAmount)}</T>
@@ -140,6 +141,17 @@ function SellerLine({ m, category }: { m?: Merchant; category?: string }) {
 }
 
 /** A product on the P2P market, glass style: picture, category, name, seller, delivery speed, price, View. */
+/** "⚡ Instant delivery" — the listing is delivered automatically once the seller confirms the payment. */
+export function InstantBadge() {
+  const g = useGlass();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: g.accentSoft, borderWidth: 1, borderColor: g.accent, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1 }}>
+      <Ionicons name="flash" size={11} color={g.accent} />
+      <Text style={{ color: g.accent, fontSize: 11.5, fontWeight: "600" }}>Instant delivery</Text>
+    </View>
+  );
+}
+
 export function ListingCard({ ad, m }: { ad: P2PAd; m?: Merchant }) {
   const g = useGlass();
   const isNew = Date.now() - ad.createdAt < 7 * 86_400_000;
@@ -155,6 +167,7 @@ export function ListingCard({ ad, m }: { ad: P2PAd; m?: Merchant }) {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <Text numberOfLines={2} style={{ color: g.text, fontSize: 18, fontWeight: "700", flexShrink: 1 }}>{ad.product}</Text>
               {isNew && <View style={{ backgroundColor: g.field, borderWidth: 1, borderColor: g.border, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 1 }}><Text style={{ color: g.text, fontSize: 11.5, fontWeight: "600" }}>New</Text></View>}
+              {ad.autoDelivery && <InstantBadge />}
             </View>
           </View>
           <SellerLine m={m} category={ad.category} />

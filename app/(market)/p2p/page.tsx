@@ -6,7 +6,7 @@ import { Search, Store } from "lucide-react";
 import { canSellAs, inr, useP2P } from "@/lib/p2p/store";
 import type { PaymentMethod } from "@/lib/p2p/types";
 import { Empty, inputCls } from "@/components/ui";
-import { DeliveryLine, ListingImage, SellerHandle } from "./_components/bits";
+import { DeliveryLine, InstantBadge, ListingImage, SellerHandle } from "./_components/bits";
 
 const METHODS: PaymentMethod[] = ["UPI", "IMPS", "Bank transfer"];
 
@@ -95,7 +95,7 @@ export default function P2PMarket() {
 
       {side === "sell" && !canSell && (
         <div role="note" className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-[14px] text-amber-900 dark:text-amber-200">
-          <span><strong>Selling is locked for now.</strong> As a customer you can buy right away; selling opens as soon as our team has verified your account — nothing to fill in.</span>
+          <span className="font-semibold">Selling unlocks after verification is complete.</span>
           <Link href="/p2p/profile" className="font-semibold underline">See your status →</Link>
         </div>
       )}
@@ -125,6 +125,7 @@ export default function P2PMarket() {
                     <div className="flex flex-wrap items-center gap-1.5">
                       <h3 className="line-clamp-2 text-[18px] font-bold leading-snug">{a.product}</h3>
                       {isNew && <span className="rounded-full border border-[var(--border)] bg-[var(--input)] px-2 py-px text-[11.5px] font-semibold">New</span>}
+                      {a.autoDelivery && <InstantBadge />}
                     </div>
                   </div>
                   <SellerHandle m={m} />

@@ -7,7 +7,7 @@ import { useTheme } from "@/lib/theme";
 import { deliveryText, inr, productRating, SELL_BLOCKED, useP2P } from "@/lib/p2p";
 import type { PaymentMethod } from "@/lib/p2p-types";
 import { Empty, Sheet, T } from "@/components/ui";
-import { handle, ListingImage } from "@/components/P2P";
+import { handle, InstantBadge, ListingImage } from "@/components/P2P";
 import { GlassCard, GlassScreen, useGlass } from "@/components/p2p/glass";
 
 /** Checkout for one listing (step 1 of 3: Review → Pay seller → Delivery): plan, quantity, payment, terms, total. */
@@ -27,6 +27,7 @@ export default function Checkout() {
   const [terms, setTerms] = useState(false);
   const [busy, setBusy] = useState(false);
   const [help, setHelp] = useState(false);
+  const [email, setEmail] = useState("");
   if (!a) return <Empty icon="alert-circle-outline" title="This listing is no longer available" />;
   const m = merchant(a.merchantId);
   const plan = a.plans?.find((x) => x.id === planId);
@@ -39,11 +40,15 @@ export default function Checkout() {
   const iBuy = a.side === "sell";
   const blocked = !iBuy && !canSell;
   const tooFew = n < minQty;
+  // the seller asked for an email (e.g. to activate the product on it)
+  const askEmail = iBuy && !!a.askEmail;
+  const mail = email.trim().toLowerCase();
+  const mailOk = !askEmail || (mail.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail));
 
   const place = async () => {
     setBusy(true);
     try {
-      const orderId = await run("p2p.order", { adId: a.id, qty: n, paymentMethod: method, planId: plan?.id }, "Order created — now pay the seller");
+      const orderId = await run("p2p.order", { adId: a.id, qty: n, paymentMethod: method, planId: plan?.id, email: askEmail ? mail : undefined }, "Order created — now pay the seller");
       if (typeof orderId === "string") router.replace({ pathname: "/p2p/order/[id]", params: { id: orderId } });
     } finally { setBusy(false); }
   };
@@ -110,6 +115,7 @@ export default function Checkout() {
               </Text>
             </View>
             <Text style={{ color: g.muted, fontSize: 13.5 }}>{productRating(a)}</Text>
+            {a.autoDelivery && <View style={{ flexDirection: "row", marginTop: 2 }}><InstantBadge /></View>}
           </View>
         </View>
 
@@ -151,8 +157,18 @@ export default function Checkout() {
         </View>
         {tooFew && <Text style={{ fontSize: 13.5, color: c.danger }}>This seller takes orders of at least {minQty}.</Text>}
 
+        {askEmail && (
+          <View style={{ gap: 6 }}>
+            <Text style={{ color: g.text, fontSize: 17, fontWeight: "700" }}>Email for activation</Text>
+            <TextInput value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor={g.muted} accessibilityLabel="Email for activation"
+              keyboardType="email-address" autoCapitalize="none" autoCorrect={false} autoComplete="email" maxLength={254}
+              style={{ height: 50, borderRadius: 14, borderWidth: 1.5, borderColor: email && !mailOk ? c.danger : g.fieldBorder, backgroundColor: g.field, color: g.text, fontSize: 16.5, paddingHorizontal: 16 }} />
+            <Text style={{ color: email && !mailOk ? c.danger : g.muted, fontSize: 13.5 }}>{email && !mailOk ? "Enter a valid email" : "The seller needs it to deliver your product."}</Text>
+          </View>
+        )}
+
         <View>
-          <Row icon="chatbox-ellipses-outline" title="Delivery" sub={`${n} item${n > 1 ? "s" : ""} · In the order chat`} />
+          <Row icon={a.autoDelivery ? "flash-outline" : "chatbox-ellipses-outline"} title="Delivery" sub={`${n} item${n > 1 ? "s" : ""} · ${a.autoDelivery ? "Automatic, once the seller confirms your payment" : "In the order chat"}`} />
           <Row icon="paper-plane-outline" title="Payment method" sub={`${method} · Direct to seller`} onPress={a.payments.length > 1 ? () => setPickPay(true) : undefined} />
           <Row icon="document-text-outline" title="Seller terms" onPress={() => setTerms((t) => !t)} right={<Ionicons name={terms ? "chevron-up" : "chevron-down"} size={18} color={g.muted} />} />
           {terms && (
@@ -177,8 +193,8 @@ export default function Checkout() {
       <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: Math.max(insets.bottom, 14), gap: 8, borderTopWidth: 1, borderColor: g.divider, backgroundColor: g.screen }}>
         {own && <Text style={{ fontSize: 13, color: g.muted, textAlign: "center" }}>This is your own listing.</Text>}
         {blocked && <Text style={{ fontSize: 13, color: c.noteText, textAlign: "center" }}>{SELL_BLOCKED}</Text>}
-        <Pressable onPress={place} disabled={own || blocked || busy || tooFew || (!!a.plans?.length && !plan)}
-          style={({ pressed }) => ({ height: 56, borderRadius: 18, backgroundColor: g.chipOn, boxShadow: g.pillGlow, alignItems: "center", justifyContent: "center", opacity: own || blocked || busy || tooFew ? 0.4 : pressed ? 0.85 : 1 })}>
+        <Pressable onPress={place} disabled={own || blocked || busy || tooFew || !mailOk || (!!a.plans?.length && !plan)}
+          style={({ pressed }) => ({ height: 56, borderRadius: 18, backgroundColor: g.chipOn, boxShadow: g.pillGlow, alignItems: "center", justifyContent: "center", opacity: own || blocked || busy || tooFew || !mailOk ? 0.4 : pressed ? 0.85 : 1 })}>
           <Text style={{ fontSize: 19, fontWeight: "800", color: g.chipOnText }}>{busy ? "Creating…" : "Create order"}</Text>
         </Pressable>
         <Text style={{ fontSize: 14, color: g.muted, textAlign: "center" }}>Next: pay the seller directly</Text>
@@ -198,7 +214,7 @@ export default function Checkout() {
         {[
           { k: "1", t: "Review", d: "Pick the plan and quantity, then create the order. The stock is held for you." },
           { k: "2", t: "Pay seller", d: `Pay the seller directly (${a.payments.join(" / ")}) within ${a.payWindowMin} minutes and upload the proof.` },
-          { k: "3", t: "Delivery", d: "The seller delivers in the order chat. Rate them once you have it, or raise an appeal if something is wrong." },
+          { k: "3", t: "Delivery", d: `${a.autoDelivery ? "Your product appears on the order as soon as the seller confirms your payment." : "The seller delivers in the order chat."} Rate them once you have it, or raise an appeal if something is wrong.` },
         ].map((x) => (
           <View key={x.k} style={{ flexDirection: "row", gap: 12, paddingVertical: 8 }}>
             <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: c.card2, alignItems: "center", justifyContent: "center" }}><T weight="700" size={13}>{x.k}</T></View>

@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { ChevronLeft, Clock, ShieldCheck } from "lucide-react";
-import { inr, SELL_BLOCKED, useP2P } from "@/lib/p2p/store";
+import { ChevronLeft, Clock, Mail, ShieldCheck } from "lucide-react";
+import { inr, isEmail, SELL_BLOCKED, useP2P } from "@/lib/p2p/store";
 import type { PaymentMethod } from "@/lib/p2p/types";
 import { Card, inputCls } from "@/components/ui";
-import { DeliveryLine, ListingImage, MerchantLine } from "../../_components/bits";
+import { DeliveryLine, InstantBadge, ListingImage, MerchantLine } from "../../_components/bits";
 
 export default function TradePage() {
   const { adId } = useParams<{ adId: string }>();
@@ -17,6 +17,7 @@ export default function TradePage() {
   // start at the smallest quantity this ad allows (e.g. 10 units for bulk-only ads)
   const [qty, setQty] = useState(() => String(a ? Math.max(1, Math.ceil(a.minAmount / a.price)) : 1));
   const [method, setMethod] = useState<PaymentMethod | "">(a?.payments[0] ?? "");
+  const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -31,12 +32,16 @@ export default function TradePage() {
   const maxQty = Math.min(a.availableQty, Math.floor(a.maxAmount / a.price));
   const own = a.merchantId === s.meId;
   const blocked = !iBuy && !canSell;
+  const askEmail = iBuy && !!a.askEmail;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!method) return setErr("Pick a payment method");
+    const mail = email.trim().toLowerCase();
+    if (askEmail && !mail) return setErr("Enter the email for activation");
+    if (askEmail && !isEmail(mail)) return setErr("Enter a valid email for activation");
     setBusy(true);
-    const r = await placeOrder(a.id, n, method);
+    const r = await placeOrder(a.id, n, method, askEmail ? mail : undefined);
     setBusy(false);
     if (!r.ok) return setErr(r.error);
     router.push(`/p2p/order/${r.id}`);
@@ -66,6 +71,7 @@ export default function TradePage() {
           <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{a.category ?? "Product"}</div>
           <div className="truncate text-[18px] font-bold">{a.product}</div>
           <DeliveryLine m={m} />
+          {iBuy && a.autoDelivery && <div className="mt-1"><InstantBadge /></div>}
         </div>
         <div className="shrink-0 pr-2 text-right">
           <div className="text-[20px] font-bold">{inr(a.price)}</div>
@@ -93,6 +99,17 @@ export default function TradePage() {
                 ))}
               </div>
             </fieldset>
+            {askEmail && (
+              <label className="block text-[13px] font-semibold">
+                Email for activation
+                <span className="relative mt-1.5 block">
+                  <Mail size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+                  <input type="email" value={email} onChange={(e) => { setEmail(e.target.value); setErr(""); }} required maxLength={254} autoComplete="email" inputMode="email"
+                    placeholder="you@example.com" className={`${inputCls} h-12 pl-10 text-[15px]`} aria-describedby="email-hint" />
+                </span>
+                <span id="email-hint" className="mt-1 block text-[12.5px] font-normal text-[var(--muted)]">The seller uses it to activate your product.</span>
+              </label>
+            )}
             <div className="flex items-center justify-between rounded-[14px] border border-[var(--border)] bg-[var(--hover)] px-4 py-3">
               <span className="text-[14px] text-[var(--muted)]">{iBuy ? "You pay" : "You receive"}</span>
               <span className="text-[24px] font-bold">{inr(total)}</span>
@@ -110,7 +127,7 @@ export default function TradePage() {
             </button>
             <p className="flex items-start gap-2 text-[12.5px] text-[var(--muted)]">
               <ShieldCheck size={15} className="mt-0.5 shrink-0 text-[var(--accent)]" />
-              {iBuy ? `The units are held for you as soon as you place the order. Pay within ${a.payWindowMin} minutes or the order is cancelled automatically.` : `The buyer must pay within ${a.payWindowMin} minutes. Release only after the money reaches your account.`}
+              {iBuy ? `The units are held for you as soon as you place the order. Pay within ${a.payWindowMin} minutes or the order is cancelled automatically.${a.autoDelivery ? " Your product is delivered automatically once the seller confirms your payment." : ""}` : `The buyer must pay within ${a.payWindowMin} minutes. Release only after the money reaches your account.`}
             </p>
           </form>
         </Card>
