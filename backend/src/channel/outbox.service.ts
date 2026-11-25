@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from "@nestjs/common";
-import { LessThan } from "typeorm";
+import { In, LessThan } from "typeorm";
 import { SYSTEM_USER } from "../common/system-user";
-import { ContactEntity, ConversationEntity, MessageEntity } from "../database/entities";
+import { ContactEntity, ConversationEntity, MessageEntity, UserEntity } from "../database/entities";
 import { UnitOfWork } from "../database/unit-of-work.service";
 import { ChannelProvider } from "./channel.provider";
 import { InboundService } from "./inbound.service";
@@ -41,6 +41,16 @@ export class OutboxService implements OnModuleInit, OnModuleDestroy {
       const conv = await em.findOne(ConversationEntity, { where: { id: m.conversationId } });
       const contact = conv && (await em.findOne(ContactEntity, { where: { id: conv.contactId } }));
       if (!conv || !contact) return;
+      if (contact.blockedAt) {
+        // queued before the team blocked them (or picked up by the sweeper): never hand it to the channel.
+        // Neutral wording, and only the team's devices get the live update — the customer is never told.
+        await this.uow.write(SYSTEM_USER, async (tx) => {
+          await tx.em.update(MessageEntity, { id, status: "queued" }, { status: "failed", error: "Not delivered" });
+          const team = await tx.em.find(UserEntity, { where: { role: In(["admin", "agent"]) }, select: { id: true } });
+          tx.onlyUsers(SYSTEM_USER.id, ...team.map((u) => u.id));
+        });
+        return;
+      }
       try {
         const { externalId } = await this.provider.deliver(conv.channel, contact.phone, m.text);
         await this.uow.write(SYSTEM_USER, async ({ em }) => {

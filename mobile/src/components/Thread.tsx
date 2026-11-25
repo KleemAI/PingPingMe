@@ -237,11 +237,13 @@ export function MessageList({ messages: all, side, onRetry, viewer = "team", wal
 export type ComposerMode = { id: string; label: string; hint: string; kind: "customer" | "reseller" | "internal" };
 
 /** Composer that shows WHO will receive the message before sending. */
-export function Composer({ modes, onSend, savedReplies = [], disabled, allowViewOnce, encrypt }: {
+export function Composer({ modes, onSend, savedReplies = [], disabled, onDisabledPress, allowViewOnce, encrypt }: {
   modes: ComposerMode[];
   onSend: (modeId: string, text: string, attachments: Attachment[], opts?: { viewOnce?: boolean }) => Promise<unknown>;
   savedReplies?: SavedReply[];
   disabled?: string;
+  /** makes the disabled bar tappable (e.g. "Tap to unblock") */
+  onDisabledPress?: () => void;
   /** show the "view once" switch for photos / videos (customer chats) */
   allowViewOnce?: boolean;
   /** end-to-end encrypted chat: files are encrypted on the phone before upload */
@@ -276,7 +278,13 @@ export function Composer({ modes, onSend, savedReplies = [], disabled, allowView
   const replies = useMemo(() => savedReplies.filter((r) => (mode?.kind === "internal" || r.audience === mode?.kind) && (slash === null || r.shortcut.includes(slash) || r.text.toLowerCase().includes(slash))), [savedReplies, slash, mode?.kind]);
   const open = (showSaved || slash !== null) && replies.length > 0;
 
-  if (disabled || !mode) return <View style={{ padding: 14, backgroundColor: c.header, borderTopWidth: StyleSheet.hairlineWidth, borderColor: c.border }}><T muted size={13} style={{ textAlign: "center" }}>{disabled}</T></View>;
+  if (disabled || !mode) {
+    const barStyle = { padding: 14, backgroundColor: c.header, borderTopWidth: StyleSheet.hairlineWidth, borderColor: c.border };
+    const label = <T muted size={13} style={{ textAlign: "center" }}>{disabled}</T>;
+    return onDisabledPress
+      ? <Pressable onPress={onDisabledPress} accessibilityRole="button" style={({ pressed }) => [barStyle, pressed && { backgroundColor: c.card2 }]}>{label}</Pressable>
+      : <View style={barStyle}>{label}</View>;
+  }
 
   const canSend = !!text.trim() || files.length > 0;
   // view once: only photos / videos, never on internal notes

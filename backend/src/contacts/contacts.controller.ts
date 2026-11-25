@@ -11,7 +11,7 @@ export class ContactsController {
   constructor(private readonly uow: UnitOfWork, private readonly svc: ContactsService, private readonly query: QueryService) {}
 
   @Get("contacts")
-  list(@Query("type") type?: string, @Query("q") q?: string) { return this.query.contacts({ type, q }); }
+  list(@Query("type") type?: string, @Query("q") q?: string, @Query("blocked") blocked?: string) { return this.query.contacts({ type, q, blocked }); }
 
   /** Creates the contact and an empty conversation → `{ conversationId }`. */
   @Post("contacts")

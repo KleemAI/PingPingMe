@@ -1,5 +1,5 @@
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
-import { TS } from "../transformers";
+import { TS, TS_NULL } from "../transformers";
 
 @Entity("companies")
 export class CompanyEntity {
@@ -26,4 +26,11 @@ export class ContactEntity {
   @Column({ type: "varchar", length: 200, nullable: true }) designation: string | null;
   @Column({ type: "varchar", length: 100, nullable: true }) city: string | null;
   @Column({ name: "created_at", ...TS }) createdAt: number;
+  /**
+   * Team-wide block (Customer inbox): while set, this contact's new messages are stored hidden from the team,
+   * nobody is notified and the team can't send to them. They are never told. Covers all their channels.
+   */
+  @Column({ name: "blocked_at", ...TS_NULL }) blockedAt: number | null;
+  /** The team member who blocked them. */
+  @Column({ name: "blocked_by", type: "varchar", length: 40, nullable: true }) blockedBy: string | null;
 }

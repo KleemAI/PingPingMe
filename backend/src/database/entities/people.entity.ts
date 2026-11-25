@@ -20,6 +20,9 @@ export class PersonalChatEntity {
   @Column({ name: "read_b", ...TS_NULL }) readB: number | null;
   /** Disappearing messages: new messages leave the chat this many seconds after sending (0 = off). Rows stay. */
   @Column({ name: "disappear_seconds", type: "int", default: 0 }) disappearSeconds: number;
+  /** A timer picked by someone the other person has blocked: applies to their own view and sends only, never to the blocker. */
+  @Column({ name: "hidden_disappear_by", type: "varchar", length: 40, nullable: true }) hiddenDisappearBy: string | null;
+  @Column({ name: "hidden_disappear_seconds", type: "int", nullable: true }) hiddenDisappearSeconds: number | null;
 }
 
 @Entity("personal_messages")
@@ -38,6 +41,8 @@ export class PersonalMessageEntity {
   @Column({ type: "jsonb", nullable: true }) e2e: E2EEnvelope | null;
   @Column({ name: "viewed_at", ...TS_NULL }) viewedAt: number | null;
   @Column({ name: "viewed_by", type: "varchar", length: 40, nullable: true }) viewedBy: string | null;
+  /** sent while the recipient had blocked the author: the recipient never sees it, not even after unblocking */
+  @Column({ name: "hidden_for_recipient", default: false }) hiddenForRecipient: boolean;
 }
 
 /**
@@ -118,4 +123,16 @@ export class GroupMessageViewEntity {
   @PrimaryColumn({ name: "message_id", type: "varchar", length: 40 }) messageId: string;
   @PrimaryColumn({ name: "user_id", type: "varchar", length: 40 }) userId: string;
   @Column({ name: "viewed_at", ...TS }) viewedAt: number;
+}
+
+/** Blocks in personal chats (like WhatsApp): the blocker no longer gets the blocked person's messages. One-directional. */
+@Entity("blocks")
+@Index(["blockerId", "blockedId"], { unique: true })
+export class BlockEntity {
+  @PrimaryColumn({ type: "varchar", length: 40 }) id: string;
+  @Index() @Column({ name: "blocker_id", type: "varchar", length: 40 }) blockerId: string;
+  @Index() @Column({ name: "blocked_id", type: "varchar", length: 40 }) blockedId: string;
+  @Column({ name: "created_at", ...TS }) createdAt: number;
+  /** the blocker's read receipt in their chat at the moment of the block (frozen for the blocked person) */
+  @Column({ name: "read_at", ...TS_NULL }) readAt: number | null;
 }

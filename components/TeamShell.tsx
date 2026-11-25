@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { logout, useTeam } from "@/lib/client/store";
 import { DevicesButton } from "./LinkedDevices";
-import { overview, relative } from "@/lib/format";
+import { isBlockedConv, overview, relative } from "@/lib/format";
 import { Avatar } from "./ui";
 import { ReminderAlerts, RemindersButton } from "./Reminders";
 import { TodoAlerts, TodoButton } from "./Todo";
@@ -39,7 +39,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
   const o = useMemo(() => (team ? overview(team.db, now, team.me.id) : null), [team, now]);
 
   // Browser notification + tab title when new customer messages arrive
-  const unreadTotal = team ? team.db.conversations.reduce((n, c) => n + c.unread, 0) : 0;
+  const unreadTotal = team ? team.db.conversations.reduce((n, c) => n + (isBlockedConv(team.db, c.contactId) ? 0 : c.unread), 0) : 0;
   const prevUnread = useRef<number | null>(null);
   useEffect(() => {
     document.title = unreadTotal ? `(${unreadTotal}) Business Messaging` : "Business Messaging";
@@ -59,7 +59,7 @@ export default function TeamShell({ children }: { children: React.ReactNode }) {
 
   const db = team.db;
   const contactType = (id: string) => db.contacts.find((c) => c.id === id)?.type;
-  const unreadOf = (t: string) => db.conversations.filter((c) => c.unread > 0 && contactType(c.contactId) === t).length;
+  const unreadOf = (t: string) => db.conversations.filter((c) => c.unread > 0 && contactType(c.contactId) === t && !isBlockedConv(db, c.contactId)).length;
 
   const nav = [
     { href: "/", label: "Overview", icon: LayoutDashboard },

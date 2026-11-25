@@ -209,11 +209,13 @@ const MODE_STYLE = {
 };
 
 /** Composer that makes the recipient explicit BEFORE sending (brief: communication clarity). */
-export function Composer({ modes, onSend, savedReplies = [], disabled, allowViewOnce, encrypt }: {
+export function Composer({ modes, onSend, savedReplies = [], disabled, onDisabledClick, allowViewOnce, encrypt }: {
   modes: ComposerMode[];
   onSend: (modeId: string, text: string, attachments: Attachment[], opts?: { viewOnce?: boolean }) => Promise<unknown>;
   savedReplies?: SavedReply[];
   disabled?: string;
+  /** makes the disabled bar a button (e.g. "Tap to unblock") */
+  onDisabledClick?: () => void;
   /** show the "view once" switch for photos / videos (not for internal notes) */
   allowViewOnce?: boolean;
   /** end-to-end encrypted chat: files are encrypted in the browser before upload */
@@ -277,6 +279,7 @@ export function Composer({ modes, onSend, savedReplies = [], disabled, allowView
     try { await onSend(mode.id, sticker, []); setEmoji(false); } catch {} finally { setBusy(false); }
   };
 
+  if (disabled && onDisabledClick) return <button onClick={onDisabledClick} className="glass-bar w-full border-t border-[var(--border)] px-4 py-3 text-center text-[13px] text-[var(--muted)] hover:bg-[var(--hover)]">{disabled}</button>;
   if (disabled) return <div className="glass-bar border-t border-[var(--border)] px-4 py-3 text-center text-[13px] text-[var(--muted)]">{disabled}</div>;
 
   return (

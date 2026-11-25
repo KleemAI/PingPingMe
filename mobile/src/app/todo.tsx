@@ -111,9 +111,30 @@ export default function Todo() {
     confirm({ title: "Clear completed tasks?", message: "Your finished tasks will be deleted.", ok: "Clear", danger: true, icon: "checkmark-done-outline" }).then((ok) => { if (ok) go(); });
   };
 
+  /** a to-do someone gave you: turn its notifications off (it stays in your list) or back on */
+  // shown at once (the saved state takes a few seconds to come back); dropped when that state arrives or the call fails
+  const [muting, setMuting] = useState<Record<string, boolean>>({});
+  const isMuted = (t: Task) => muting[t.id] ?? !!t.muted;
+  useEffect(() => setMuting((m) => {
+    const left = Object.fromEntries(Object.entries(m).filter(([id, v]) => !!state?.tasks?.find((t) => t.id === id)?.muted !== v));
+    return Object.keys(left).length === Object.keys(m).length ? m : left;
+  }), [state?.tasks]);
+  const mute = (t: Task) => {
+    const muted = !isMuted(t);
+    setMuting((m) => ({ ...m, [t.id]: muted }));
+    act("task.mute", { id: t.id, muted }, muted ? "Notifications off for this to-do" : "Notifications on again")
+      .catch(() => setMuting((m) => { const { [t.id]: _, ...rest } = m; return rest; }));
+  };
+  const canMute = (t: Task) => !!t.assignedBy && t.status === "accepted" && !t.done;
+  const bell = (t: Task) => canMute(t) && (
+    <Pressable onPress={() => { mute(t); }} hitSlop={10} accessibilityRole="switch" accessibilityState={{ checked: !isMuted(t) }}
+      accessibilityLabel={isMuted(t) ? "Turn notifications on" : "Turn notifications off"}>
+      <Ionicons name={isMuted(t) ? "notifications-off-outline" : "notifications-outline"} size={20} color={isMuted(t) ? c.muted : c.accentStrong} />
+    </Pressable>
+  );
   const taskRow = (t: Task) => {
     const late = isOverdue(t, now);
-    const meta = [dueText(t), repeatLabel(t) && `🔁 ${repeatLabel(t)}`, t.assignedBy ? `from ${t.assignedByName}` : listName(t.listId)].filter(Boolean).join("  ·  ");
+    const meta = [dueText(t), repeatLabel(t) && `🔁 ${repeatLabel(t)}`, t.assignedBy ? `from ${t.assignedByName}` : listName(t.listId), isMuted(t) && "🔕 Off"].filter(Boolean).join("  ·  ");
     return (
       <Pressable onPress={() => router.push({ pathname: "/task/[id]", params: { id: t.id } })}
         style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 12, backgroundColor: c.card, borderBottomWidth: 1, borderColor: c.border }}>
@@ -125,6 +146,7 @@ export default function Todo() {
           {!!meta && <T size={12.5} color={late ? c.danger : c.muted} numberOfLines={1}>{meta}</T>}
         </View>
         {!!t.note && <Ionicons name="document-text-outline" size={16} color={c.muted} />}
+        {bell(t)}
       </Pressable>
     );
   };
@@ -145,6 +167,7 @@ export default function Todo() {
           <T size={12.5} color={late ? c.danger : c.muted} numberOfLines={1} style={{ flex: 1 }}>
             {repeatLabel(t) ? "🔁 " : ""}{t.assignedBy ? `from ${t.assignedByName} · ` : ""}{date}
           </T>
+          {bell(t)}
           <Pressable onPress={() => { toggle(t); }} hitSlop={10} accessibilityRole="checkbox" accessibilityState={{ checked: t.done }} accessibilityLabel={`Done: ${t.title}`}>
             <Ionicons name={t.done ? "checkmark-circle" : "ellipse-outline"} size={22} color={t.done ? c.accentStrong : c.muted} />
           </Pressable>

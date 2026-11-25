@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BellRing, Check, ListTodo, Plus, Search, Send, Trash2, UserPlus, X } from "lucide-react";
+import { BellOff, BellRing, Check, ListTodo, Plus, Search, Send, Trash2, UserPlus, X } from "lucide-react";
 import { useStore } from "@/lib/client/store";
 import type { Task, TaskPerson } from "@/lib/types";
 import { REPEAT_LABEL, UNITS, repeatText, type Repeat, type RepeatUnit } from "@/lib/recurrence";
@@ -83,6 +83,19 @@ function TodoPanel({ onClose }: { onClose: () => void }) {
     if (r?.next) toast(`Done — next on ${dueText({ ...t, dueDate: r.next })}`);
   };
   const respond = (t: Task, accept: boolean) => act("task.respond", { id: t.id, accept }, accept ? "Accepted — it's in your to-do" : "Declined").catch(() => {});
+  /** a to-do someone gave you: turn its notifications off (it stays in your list) or back on */
+  // shown at once (the saved state takes a few seconds to come back); dropped when that state arrives or the call fails
+  const [muting, setMuting] = useState<Record<string, boolean>>({});
+  const isMuted = (t: Task) => muting[t.id] ?? !!t.muted;
+  useEffect(() => setMuting((m) => {
+    const left = Object.fromEntries(Object.entries(m).filter(([id, v]) => !!all.find((t) => t.id === id)?.muted !== v)); // still waiting for the saved state
+    return Object.keys(left).length === Object.keys(m).length ? m : left;
+  }), [all]);
+  const mute = (t: Task, muted: boolean) => {
+    setMuting((m) => ({ ...m, [t.id]: muted }));
+    act("task.mute", { id: t.id, muted }, muted ? "Notifications off for this to-do" : "Notifications on again")
+      .catch(() => setMuting((m) => { const { [t.id]: _, ...rest } = m; return rest; }));
+  };
   const takeBack = async (t: Task) => { if (await ask({ title: `Take “${t.title}” back?`, message: `It will be removed from ${t.ownerName}'s list.`, ok: "Take back", danger: true })) act("task.delete", { id: t.id }, "Taken back").catch(() => {}); };
   const addQuick = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,7 +116,8 @@ function TodoPanel({ onClose }: { onClose: () => void }) {
 
   const taskRow = (t: Task) => {
     const late = isOverdue(t, now);
-    const meta = [dueText(t), repeatLabel(t) && `🔁 ${repeatLabel(t)}`, t.assignedBy ? `from ${t.assignedByName}` : listName(t.listId)].filter(Boolean).join("  ·  ");
+    const meta = [dueText(t), repeatLabel(t) && `🔁 ${repeatLabel(t)}`, t.assignedBy ? `from ${t.assignedByName}` : listName(t.listId), isMuted(t) && "🔕 Notifications off"].filter(Boolean).join("  ·  ");
+    const canMute = !!t.assignedBy && t.status === "accepted" && !t.done;
     return (
       <li key={t.id} className="flex items-center gap-3 border-b border-[var(--border)] px-1 py-2.5 last:border-0">
         <button onClick={() => toggle(t)} role="checkbox" aria-checked={t.done} aria-label={t.title}
@@ -114,6 +128,13 @@ function TodoPanel({ onClose }: { onClose: () => void }) {
           <div className={`text-[14.5px] font-medium ${t.done ? "text-[var(--muted)] line-through" : ""}`}>{t.title}</div>
           {meta && <div className={`truncate text-[12px] ${late ? "font-medium text-rose-600" : "text-[var(--muted)]"}`}>{meta}</div>}
         </button>
+        {canMute && (
+          <button onClick={() => mute(t, !isMuted(t))} title={isMuted(t) ? "Turn notifications back on" : "Turn notifications off for this to-do"}
+            aria-label={isMuted(t) ? "Turn notifications on" : "Turn notifications off"} aria-pressed={isMuted(t)}
+            className={`shrink-0 rounded-full p-1.5 hover:bg-[var(--hover)] ${isMuted(t) ? "text-[var(--muted)]" : "text-[var(--accent-strong)]"}`}>
+            {isMuted(t) ? <BellOff size={17} /> : <BellRing size={17} />}
+          </button>
+        )}
       </li>
     );
   };

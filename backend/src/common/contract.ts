@@ -39,6 +39,8 @@ export type Contact = {
   designation?: string;
   city?: string;
   createdAt: number;
+  blockedAt?: number; // team-wide block: their new messages never reach the inbox (team only; never sent to the customer)
+  blockedBy?: string; // user id of the team member who blocked them
 };
 
 export type Channel = "whatsapp" | "web" | "email";
@@ -358,6 +360,7 @@ export type Task = {
   status: "pending" | "accepted" | "declined"; // …who the owner accepts or declines; own tasks are "accepted"
   respondedAt?: number;
   lastDoneAt?: number; // last time it was marked done (also for repeating ones)
+  muted?: boolean; // the owner turned its notifications off (only the owner sees this)
   done: boolean;
   doneAt?: number;
   createdAt: number;
@@ -532,15 +535,20 @@ export type AppState = TeamState | ResellerState | CustomerState;
 export type LinkedDevice = { id: string; name: string; kind: "web" | "mobile" | "api"; ip: string; createdAt: number; lastSeenAt: number; current: boolean };
 
 /** Personal chats (customers and the team): someone you can chat with. `hint` = masked phone / email, to tell people apart. */
-export type Person = { id: string; name: string; role: "customer" | "team"; hint?: string };
+export type Person = { id: string; name: string; role: "customer" | "team"; hint?: string; blocked?: boolean /* search: you blocked them */ };
 /** An end-to-end encrypted message (personal chats and groups) — see backend/src/common/e2e.ts. */
 export type E2EEnvelope = { v: 1; from: string; fromKey: string; nonce: string; ct: string; keys: Record<string, string> };
 export type PersonalMessage = {
   id: string; chatId: string; authorId: string; text: string; attachments: Attachment[]; createdAt: number;
   expiresAt?: number; viewOnce?: boolean; viewedAt?: number;
   e2e?: E2EEnvelope; // encrypted: text is empty, the app decrypts this
+  undelivered?: boolean; // your message wasn't delivered (show a single tick, never "read")
 };
-export type PersonalChat = { id: string; with: Person; lastMessageAt: number; unread: number; theirReadAt?: number; disappearSeconds?: number; messages: PersonalMessage[] };
+export type PersonalChat = { id: string; with: Person; lastMessageAt: number; unread: number; theirReadAt?: number; disappearSeconds?: number; messages: PersonalMessage[];
+  blocked?: boolean; // you blocked this person: they can't message you, you can't message them until you unblock
+};
+/** GET /people: your chats, groups, communities and the people you blocked (only your own list). */
+export type PeoplePayload = { chats: PersonalChat[]; groups: GroupChat[]; communities: Community[]; blocked: Person[] };
 
 /** Group chats. `messages` start from when you joined; view-once files show only until you opened them. */
 export type GroupMember = Person & { admin: boolean };

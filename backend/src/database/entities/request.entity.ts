@@ -25,6 +25,8 @@ export class RequestEntity {
   @Column({ name: "follow_up_at", ...TS_NULL }) followUpAt: number | null;
   @Column({ name: "feedback_rating", type: "smallint", nullable: true }) feedbackRating: number | null;
   @Column({ name: "feedback_comment", type: "text", nullable: true }) feedbackComment: string | null;
+  /** Asked for while the team had the customer blocked: only the customer sees it, never the team (even after unblock). */
+  @Column({ name: "hidden_from_team", default: false }) hiddenFromTeam: boolean;
   @Column({ name: "created_at", ...TS }) createdAt: number;
   @Column({ name: "updated_at", ...TS }) updatedAt: number;
   /** Disappearing messages on the reseller thread (seconds, 0 = off) — set by our team or the reseller. */

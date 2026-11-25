@@ -5,15 +5,15 @@ import { PeopleService } from "./people.service";
 import { GroupsService } from "./groups.service";
 import { CommunitiesService } from "./communities.service";
 
-/** Personal chats. Reads here; writes through POST /actions (pm.send, pm.read). */
+/** Personal chats. Reads here; writes through POST /actions (pm.send, pm.read, pm.block, pm.unblock). */
 @Controller("people") @AllowCustomer()
 export class PeopleController {
   constructor(private readonly people: PeopleService, private readonly groups: GroupsService, private readonly communities: CommunitiesService) {}
 
-  /** Your personal chats and your groups. */
+  /** Your personal chats, your groups and communities, and the people you blocked (only your own list). */
   @Get() async list(@CurrentUser() u: User, @CurrentSession() sid?: string) {
-    const [{ chats }, groups, communities] = await Promise.all([this.people.list(u), this.groups.list(u, sid), this.communities.list(u)]);
-    return { chats, groups, communities };
+    const [{ chats, blocked }, groups, communities] = await Promise.all([this.people.list(u), this.groups.list(u, sid), this.communities.list(u)]);
+    return { chats, groups, communities, blocked };
   }
 
   @Get("search") search(@CurrentUser() u: User, @Query("q") q?: string) { return this.people.search(u, q); }

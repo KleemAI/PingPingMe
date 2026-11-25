@@ -90,10 +90,14 @@ export function lastCustomerMsg(db: DBv, convId: string) {
   return db.messages.filter((m) => m.conversationId === convId && m.audience === "customer").at(-1);
 }
 
+/** The team blocked this contact: their chats stay out of counts and work lists. */
+export const isBlockedConv = (db: DBv, contactId: string) => !!db.contacts.find((c) => c.id === contactId)?.blockedAt;
+
 /** Conversation where the customer spoke last and we haven't answered within the rule. */
 export function isUnanswered(db: DBv, convId: string, now: number) {
   const c = db.conversations.find((x) => x.id === convId);
   if (!c || c.status === "resolved") return false;
+  if (isBlockedConv(db, c.contactId)) return false; // blocked contacts never wait on the team
   const last = lastCustomerMsg(db, convId);
   return !!last && last.direction === "in" && now - last.createdAt > db.settings.rules.firstResponseMinutes * 60000;
 }
@@ -104,7 +108,7 @@ export const resellerOverdue = (r: DBv["requests"][number], now: number) =>
 export const caseOverdue = (c: DBv["cases"][number], now: number) => c.status !== "resolved" && c.targetResponseAt < now;
 
 export function overview(db: DBv, now: number, meId?: string) {
-  const openConvs = db.conversations.filter((c) => c.status !== "resolved");
+  const openConvs = db.conversations.filter((c) => c.status !== "resolved" && !isBlockedConv(db, c.contactId));
   const contactType = (id: string) => db.contacts.find((c) => c.id === id)?.type;
   const activeReq = db.requests.filter((r) => !["completed", "cancelled"].includes(r.status));
   return {
@@ -119,7 +123,7 @@ export function overview(db: DBv, now: number, meId?: string) {
     overdueCases: db.cases.filter((c) => caseOverdue(c, now)),
     openCases: db.cases.filter((c) => c.status !== "resolved"),
     unanswered: openConvs.filter((c) => isUnanswered(db, c.id, now)),
-    failedSends: db.messages.filter((m) => m.status === "failed"),
+    failedSends: db.messages.filter((m) => m.status === "failed" && !isBlockedConv(db, db.conversations.find((c) => c.id === m.conversationId)?.contactId ?? "")),
     dueReminders: db.reminders.filter((r) => !r.done && r.dueAt < now && (!meId || r.ownerId === meId)),
     myReminders: db.reminders.filter((r) => !r.done && (!meId || r.ownerId === meId)),
   };

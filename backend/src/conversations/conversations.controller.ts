@@ -12,8 +12,8 @@ export class ConversationsController {
   constructor(private readonly uow: UnitOfWork, private readonly svc: ConversationsService, private readonly query: QueryService) {}
 
   @Get()
-  list(@Query("kind") kind?: string, @Query("status") status?: string, @Query("assigneeId") assigneeId?: string, @Query("q") q?: string) {
-    return this.query.conversations({ kind, status, assigneeId, q });
+  list(@Query("kind") kind?: string, @Query("status") status?: string, @Query("assigneeId") assigneeId?: string, @Query("q") q?: string, @Query("blocked") blocked?: string) {
+    return this.query.conversations({ kind, status, assigneeId, q, blocked });
   }
 
   @Get(":id")

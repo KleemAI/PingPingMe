@@ -105,6 +105,11 @@ export class FilesService {
       );
       return allowed.length > 0;
     }
+    // a file sent by a contact while the team had them blocked: never shown to the team (the sender still sees it)
+    if (isTeam(user)) {
+      const hidden = await em.query(`SELECT 1 FROM messages WHERE hidden_from_team AND attachments @> $1::jsonb LIMIT 1`, [JSON.stringify([{ id: fileId }])]);
+      if (hidden.length && !(await em.count(FileEntity, { where: { id: fileId, uploadedBy: user.id } }))) return false;
+    }
     // disappearing / view-once chat files: gone after the time runs out; a view-once file opens only for the person
     // who just tapped "Open" (message.open). Admins keep access for the audit trail.
     if (user.role !== "admin") {
@@ -141,7 +146,8 @@ export class FilesService {
     // personal chats: the two people in the chat
     const pm = await em.query(
       `SELECT 1 FROM personal_messages m JOIN personal_chats c ON c.id = m.chat_id
-        WHERE m.attachments @> $1::jsonb AND (c.user_a = $2 OR c.user_b = $2) LIMIT 1`,
+        WHERE m.attachments @> $1::jsonb AND (c.user_a = $2 OR c.user_b = $2)
+          AND NOT (m.hidden_for_recipient AND m.author_id <> $2) LIMIT 1`,
       [JSON.stringify([{ id: fileId }]), user.id],
     );
     if (pm.length) return true;

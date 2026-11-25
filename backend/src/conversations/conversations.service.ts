@@ -14,6 +14,11 @@ import type { Tx } from "../database/unit-of-work.service";
 
 const STATUSES = ["open", "waiting_customer", "waiting_reseller", "resolved"] as const;
 
+/** The team can't send to a contact it blocked (replies, quotes, order updates alike). */
+export function refuseIfBlocked(contact: Pick<ContactEntity, "name" | "blockedAt"> | null | undefined, what = "send a message") {
+  if (contact?.blockedAt) throw badRequest(`Unblock ${contact.name} to ${what}`);
+}
+
 @Injectable()
 export class ConversationsService {
   constructor(
@@ -30,6 +35,7 @@ export class ConversationsService {
    */
   async postToCustomer(tx: Tx, conversationId: string, text: string, attachments: Attachment[] = [], chat?: { viewOnce?: boolean }) {
     const conv = need(await tx.em.findOne(ConversationEntity, { where: { id: conversationId } }), "Conversation");
+    refuseIfBlocked(await tx.em.findOne(ContactEntity, { where: { id: conv.contactId } }));
     const now = Date.now();
     const id = newId("m");
     await tx.em.insert(MessageEntity, {
@@ -90,6 +96,7 @@ export class ConversationsService {
   /** conv.disappearing { conversationId, seconds: 0 | 86400 | 604800 | 7776000 } — disappearing messages for this chat. */
   async disappearing(tx: Tx, p: Payload) {
     const conv = need(await tx.em.findOne(ConversationEntity, { where: { id: str(p.conversationId, "conversationId", 40) } }), "Conversation");
+    refuseIfBlocked(await tx.em.findOne(ContactEntity, { where: { id: conv.contactId } }), "change disappearing messages");
     return setDisappearing(tx, conv, p.seconds);
   }
 
@@ -98,6 +105,8 @@ export class ConversationsService {
     const m = need(await tx.em.findOne(MessageEntity, { where: { id: String(p.messageId ?? ""), audience: "customer" } }), "Message");
     if (m.status !== "failed") throw conflict("Only failed messages can be retried");
     if ((m.retries ?? 0) >= 5) throw new AppError(429, "Retry limit reached");
+    const conv = m.conversationId ? await tx.em.findOne(ConversationEntity, { where: { id: m.conversationId } }) : null;
+    if (conv) refuseIfBlocked(await tx.em.findOne(ContactEntity, { where: { id: conv.contactId } }));
     if (p.text) m.text = str(p.text, "Message", MAX_MESSAGE);
     m.status = "queued";
     m.retries = (m.retries ?? 0) + 1;
@@ -142,10 +151,39 @@ export class ConversationsService {
   }
 
   /** inbound.simulate — inbox "simulate incoming message" button (same intake as the real webhook). */
-  simulateInbound(tx: Tx, p: Payload) {
-    return this.inbound.ingest(tx.em, {
+  async simulateInbound(tx: Tx, p: Payload) {
+    const r = await this.inbound.ingest(tx.em, {
       eventId: p.eventId || newId("ev"), type: "message", channel: p.channel ?? "whatsapp",
       from: str(p.from, "Phone", 30), name: p.name, text: str(p.text, "Message", MAX_MESSAGE), externalId: p.externalId,
     });
+    // from a blocked contact: nobody else on the team gets a live update
+    if (r.hidden) tx.onlyUsers(tx.user.id);
+    return r;
+  }
+
+  /**
+   * contact.block { contactId } — block a customer / contact from the team's Customer inbox, team-wide.
+   * Their new messages (every channel) are stored hidden from the team for good, nobody is notified, and the team
+   * can't send to them. They are never told.
+   */
+  async block(tx: Tx, p: Payload) {
+    const ct = need(await tx.em.findOne(ContactEntity, { where: { id: str(p.contactId, "contactId", 40) } }), "Contact");
+    if (ct.blockedAt) return null;
+    ct.blockedAt = Date.now();
+    ct.blockedBy = tx.user.id;
+    await tx.em.save(ct);
+    await this.audit.log(tx, "contact", ct.id, `Blocked by ${tx.user.name}`);
+    return null;
+  }
+
+  /** contact.unblock { contactId } — messages that came in while they were blocked stay hidden (like WhatsApp). */
+  async unblock(tx: Tx, p: Payload) {
+    const ct = need(await tx.em.findOne(ContactEntity, { where: { id: str(p.contactId, "contactId", 40) } }), "Contact");
+    if (!ct.blockedAt) return null;
+    ct.blockedAt = null;
+    ct.blockedBy = null;
+    await tx.em.save(ct);
+    await this.audit.log(tx, "contact", ct.id, `Unblocked by ${tx.user.name}`);
+    return null;
   }
 }

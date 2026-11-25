@@ -16,7 +16,7 @@ const ask = (title: string, ok: string) => confirm({ title, ok, danger: true, ic
 export default function GroupInfo() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
-  const { act, state } = useStore();
+  const { act, state, toast } = useStore();
   const me = (state as { me?: { id: string } } | null)?.me;
   const { groups, reload } = usePersonalChats();
   const group = groups.find((g) => g.id === id);
@@ -29,7 +29,12 @@ export default function GroupInfo() {
   const large = !!group?.large;
   const found = useGroupMembers(group?.id, q, large);
   if (!group) return <Empty icon="people-outline" title="Group not found" />;
-  const run = (type: string, payload: Record<string, unknown>, ok?: string) => act(type, { groupId: group.id, ...payload }, ok).then(() => { reload(); if (large) found.refresh(); }).catch(() => {});
+  const run = (type: string, payload: Record<string, unknown>, ok?: string) => act(type, { groupId: group.id, ...payload }, ok).then((r) => {
+    // people who blocked you can't be added (the rest were)
+    const notAdded = (r as { notAdded?: string[] } | null)?.notAdded;
+    if (notAdded?.length) toast(`${notAdded.join(", ")} can't be added`, "error");
+    reload(); if (large) found.refresh();
+  }).catch(() => {});
   const shown = large ? found.members ?? group.members : group.members;
 
   return (

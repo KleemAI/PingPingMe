@@ -7,6 +7,7 @@ import { clean, Payload, newId, oneOf, optStr, str } from "../common/util";
 import { isTeam } from "../auth/decorators";
 import { TaskEntity, TaskListEntity, UserEntity } from "../database/entities";
 import { UnitOfWork, type Tx } from "../database/unit-of-work.service";
+import { whoBlocked } from "../people/people.service";
 import { REPEATS, UNITS, epochOf, isDate, isTime, nextDate, occurrences, todayIn, type RepeatRule } from "./recurrence";
 
 const MAX_OPEN = 500; // open tasks per user
@@ -19,12 +20,13 @@ const kindOf = (role: string): TaskPerson["kind"] => (TEAM_ROLES.includes(role) 
 
 const ruleOf = (t: TaskEntity): RepeatRule => ({ repeat: t.repeat as RepeatRule["repeat"], repeatEvery: t.repeatEvery, repeatUnit: t.repeatUnit as RepeatRule["repeatUnit"], anchorDay: t.anchorDay ?? undefined });
 
-const toTask = (t: TaskEntity): Task => clean({
+/** `own`: the viewer owns it, so they see whether they muted it (the giver never does). */
+const toTask = (t: TaskEntity, own = false): Task => clean({
   id: t.id, ownerId: t.ownerId, ownerName: t.ownerName, audience: t.audience as Task["audience"], title: t.title, note: t.note || undefined, noteHtml: t.noteHtml || undefined,
   listId: t.listId ?? undefined, dueDate: t.dueDate ?? undefined, dueTime: t.dueTime ?? undefined, tzOffset: t.tzOffset,
   repeat: t.repeat as Task["repeat"], repeatEvery: t.repeatEvery, repeatUnit: t.repeatUnit as Task["repeatUnit"], anchorDay: t.anchorDay ?? undefined,
   assignedBy: t.assignedBy ?? undefined, assignedByName: t.assignedByName ?? undefined, status: (t.status || "accepted") as Task["status"],
-  respondedAt: t.respondedAt ?? undefined, lastDoneAt: t.lastDoneAt ?? undefined,
+  respondedAt: t.respondedAt ?? undefined, lastDoneAt: t.lastDoneAt ?? undefined, muted: own && t.muted ? true : undefined,
   done: t.done, doneAt: t.doneAt ?? undefined, createdAt: t.createdAt, updatedAt: t.updatedAt,
 }) as Task;
 
@@ -56,9 +58,9 @@ export class TasksService {
       }),
     ]);
     return {
-      tasks: [...open, ...done, ...shared].map(toTask),
+      tasks: [...open.map((t) => toTask(t, true)), ...done.map((t) => toTask(t, true)), ...shared.map((t) => toTask(t))],
       taskLists: lists.map((l) => ({ id: l.id, name: l.name, createdAt: l.createdAt })),
-      assignedTasks: given.map(toTask),
+      assignedTasks: given.map((t) => toTask(t)),
       taskPeople: people.map((u) => ({ id: u.id, name: u.name, kind: kindOf(u.role) })),
     };
   }
@@ -160,6 +162,10 @@ export class TasksService {
     const users = others.length ? await tx.em.find(UserEntity, { where: { id: In(others), active: true } }) : [];
     if (users.length !== others.length) throw notFound("Person");
     if (!isTeam(tx.user) && users.some((u) => !TEAM_ROLES.includes(u.role))) throw forbidden("You can give a to-do to our team only");
+    // someone who blocked you in chats can't get your to-dos (neutral: they aren't named as blocking)
+    const blockers = await whoBlocked(tx.em, tx.user.id, users.map((u) => u.id));
+    const refused = users.find((u) => blockers.has(u.id));
+    if (refused) throw forbidden(`${refused.name} can't get this to-do`);
     const out: string[] = [];
     if (ids.includes(tx.user.id)) {
       const id = newId("tk");
@@ -187,6 +193,16 @@ export class TasksService {
     t.respondedAt = t.updatedAt = Date.now();
     await tx.em.save(t);
     return t.status;
+  }
+
+  /** task.mute { id, muted } — turn a to-do's notifications off or back on. It stays in your list; the giver sees no change. */
+  async mute(tx: Tx, p: Payload) {
+    const t = await tx.em.findOne(TaskEntity, { where: { id: String(p.id ?? ""), ownerId: tx.user.id } });
+    if (!t) throw notFound("Task");
+    if (t.status === "pending") throw conflict("Accept this to-do first");
+    t.muted = p.muted !== false;
+    await tx.em.save(t); // updatedAt stays: muting is not a change the giver should see
+    return t.muted;
   }
 
   /** task.batch { titles: string[] | "line 1\nline 2", dueDate?, listId?, tzOffset } — "Add in batch mode" (own tasks). */

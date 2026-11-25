@@ -25,7 +25,7 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
   const { c } = useTheme();
   const { api, state } = useStore();
   const me = (state as { me?: { id: string } } | null)?.me;
-  const { chats, groups, communities } = usePersonalChats();
+  const { chats, groups, communities, blocked } = usePersonalChats();
   const { me: myDev } = useE2E(me?.id, []); // to show the last line of encrypted chats
   const [q, setQ] = useState("");
   const [type, setType] = useState<SearchType>("all");
@@ -74,7 +74,7 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
       }),
     ].sort((a, b) => (b.at ?? 0) - (a.at ?? 0)),
     ...(found ?? []).filter((p) => !(chats ?? []).some((ch) => ch.with.id === p.id))
-      .map((p, i) => ({ key: `p-${p.id}`, name: p.name, sub: `${p.role === "team" ? "Our team" : "Customer"}${p.hint ? ` · ${p.hint}` : ""}`, right: "Message",
+      .map((p, i) => ({ key: `p-${p.id}`, name: p.name, sub: `${p.role === "team" ? "Our team" : "Customer"}${p.hint ? ` · ${p.hint}` : ""}`, right: p.blocked ? "Blocked" : "Message",
         header: i === 0 ? "START A NEW CHAT" : undefined, onPress: () => openPerson(p) })),
   ];
 
@@ -109,7 +109,13 @@ export function PeopleList({ pinned, autoFocus }: { pinned?: Pinned; autoFocus?:
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={<Empty icon="people-outline" title={t ? (searching ? "Searching…" : "Nobody found") : "No chats yet"}
             text={t ? "Type at least 2 letters of a name, or 6 digits of a phone number." : "Search a name or phone number above to start a chat."} />}
-          ListFooterComponent={t && searching ? <ActivityIndicator style={{ marginVertical: 14 }} color={c.accent} /> : undefined}
+          ListFooterComponent={t && searching ? <ActivityIndicator style={{ marginVertical: 14 }} color={c.accent} />
+            : !t && blocked.length ? (
+              <Pressable onPress={() => router.push("/people/blocked")} style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 16, backgroundColor: pressed ? c.card2 : c.card })}>
+                <Ionicons name="ban-outline" size={15} color={c.muted} />
+                <T size={13} muted>Blocked contacts ({blocked.length})</T>
+              </Pressable>
+            ) : undefined}
           renderItem={({ item: r }) => (
             <View>
               {r.header && <T size={12} weight="700" color={c.accentStrong} style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 }}>{r.header}</T>}

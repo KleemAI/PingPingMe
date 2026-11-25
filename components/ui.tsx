@@ -7,6 +7,25 @@ import Link from "next/link";
 import type { Attachment } from "@/lib/types";
 import { colorFor, initials } from "@/lib/format";
 
+/**
+ * Closes a dropdown on a click / tap outside it. (A `fixed inset-0` overlay can't do this inside a
+ * `glass-bar` header: its backdrop-filter makes the header the containing block, so the overlay only covers the header.)
+ */
+export function useClickAway<T extends HTMLElement>(open: boolean, close: () => void) {
+  const ref = useRef<T>(null);
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) closeRef.current(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") closeRef.current(); };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  return ref;
+}
+
 const TONES = {
   gray: "bg-slate-500/12 text-slate-600 dark:text-slate-300",
   blue: "bg-sky-500/12 text-sky-700 dark:text-sky-300",

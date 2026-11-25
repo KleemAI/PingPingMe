@@ -52,4 +52,6 @@ export class MessageEntity {
   @Column({ name: "view_once", default: false }) viewOnce: boolean;
   @Column({ name: "viewed_at", ...TS_NULL }) viewedAt: number | null;
   @Column({ name: "viewed_by", type: "varchar", length: 40, nullable: true }) viewedBy: string | null;
+  /** From a contact that was blocked when it arrived: never shown to the team, not even after unblocking. The sender still sees it. */
+  @Column({ name: "hidden_from_team", default: false }) hiddenFromTeam: boolean;
 }

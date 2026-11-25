@@ -21,7 +21,7 @@ export class RequestsService {
   }
 
   async get(tx: Tx, id: unknown) {
-    return need(await tx.em.findOne(RequestEntity, { where: { id: String(id ?? "") } }), "Request");
+    return need(await tx.em.findOne(RequestEntity, { where: { id: String(id ?? ""), hiddenFromTeam: false } }), "Request");
   }
 
   private async teamMember(tx: Tx, id: unknown, what: string) {

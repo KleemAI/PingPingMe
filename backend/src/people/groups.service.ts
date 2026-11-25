@@ -10,7 +10,7 @@ import { UnitOfWork, type Tx } from "../database/unit-of-work.service";
 import { disappearLabel, expiryFor, viewOnceFlag } from "../conversations/disappearing";
 import { FilesService } from "../files/files.service";
 import { PushService, preview } from "../push/push.service";
-import { canChat } from "./people.service";
+import { canChat, whoBlocked } from "./people.service";
 
 /** Like Telegram: groups of up to 200,000 people. */
 export const MAX_GROUP_MEMBERS = 200_000;
@@ -308,22 +308,28 @@ export class GroupsService implements OnModuleInit {
       ? await tx.em.createQueryBuilder(UserEntity, "u").select(["u.id", "u.name", "u.role", "u.active"])
         .where("u.id = ANY(:ids) AND u.active = true", { ids: unique }).getMany()
       : [];
-    const ok = users.filter((u) => canChat(u));
-    if (ok.length !== unique.length) throw notFound("Person");
-    return ok;
+    const all = users.filter((u) => canChat(u));
+    if (all.length !== unique.length) throw notFound("Person");
+    // people who blocked you can't be added by you (neutral: they aren't named as blocking)
+    const blockers = await whoBlocked(tx.em, tx.user.id, all.map((u) => u.id));
+    return { ok: all.filter((u) => !blockers.has(u.id)), notAdded: all.filter((u) => blockers.has(u.id)) };
   }
+
+  /** "Rixit can't be added" — the neutral refusal for people who blocked you. */
+  private cantAdd = (users: { name: string }[]) => `${this.names(users)} can't be added`;
 
   private names = (users: { name: string }[]) =>
     users.length <= 3 ? users.map((u) => u.name).join(", ") : `${users.slice(0, 2).map((u) => u.name).join(", ")} and ${users.length - 2} others`;
 
   // ------------------------------------------------------------------ actions
 
-  /** group.create { name, memberIds } — you become its admin. Returns the group id. */
+  /** group.create { name, memberIds } — you become its admin. Returns { id, notAdded: names[] }. */
   async create(tx: Tx, p: Payload) {
     if (!canChat(tx.user)) throw forbidden("Group chats are for customers and our team");
     const name = str(p.name, "Group name", 80);
-    const people = (await this.addable(tx, p.memberIds)).filter((u) => u.id !== tx.user.id);
-    if (!people.length) throw badRequest("Add at least one person");
+    const picked = await this.addable(tx, p.memberIds);
+    const people = picked.ok.filter((u) => u.id !== tx.user.id);
+    if (!people.length) throw badRequest(picked.notAdded.length ? this.cantAdd(picked.notAdded) : "Add at least one person");
     if (people.length + 1 > MAX_GROUP_MEMBERS) throw badRequest(`A group can have up to ${MAX_GROUP_MEMBERS.toLocaleString("en-IN")} members`);
     // a new group inside a community: only its admins
     const community = p.communityId ? await tx.em.findOne(CommunityEntity, { where: { id: str(p.communityId, "communityId", 40) } }) : null;
@@ -338,7 +344,7 @@ export class GroupsService implements OnModuleInit {
     await this.notice(tx, g, `${tx.user.name} created the group "${name}" and added ${this.names(people)}`);
     this.push.notify(tx, people.map((u) => u.id), { title: name, body: `${tx.user.name} added you to the group`, data: { type: "group", id: g.id } });
     if (community) await this.joinAnnouncements(tx, community.id, [tx.user.id, ...people.map((u) => u.id)]);
-    return g.id;
+    return { id: g.id, notAdded: picked.notAdded.map((u) => u.name) };
   }
 
   /** group.send { groupId, text?, attachments?, viewOnce? } */
@@ -390,15 +396,15 @@ export class GroupsService implements OnModuleInit {
     await this.notice(tx, g, `${tx.user.name} renamed the group to "${name}"`);
   }
 
-  /** group.addMembers { groupId, userIds } — admins. New members see messages from now on. */
+  /** group.addMembers { groupId, userIds } — admins. New members see messages from now on. Returns { notAdded: names[] }. */
   async addMembers(tx: Tx, p: Payload) {
     const { g } = await this.adminOf(tx, p.groupId);
-    const picked = await this.addable(tx, p.userIds);
+    const { ok: picked, notAdded } = await this.addable(tx, p.userIds);
     const inIt: { user_id: string }[] = picked.length
       ? await tx.em.query(`SELECT user_id FROM group_members WHERE group_id = $1 AND user_id = ANY($2::text[])`, [g.id, picked.map((u) => u.id)]) : [];
     const already = new Set(inIt.map((r) => r.user_id));
     const people = picked.filter((u) => !already.has(u.id));
-    if (!people.length) throw badRequest("They're already in the group");
+    if (!people.length) throw badRequest(notAdded.length ? this.cantAdd(notAdded) : "They're already in the group");
     const count = (await memberCounts(tx.em, [g])).get(g.id) ?? 0;
     if (count + people.length > MAX_GROUP_MEMBERS) throw badRequest(`A group can have up to ${MAX_GROUP_MEMBERS.toLocaleString("en-IN")} members`);
     const now = Date.now();
@@ -406,6 +412,7 @@ export class GroupsService implements OnModuleInit {
     await this.notice(tx, g, `${tx.user.name} added ${this.names(people)}`);
     this.push.notify(tx, people.map((u) => u.id), { title: g.name, body: `${tx.user.name} added you to the group`, data: { type: "group", id: g.id } });
     if (g.communityId && !g.announcement) await this.joinAnnouncements(tx, g.communityId, people.map((u) => u.id));
+    return { notAdded: notAdded.map((u) => u.name) };
   }
 
   /** group.removeMember { groupId, userId } — admins. */

@@ -94,6 +94,7 @@ export function lastCustomerMsg(db: DBv, convId: string) {
 export function isUnanswered(db: DBv, convId: string, now: number) {
   const c = db.conversations.find((x) => x.id === convId);
   if (!c || c.status === "resolved") return false;
+  if (db.contacts.find((x) => x.id === c.contactId)?.blockedAt) return false; // blocked team-wide: not waiting on us
   const last = lastCustomerMsg(db, convId);
   return !!last && last.direction === "in" && now - last.createdAt > db.settings.rules.firstResponseMinutes * 60000;
 }
@@ -104,7 +105,8 @@ export const resellerOverdue = (r: DBv["requests"][number], now: number) =>
 export const caseOverdue = (c: DBv["cases"][number], now: number) => c.status !== "resolved" && c.targetResponseAt < now;
 
 export function overview(db: DBv, now: number, meId?: string) {
-  const openConvs = db.conversations.filter((c) => c.status !== "resolved");
+  // chats with contacts blocked team-wide don't count anywhere on the overview
+  const openConvs = db.conversations.filter((c) => c.status !== "resolved" && !db.contacts.find((x) => x.id === c.contactId)?.blockedAt);
   const contactType = (id: string) => db.contacts.find((c) => c.id === id)?.type;
   const activeReq = db.requests.filter((r) => !["completed", "cancelled"].includes(r.status));
   return {

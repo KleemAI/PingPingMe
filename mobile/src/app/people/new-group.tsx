@@ -11,7 +11,7 @@ import { PeoplePicker } from "@/components/PeoplePicker";
 /** New group: a name and the people (found by name or phone). You become its admin. */
 export default function NewGroup() {
   const { c } = useTheme();
-  const { act } = useStore();
+  const { act, toast } = useStore();
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<Person[]>([]);
   const [busy, setBusy] = useState(false);
@@ -26,7 +26,8 @@ export default function NewGroup() {
         <Button icon="people" title={busy ? "Creating…" : `Create group (${picked.length + 1})`} disabled={!name.trim() || !picked.length || busy} onPress={async () => {
           setBusy(true);
           try {
-            const id = (await act("group.create", { name: name.trim(), memberIds: picked.map((p) => p.id) }, "Group created")) as string;
+            const { id, notAdded } = (await act("group.create", { name: name.trim(), memberIds: picked.map((p) => p.id) }, "Group created")) as { id: string; notAdded?: string[] };
+            if (notAdded?.length) toast(`${notAdded.join(", ")} can't be added`, "error");
             router.replace({ pathname: "/people/group/[id]", params: { id } });
           } catch { /* toast shown */ } finally { setBusy(false); }
         }} />

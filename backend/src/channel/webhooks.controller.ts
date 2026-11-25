@@ -23,8 +23,14 @@ export class WebhooksController {
   @Public() @Post("inbound") @HttpCode(200)
   async inboundEvent(@Headers("x-webhook-secret") secret: string | undefined, @Body() ev: InboundEvent) {
     if (!secret || !same(secret, env.webhookSecret)) throw unauthorized("Bad webhook secret");
-    const r = await this.uow.write(SYSTEM_USER, ({ em }) => this.inbound.ingest(em, ev));
-    return { ok: true, ...r };
+    const r = await this.uow.write(SYSTEM_USER, async (tx) => {
+      const res = await this.inbound.ingest(tx.em, ev);
+      // from a blocked contact: no live update to anyone on the team (the system user has no sockets)
+      if (res.hidden) tx.onlyUsers(SYSTEM_USER.id);
+      return res;
+    });
+    const { hidden, ...rest } = r; // eslint-disable-line @typescript-eslint/no-unused-vars
+    return { ok: true, ...rest };
   }
 
   /** Meta-style verification handshake (GET ?hub.mode=subscribe&hub.verify_token=…&hub.challenge=…). */

@@ -89,7 +89,7 @@ export class SearchService {
       // message text in the inboxes (never the reseller threads)
       const rows: { id: string; conversation_id: string; text: string; created_at: Date }[] = await em.query(
         `SELECT id, conversation_id, text, created_at FROM messages
-          WHERE conversation_id IS NOT NULL AND audience IN ('customer','internal') AND lower(text) LIKE $1
+          WHERE conversation_id IS NOT NULL AND audience IN ('customer','internal') AND NOT hidden_from_team AND lower(text) LIKE $1
             AND (expires_at IS NULL OR expires_at > now()) ORDER BY created_at DESC LIMIT 20`, [like(q)]);
       for (const r of rows) {
         const c = convs.find((x) => x.id === r.conversation_id);
@@ -139,7 +139,8 @@ export class SearchService {
     }
     const rows: { id: string; chat_id: string; text: string; created_at: Date }[] = await this.em.query(
       `SELECT id, chat_id, text, created_at FROM personal_messages WHERE chat_id = ANY($1) AND NOT view_once AND lower(text) LIKE $2
-          AND (expires_at IS NULL OR expires_at > now()) ORDER BY created_at DESC LIMIT 20`, [chats.map((c) => c.id), like(q)]);
+          AND (expires_at IS NULL OR expires_at > now()) AND NOT (hidden_for_recipient AND author_id <> $3)
+        ORDER BY created_at DESC LIMIT 20`, [chats.map((c) => c.id), like(q), user.id]);
     for (const r of rows) {
       const c = chats.find((x) => x.id === r.chat_id)!;
       hits.push({ type: "personal", id: `m:${r.id}`, title: name.get(other(c)) ?? "", subtitle: snippet(r.text, q), at: new Date(r.created_at).getTime(), score: 0.7, target: { kind: "pm", chatId: c.id, userId: other(c) } });

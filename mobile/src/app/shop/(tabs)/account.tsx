@@ -48,6 +48,9 @@ export default function Account() {
       <Card title="Linked devices" icon="phone-portrait-outline">
         <Row title="Linked devices" subtitle="Phones and browsers signed in to your account" onPress={() => router.push("/devices")} />
       </Card>
+      <Card title="Privacy" icon="ban-outline">
+        <Row title="Blocked contacts" subtitle="People you blocked in chats" onPress={() => router.push("/people/blocked")} />
+      </Card>
       <Card title="Connection" icon="cloud-outline"><Row title="Server" subtitle={server || "same origin"} /></Card>
       <Button variant="outline" icon="log-out-outline" title="Sign out" onPress={() => {
         confirm({ title: "Sign out?", message: "You can sign in again any time.", ok: "Sign out", danger: true, icon: "log-out-outline" }).then((ok) => { if (ok) logout(); });

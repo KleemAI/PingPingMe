@@ -170,6 +170,18 @@ export default function TaskEdit() {
           </View>
         )}
         {existing?.assignedBy && <T muted size={13}>Given to you by {existing.assignedByName}.</T>}
+        {existing?.assignedBy && existing.status === "accepted" && !existing.done && (
+          <Pressable onPress={() => { act("task.mute", { id: existing.id, muted: !existing.muted }, existing.muted ? "Notifications on again" : "Notifications off for this to-do").catch(() => {}); }}
+            accessibilityRole="switch" accessibilityState={{ checked: !existing.muted }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1, borderColor: c.border, backgroundColor: c.card2 }}>
+            <Ionicons name={existing.muted ? "notifications-off-outline" : "notifications-outline"} size={20} color={existing.muted ? c.muted : c.accentStrong} />
+            <View style={{ flex: 1 }}>
+              <T size={14.5} weight="600">{existing.muted ? "Notifications off" : "Notifications on"}</T>
+              <T muted size={12.5}>{existing.muted ? "Tap to get this to-do's reminders again." : "Tap to stop this to-do's reminders. It stays in your list."}</T>
+            </View>
+            <Ionicons name={existing.muted ? "toggle-outline" : "toggle"} size={30} color={existing.muted ? c.muted : c.accentStrong} />
+          </Pressable>
+        )}
 
         {f.audience === "me" && !readOnly && forMe && (
           <View style={{ gap: 4 }}>

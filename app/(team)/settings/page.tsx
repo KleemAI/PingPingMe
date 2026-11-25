@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Users, Radio, BellRing, Building, SlidersHorizontal, Zap, Plus, Trash2, Lock, RefreshCcw, History } from "lucide-react";
+import Link from "next/link";
+import { Users, Radio, BellRing, Building, SlidersHorizontal, Zap, Plus, Trash2, Lock, RefreshCcw, History, Ban } from "lucide-react";
 import { useTeam } from "@/lib/client/store";
 import type { Settings } from "@/lib/types";
-import { dateTime } from "@/lib/format";
+import { dateTime, relative } from "@/lib/format";
 import { Avatar, Button, Card, Field, Modal, PageHeader, Pill, Tabs, inputCls } from "@/components/ui";
 import { ask } from "@/components/Confirm";
+import { useContactBlock } from "@/components/Inbox";
 
-type T = "team" | "channels" | "notifications" | "profile" | "rules" | "replies" | "audit";
+type T = "team" | "channels" | "notifications" | "profile" | "rules" | "replies" | "blocked" | "audit";
 
 export default function SettingsPage() {
   const { team } = useTeam();
@@ -20,17 +22,18 @@ export default function SettingsPage() {
       <div className="px-4 pb-4 md:px-6">
         <Tabs value={tab} onChange={setTab} tabs={[
           { id: "team", label: "Team & roles" }, { id: "channels", label: "Channels" }, { id: "notifications", label: "Notifications" },
-          { id: "profile", label: "Business profile" }, { id: "rules", label: "Operating rules" }, { id: "replies", label: "Saved replies" }, { id: "audit", label: "Audit log" },
+          { id: "profile", label: "Business profile" }, { id: "rules", label: "Operating rules" }, { id: "replies", label: "Saved replies" }, { id: "blocked", label: "Blocked customers" }, { id: "audit", label: "Audit log" },
         ]} />
       </div>
       <div className="max-w-4xl px-4 md:px-6">
-        {!isAdmin && tab !== "replies" && <p className="mb-3 flex items-center gap-2 rounded-[14px] bg-[var(--panel-2)] px-3 py-2 text-[13px] text-[var(--muted)]"><Lock size={14} /> View only — ask an admin to make changes.</p>}
+        {!isAdmin && tab !== "replies" && tab !== "blocked" && <p className="mb-3 flex items-center gap-2 rounded-[14px] bg-[var(--panel-2)] px-3 py-2 text-[13px] text-[var(--muted)]"><Lock size={14} /> View only — ask an admin to make changes.</p>}
         {tab === "team" && <TeamTab />}
         {tab === "channels" && <Channels />}
         {tab === "notifications" && <Notifications />}
         {tab === "profile" && <Profile />}
         {tab === "rules" && <Rules />}
         {tab === "replies" && <Replies />}
+        {tab === "blocked" && <BlockedContacts />}
         {tab === "audit" && <Audit />}
       </div>
     </div>
@@ -218,6 +221,36 @@ function Replies() {
         <input className={inputCls} placeholder="Reply text" value={f.text} onChange={(e) => setF({ ...f, text: e.target.value })} required />
         <Button>Add</Button>
       </form>
+    </Card>
+  );
+}
+
+/** Contacts blocked from the Customer / Business inbox, team-wide. Any team member can unblock. */
+function BlockedContacts() {
+  const { team, now } = useTeam();
+  const db = team!.db;
+  const { unblock } = useContactBlock();
+  const list = db.contacts.filter((c) => c.blockedAt).sort((a, b) => (b.blockedAt ?? 0) - (a.blockedAt ?? 0));
+  return (
+    <Card title={<span className="flex items-center gap-2"><Ban size={15} /> Blocked customers</span>}>
+      <p className="px-4 pt-3 text-[12.5px] text-[var(--muted)]">Their new messages are kept out of the inbox and nobody on the team is notified. They aren&apos;t told. Messages that arrived while blocked stay hidden after you unblock.</p>
+      <ul className="divide-y divide-[var(--border)]">
+        {list.length === 0 && <li className="px-4 py-6 text-center text-[13px] text-[var(--muted)]">No blocked customers. Block someone from the ⋮ menu in their chat.</li>}
+        {list.map((c) => {
+          const by = db.users.find((u) => u.id === c.blockedBy);
+          const conv = db.conversations.find((x) => x.contactId === c.id);
+          return (
+            <li key={c.id} className="flex items-center gap-3 px-4 py-2.5">
+              <Avatar name={c.name} size={36} />
+              <div className="min-w-0 flex-1">
+                {conv ? <Link href={`/inbox/${c.type}?c=${conv.id}`} className="block truncate text-[14px] font-medium hover:underline">{c.name}</Link> : <div className="truncate text-[14px] font-medium">{c.name}</div>}
+                <div className="truncate text-[12px] text-[var(--muted)]">{c.phone} · {c.type === "business" ? "Business" : "Customer"} · Blocked{by ? ` by ${by.name}` : ""} {relative(c.blockedAt!, now)}</div>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => unblock(c)}>Unblock</Button>
+            </li>
+          );
+        })}
+      </ul>
     </Card>
   );
 }

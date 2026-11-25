@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useStore } from "./store";
-import type { Community, GroupChat, GroupMember, GroupMembersPage, PersonalChat } from "./types";
+import type { Community, GroupChat, GroupMember, GroupMembersPage, Person, PersonalChat } from "./types";
 
 const versionOf = (s: unknown) => (s as { db?: { version?: number }; version?: number } | null)?.db?.version ?? (s as { version?: number } | null)?.version ?? 0;
 
@@ -22,17 +22,18 @@ export function usePersonalChats() {
   const [chats, setChats] = useState<PersonalChat[] | null>(null);
   const [groups, setGroups] = useState<GroupChat[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
+  const [blocked, setBlocked] = useState<Person[]>([]); // people you blocked (only your own list)
   const version = versionOf(state);
   const load = useCallback(async () => {
-    if (!token || !canUsePeople(role)) { setChats([]); setGroups([]); setCommunities([]); return; }
+    if (!token || !canUsePeople(role)) { setChats([]); setGroups([]); setCommunities([]); setBlocked([]); return; }
     try {
       const r = await api("/api/v1/people");
-      if (r.ok) { const d = await r.json(); setChats(d.chats); setGroups(d.groups ?? []); setCommunities(d.communities ?? []); }
+      if (r.ok) { const d = await r.json(); setChats(d.chats); setGroups(d.groups ?? []); setCommunities(d.communities ?? []); setBlocked(d.blocked ?? []); }
     } catch { /* offline: keep what we have */ }
   }, [api, token, role]);
   useEffect(() => { load(); }, [load, version]);
   const unread = (chats ?? []).reduce((n, c) => n + c.unread, 0) + groups.reduce((n, g) => n + g.unread, 0);
-  return { chats, groups, communities, reload: load, unread, enabled: canUsePeople(role) };
+  return { chats, groups, communities, blocked, reload: load, unread, enabled: canUsePeople(role) };
 }
 
 /** Search / page a group's members on the server (large groups list only a page). q = name or phone; "" = everyone. */

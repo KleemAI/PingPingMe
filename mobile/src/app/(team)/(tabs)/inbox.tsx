@@ -8,14 +8,14 @@ import { useTeam } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import type { ContactType, Conversation, GroupChat } from "@/lib/types";
 import { CONV_STATUS, PRIORITY, isUnanswered, listTime } from "@/lib/format";
-import { Avatar, Chips, Empty, Input, Button, SearchBar, Sheet, StatusPill, T } from "@/components/ui";
+import { Avatar, Chips, Empty, Input, Button, Pill, SearchBar, Sheet, StatusPill, T } from "@/components/ui";
 import { Ticks } from "@/components/Thread";
 import { plain } from "@/lib/chatFormat";
 import { fuzzyScore } from "@/lib/fuzzy";
 import { HitRowView, SEARCH_FILTERS, SearchEmpty, hitRows, useGlobalSearch, type SearchType } from "@/components/GlobalSearch";
 import { msgText, useE2E } from "@/lib/e2e";
 
-type F = "open" | "mine" | "unassigned" | "unread" | "unanswered" | "waiting_customer" | "waiting_reseller" | "resolved" | "failed" | "all";
+type F = "open" | "mine" | "unassigned" | "unread" | "unanswered" | "waiting_customer" | "waiting_reseller" | "resolved" | "failed" | "all" | "blocked";
 
 export default function Inbox() {
   const { c } = useTheme();
@@ -32,7 +32,11 @@ export default function Inbox() {
   const failed = (cv: Conversation) => db.messages.some((m) => m.conversationId === cv.id && m.status === "failed");
   // "failed" and "unanswered" are cross-inbox filters from the overview
   const base = db.conversations.filter((cv) => filter === "failed" || filter === "unanswered" || contact(cv)?.type === kind);
+  // contacts blocked team-wide stay out of every filter except "Blocked" (search still finds them)
+  const isBlocked = (cv: Conversation) => !!contact(cv)?.blockedAt;
   const match = (cv: Conversation, f: F) => {
+    if (f === "blocked") return isBlocked(cv);
+    if (isBlocked(cv)) return false;
     switch (f) {
       case "open": return cv.status !== "resolved";
       case "mine": return cv.assigneeId === me.id && cv.status !== "resolved";
@@ -78,10 +82,10 @@ export default function Inbox() {
     } catch { /* toast shown */ } finally { setStarting(null); }
   };
 
-  const kindCount = (k: ContactType) => db.conversations.filter((cv) => contact(cv)?.type === k && cv.unread > 0).length;
-  const chips: { id: F; label: string; count?: number }[] = (["open", "mine", "unassigned", "unread", "unanswered", "waiting_customer", "waiting_reseller", "resolved", "failed", "all"] as F[]).map((id) => ({
-    id, label: { open: "Open", mine: "Mine", unassigned: "Unassigned", unread: "Unread", unanswered: "Unanswered", waiting_customer: "Waiting on customer", waiting_reseller: "Waiting on reseller", resolved: "Resolved", failed: "Failed sends", all: "All" }[id],
-    count: ["open", "mine", "unassigned", "unread", "unanswered", "failed"].includes(id) ? base.filter((cv) => match(cv, id)).length : undefined,
+  const kindCount = (k: ContactType) => db.conversations.filter((cv) => contact(cv)?.type === k && cv.unread > 0 && !isBlocked(cv)).length;
+  const chips: { id: F; label: string; count?: number }[] = (["open", "mine", "unassigned", "unread", "unanswered", "waiting_customer", "waiting_reseller", "resolved", "failed", "all", "blocked"] as F[]).map((id) => ({
+    id, label: { open: "Open", mine: "Mine", unassigned: "Unassigned", unread: "Unread", unanswered: "Unanswered", waiting_customer: "Waiting on customer", waiting_reseller: "Waiting on reseller", resolved: "Resolved", failed: "Failed sends", all: "All", blocked: "Blocked" }[id],
+    count: ["open", "mine", "unassigned", "unread", "unanswered", "failed", "blocked"].includes(id) ? base.filter((cv) => match(cv, id)).length : undefined,
   }));
 
   return (
@@ -121,7 +125,9 @@ export default function Inbox() {
               <T muted>Nobody with this number yet.</T>
               <Button icon="person-add-outline" title={`Add ${q.trim()} as a new ${kind === "business" ? "contact" : "customer"}`} onPress={() => setAdding(true)} />
             </View>
-          : <Empty icon="chatbubbles-outline" title="Nothing here" text={term.text ? "No chat or contact matches your search." : "Try another filter."} />}
+          : filter === "blocked" && !term.text
+            ? <Empty icon="ban-outline" title="No blocked customers" text="Block a contact from the ⋮ menu in their chat. Their new messages won't reach the inbox." />
+            : <Empty icon="chatbubbles-outline" title="Nothing here" text={term.text ? "No chat or contact matches your search." : "Try another filter."} />}
         ListFooterComponent={fresh.length || extra.length ? (
           <View>
             {extra.length > 0 && <T size={12} weight="700" color={c.accentStrong} style={{ paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 }}>PERSONAL, GROUPS, COMMUNITIES & P2P</T>}
@@ -167,6 +173,7 @@ export default function Inbox() {
           const co = company(cv);
           const last = db.messages.filter((m) => m.conversationId === cv.id && m.audience !== "reseller").at(-1);
           const owner = db.users.find((u) => u.id === cv.assigneeId);
+          const blocked = !!ct.blockedAt;
           return (
             <Pressable onPress={() => router.push(`/chat/${cv.id}`)} style={({ pressed }) => ({ flexDirection: "row", gap: 12, paddingLeft: 14, backgroundColor: pressed ? c.card2 : c.card })}>
               <View style={{ paddingVertical: 10 }}><Avatar name={co?.name ?? ct.name} size={50} /></View>
@@ -182,10 +189,12 @@ export default function Inbox() {
                   {cv.unread > 0 && <View style={{ backgroundColor: c.accent, borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}><T size={11} color="#fff" weight="700">{cv.unread}</T></View>}
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 }}>
-                  <StatusPill meta={CONV_STATUS[cv.status]} />
-                  {cv.priority !== "normal" && <StatusPill meta={PRIORITY[cv.priority]} />}
+                  {blocked ? <Pill tone="gray" icon="ban-outline" label="Blocked" /> : <StatusPill meta={CONV_STATUS[cv.status]} />}
+                  {!blocked && cv.priority !== "normal" && <StatusPill meta={PRIORITY[cv.priority]} />}
                   {cv.labels.map((id) => { const l = db.settings.labels.find((x) => x.id === id); return l ? <Ionicons key={id} name="pricetag" size={12} color={l.color} /> : null; })}
-                  <T size={11.5} muted style={{ marginLeft: "auto" }}>{owner ? owner.name.split(" ")[0] : "Unassigned"}</T>
+                  {blocked
+                    ? <Button small variant="outline" title="Unblock" style={{ marginLeft: "auto" }} onPress={() => act("contact.unblock", { contactId: ct.id }, `${ct.name} unblocked`).catch(() => {})} />
+                    : <T size={11.5} muted style={{ marginLeft: "auto" }}>{owner ? owner.name.split(" ")[0] : "Unassigned"}</T>}
                 </View>
               </View>
             </Pressable>

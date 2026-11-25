@@ -21,16 +21,17 @@ export class QueryService {
   constructor(private readonly uow: UnitOfWork, private readonly state: StateService) {}
   private get em() { return this.uow.manager; }
 
-  async conversations(f: { kind?: string; status?: string; assigneeId?: string; q?: string }) {
+  async conversations(f: { kind?: string; status?: string; assigneeId?: string; q?: string; blocked?: string }) {
     const qb = this.em.createQueryBuilder(ConversationEntity, "c").innerJoinAndSelect("c.contact", "ct").orderBy("c.lastMessageAt", "DESC");
     if (f.kind) qb.andWhere("ct.type = :kind", { kind: f.kind });
     if (f.status) qb.andWhere("c.status = :status", { status: f.status });
     if (f.assigneeId) qb.andWhere(f.assigneeId === "none" ? "c.assigneeId IS NULL" : "c.assigneeId = :a", { a: f.assigneeId });
+    if (f.blocked === "1" || f.blocked === "0") qb.andWhere(f.blocked === "1" ? "ct.blockedAt IS NOT NULL" : "ct.blockedAt IS NULL");
     if (f.q) {
       const q = `%${f.q.toLowerCase()}%`;
       qb.andWhere(new Brackets((w) => {
         w.where("LOWER(ct.name) LIKE :q", { q }).orWhere("ct.phone LIKE :q", { q })
-          .orWhere("EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.audience = 'customer' AND LOWER(m.text) LIKE :q)", { q });
+          .orWhere("EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.audience = 'customer' AND NOT m.hidden_from_team AND LOWER(m.text) LIKE :q)", { q });
       }));
     }
     const rows = await qb.take(500).getMany();
@@ -40,14 +41,20 @@ export class QueryService {
   async conversation(id: string, user: User) {
     const c = await this.em.findOne(ConversationEntity, { where: { id }, relations: { contact: true } });
     if (!c) throw notFound("Conversation");
-    const messages = await this.em.find(MessageEntity, { where: { conversationId: id, audience: In(["customer", "internal"]) }, order: { createdAt: "ASC", seq: "ASC" } });
-    const requests = await this.em.find(RequestEntity, { where: { conversationId: id } });
+    const messages = await this.em.find(MessageEntity, { where: { conversationId: id, audience: In(["customer", "internal"]), hiddenFromTeam: false }, order: { createdAt: "ASC", seq: "ASC" } });
+    const requests = await this.em.find(RequestEntity, { where: { conversationId: id, hiddenFromTeam: false } });
     const company = c.contact?.companyId ? await this.em.findOne(CompanyEntity, { where: { id: c.contact.companyId } }) : null;
     return { conversation: toConversation(c), contact: toContact(c.contact!), company: company ? toCompany(company) : undefined, messages: messagesFor(messages, user), requestIds: requests.map((r) => r.id) };
   }
 
-  async contacts(f: { type?: string; q?: string }) {
-    const qb = this.em.createQueryBuilder(ContactEntity, "c").orderBy("c.name", "ASC");
+  /** `blocked=1`: the team's Blocked contacts list (newest block first); `blocked=0`: everyone else. */
+  async contacts(f: { type?: string; q?: string; blocked?: string }) {
+    const qb = this.em.createQueryBuilder(ContactEntity, "c");
+    if (f.blocked === "1") qb.andWhere("c.blockedAt IS NOT NULL").orderBy("c.blockedAt", "DESC");
+    else {
+      qb.orderBy("c.name", "ASC");
+      if (f.blocked === "0") qb.andWhere("c.blockedAt IS NULL");
+    }
     if (f.type) qb.andWhere("c.type = :t", { t: f.type });
     if (f.q) qb.andWhere("(LOWER(c.name) LIKE :q OR c.phone LIKE :q OR LOWER(c.email) LIKE :q)", { q: `%${f.q.toLowerCase()}%` });
     return (await qb.take(1000).getMany()).map(toContact);
@@ -71,7 +78,7 @@ export class QueryService {
 
   async requests(user: User, f: { status?: string; agentId?: string; resellerId?: string }) {
     if (!isTeam(user)) return (await this.state.reseller(user)).requests;
-    const where: Record<string, string> = {};
+    const where: Record<string, string | boolean> = { hiddenFromTeam: false };
     if (f.status) where.status = f.status;
     if (f.agentId) where.agentId = f.agentId;
     if (f.resellerId) where.resellerId = f.resellerId;
@@ -92,7 +99,7 @@ export class QueryService {
         quotes: s.quotes.filter((q) => q.requestId === id), orders: s.orders.filter((o) => o.requestId === id),
       };
     }
-    const r = await this.em.findOne(RequestEntity, { where: { id } });
+    const r = await this.em.findOne(RequestEntity, { where: { id, hiddenFromTeam: false } });
     if (!r) throw notFound("Request");
     const [assignments, contact, messages, quotes, orders, cases, activity] = await Promise.all([
       this.em.find(AssignmentEntity, { where: { requestId: id }, order: { seq: "ASC" } }),
@@ -178,7 +185,7 @@ export class QueryService {
     const [openChats, unassignedChats, unassignedRequests, pendingResellerReplies, overdueResellerReplies, activeOrders, overdueCases, failedMessages, overdueReminders] = await Promise.all([
       q(`SELECT COUNT(*) n FROM conversations WHERE status <> 'resolved'`),
       q(`SELECT COUNT(*) n FROM conversations WHERE status <> 'resolved' AND assignee_id IS NULL`),
-      q(`SELECT COUNT(*) n FROM requests WHERE status = 'new'`),
+      q(`SELECT COUNT(*) n FROM requests WHERE status = 'new' AND NOT hidden_from_team`),
       q(`SELECT COUNT(*) n FROM requests WHERE reseller_response IN ('pending','clarification') AND reseller_id IS NOT NULL AND status NOT IN ('completed','cancelled')`),
       q(`SELECT COUNT(*) n FROM requests WHERE reseller_response = 'pending' AND response_due_at < now() AND status NOT IN ('completed','cancelled')`),
       q(`SELECT COUNT(*) n FROM orders WHERE status IN ('confirmed','in_progress','dispatched')`),
@@ -196,7 +203,7 @@ export class QueryService {
       avg(`SELECT AVG(EXTRACT(EPOCH FROM responded_at - assigned_at)/60) m FROM request_assignments WHERE responded_at IS NOT NULL`),
     ]);
     const workload: { agent_id: string; n: string }[] = await this.em.query(
-      `SELECT agent_id, COUNT(*) n FROM requests WHERE status NOT IN ('completed','cancelled') AND agent_id IS NOT NULL GROUP BY agent_id`);
+      `SELECT agent_id, COUNT(*) n FROM requests WHERE status NOT IN ('completed','cancelled') AND agent_id IS NOT NULL AND NOT hidden_from_team GROUP BY agent_id`);
     const orderStatus: { status: string; n: string }[] = await this.em.query(`SELECT status, COUNT(*) n FROM orders GROUP BY status`);
     const resellerPerf: { reseller_id: string; assigned: string; accepted: string; declined: string; avg_min: string | null }[] = await this.em.query(
       `SELECT reseller_id, COUNT(*) assigned, COUNT(*) FILTER (WHERE outcome='accepted') accepted, COUNT(*) FILTER (WHERE outcome='declined') declined,

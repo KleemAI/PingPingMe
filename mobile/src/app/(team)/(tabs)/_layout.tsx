@@ -12,7 +12,7 @@ export default function TeamTabs() {
   const tabs = useGlassTabs(c.accent);
   const { db, me, now } = useTeam();
   const o = useMemo(() => overview(db, now, me.id), [db, now, me.id]);
-  const unread = db.conversations.filter((x) => x.unread > 0).length;
+  const unread = db.conversations.filter((x) => x.unread > 0 && !db.contacts.find((ct) => ct.id === x.contactId)?.blockedAt).length;
   const alerts = o.unanswered.length + o.resellerOverdue.length + o.overdueCases.length + o.failedSends.length + o.dueReminders.length;
 
   const icon = (name: keyof typeof Ionicons.glyphMap) => ({ color, focused }: { color: import("react-native").ColorValue; focused: boolean }) =>

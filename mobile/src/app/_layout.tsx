@@ -47,6 +47,7 @@ function Root() {
         <Stack.Screen name="people/group/info" options={{ title: "Group info" }} />
         <Stack.Screen name="people/new-community" options={{ title: "New community" }} />
         <Stack.Screen name="people/community/[id]" options={{ title: "Community" }} />
+        <Stack.Screen name="people/blocked" options={{ title: "Blocked contacts" }} />
         <Stack.Screen name="task/[id]" options={{ title: "New Task" }} />
         <Stack.Screen name="task/batch" options={{ title: "Add in Batch Mode" }} />
         <Stack.Screen name="task/note" options={{ title: "Note" }} />

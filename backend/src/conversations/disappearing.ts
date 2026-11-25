@@ -30,8 +30,11 @@ export function viewOnceFlag(flag: unknown, attachments: Attachment[]) {
   return true;
 }
 
-/** Turns the timer on/off and writes a notice into the chat (both sides see it, like WhatsApp). */
-export async function setDisappearing(tx: Tx, conv: ConversationEntity, seconds: unknown) {
+/**
+ * Turns the timer on/off and writes a notice into the chat (both sides see it, like WhatsApp).
+ * `hiddenFromTeam`: a blocked customer changed it — the notice is stored hidden from the team.
+ */
+export async function setDisappearing(tx: Tx, conv: ConversationEntity, seconds: unknown, hiddenFromTeam = false) {
   const s = Number(seconds);
   if (!DISAPPEAR_CHOICES.includes(s)) throw badRequest("Pick off, 24 hours, 7 days or 90 days");
   if (conv.disappearSeconds === s) return s;
@@ -43,7 +46,7 @@ export async function setDisappearing(tx: Tx, conv: ConversationEntity, seconds:
     text: s
       ? `⏱️ ${tx.user.name} turned on disappearing messages. New messages will disappear from this chat ${disappearLabel(s)} after they're sent.`
       : `⏱️ ${tx.user.name} turned off disappearing messages.`,
-    attachments: [], status: null, createdAt: Date.now(),
+    attachments: [], status: null, createdAt: Date.now(), hiddenFromTeam,
   });
   return s;
 }

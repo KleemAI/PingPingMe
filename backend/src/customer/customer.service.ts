@@ -8,7 +8,7 @@ import { SYSTEM_USER } from "../common/system-user";
 import { AuditService } from "../audit/audit.service";
 import { FilesService } from "../files/files.service";
 import { ConversationEntity, MessageEntity, ProductEntity, RequestEntity, SettingsEntity, UserEntity, ContactEntity } from "../database/entities";
-import { toContact, toMessage, toProduct, messagesFor } from "../database/mappers";
+import { toOwnContact, toMessage, toProduct, messagesFor } from "../database/mappers";
 import { nextRef, UnitOfWork, type Tx } from "../database/unit-of-work.service";
 import { ensureContact, ensureConversation, relinkPossible } from "./customer-link";
 import { expiryFor, setDisappearing, viewOnceFlag } from "../conversations/disappearing";
@@ -50,10 +50,11 @@ export class CustomerService {
     return {
       scope: "customer",
       me: user,
-      profile: toContact(need(contact, "Contact")),
+      profile: toOwnContact(need(contact, "Contact")),
       conversationId: convs.find((c) => c.channel === "web")?.id,
       disappearSeconds: convs.find((c) => c.channel === "web")?.disappearSeconds || undefined,
-      messages: messagesFor(messages, user),
+      // the team's delivery status (queued / failed + error) stays with the team
+      messages: messagesFor(messages, user).map((m) => (m.direction === "out" ? { ...m, status: undefined, error: undefined } : m)),
       products: products.map((p): CustomerProduct => {
         // who proposed it and their price stay with the team
         const { status, resellerId, resellerPrice, reviewNote, ...rest } = toProduct(p); // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -67,23 +68,31 @@ export class CustomerService {
     };
   }
 
-  /** Writes a customer message into their web conversation (it shows up in the team's Customer inbox). */
+  /**
+   * Writes a customer message into their web conversation (it shows up in the team's Customer inbox).
+   * While the team has them blocked it is stored hidden from the team for good: no reopen, no unread, no push,
+   * and only the customer's own devices refresh. The customer sees it as sent and is never told.
+   */
   private async post(tx: Tx, text: string, attachments: Awaited<ReturnType<FilesService["attachments"]>>, viewOnce = false) {
     const { contact } = await ensureContact(tx.em, tx.user.id);
     const conv = await ensureConversation(tx.em, contact.id);
+    const hidden = !!contact.blockedAt;
     const now = Date.now();
-    if (conv.status === "resolved" || conv.status === "waiting_customer") { conv.status = "open"; conv.resolvedAt = null; }
-    conv.unread += 1;
-    conv.lastMessageAt = now;
-    await tx.em.save(conv);
+    if (!hidden) {
+      if (conv.status === "resolved" || conv.status === "waiting_customer") { conv.status = "open"; conv.resolvedAt = null; }
+      conv.unread += 1;
+      conv.lastMessageAt = now;
+      await tx.em.save(conv);
+    }
     const id = newId("m");
     await tx.em.insert(MessageEntity, {
       id, audience: "customer", conversationId: conv.id, direction: "in", authorId: tx.user.id, authorName: contact.name, text, attachments, createdAt: now,
-      expiresAt: expiryFor(conv, now), viewOnce,
+      expiresAt: expiryFor(conv, now), viewOnce, hiddenFromTeam: hidden,
     });
+    if (hidden) tx.onlyUsers(tx.user.id);
     // the agent who owns the chat — or the whole team while nobody does
-    this.push.notify(tx, await this.push.teamIds(tx, conv.assigneeId), { title: contact.name, body: preview(text, attachments, viewOnce), data: { type: "conv", id: conv.id } });
-    return { id, conv, contact };
+    else this.push.notify(tx, await this.push.teamIds(tx, conv.assigneeId), { title: contact.name, body: preview(text, attachments, viewOnce), data: { type: "conv", id: conv.id } });
+    return { id, conv, contact, hidden };
   }
 
   /** chat.send { text?, attachments?: fileId[] } — a message (and/or pictures, videos, documents, voice notes) to our team. */
@@ -108,7 +117,10 @@ export class CustomerService {
   /** chat.disappearing { seconds } — disappearing messages in the customer's chat with our team. */
   async disappearing(tx: Tx, p: Payload) {
     const { contact } = await ensureContact(tx.em, tx.user.id);
-    return setDisappearing(tx, await ensureConversation(tx.em, contact.id), p.seconds);
+    const hidden = !!contact.blockedAt;
+    // blocked by the team: the notice stays on the customer's side and nobody on the team gets a live update
+    if (hidden) tx.onlyUsers(tx.user.id);
+    return setDisappearing(tx, await ensureConversation(tx.em, contact.id), p.seconds, hidden);
   }
 
   /**
@@ -134,13 +146,16 @@ export class CustomerService {
       `Delivery area: ${area}`,
       note ? `Note: ${note}` : "",
     ].filter(Boolean).join("\n");
-    const { conv } = await this.post(tx, `Price request: ${title}\nQuantity: ${quantity} · Area: ${area}${note ? `\n${note}` : ""}`, []);
+    const { id: messageId, conv, hidden } = await this.post(tx, `Price request: ${title}\nQuantity: ${quantity} · Area: ${area}${note ? `\n${note}` : ""}`, []);
     const now = Date.now();
     const r = tx.em.create(RequestEntity, {
       id: newId("rq"), ref: await nextRef(tx.em, "REQ"), conversationId: conv.id, contactId: contact.id, title, requirement,
-      category, area, quantity, priority: "normal", status: "new", agentId: conv.assigneeId ?? null, createdAt: now, updatedAt: now,
+      category, area, quantity, priority: "normal", status: "new", agentId: hidden ? null : conv.assigneeId ?? null, createdAt: now, updatedAt: now,
+      hiddenFromTeam: hidden,
     });
     await tx.em.save(r);
+    // blocked by the team: the request shows in the customer's own list as usual, but never reaches the team (no audit, no agent)
+    if (hidden) return r.id;
     await this.audit.log(tx, "request", r.id, `${r.ref} asked for by the customer from the portal`);
     return r.id;
   }

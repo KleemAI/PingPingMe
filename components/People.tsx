@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, Crown, Info, Loader2, Lock, LogOut, Megaphone, MessagesSquare, Pencil, Search, UserMinus, UserPlus, Users, X } from "lucide-react";
+import { ArrowLeft, Ban, Check, Crown, Info, Loader2, Lock, LogOut, Megaphone, MessagesSquare, MoreVertical, Pencil, Search, UserMinus, UserPlus, Users, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useStore } from "@/lib/client/store";
-import type { Attachment, Community, GroupChat, GroupMember, GroupMembersPage, Message, Person, PersonalChat } from "@/lib/types";
+import type { Attachment, Community, GroupChat, GroupMember, GroupMembersPage, Message, PeoplePayload, Person, PersonalChat } from "@/lib/types";
 import { listTime } from "@/lib/format";
 import { plain } from "@/lib/chatFormat";
-import { Avatar, Button, Empty, Modal, inputCls } from "./ui";
+import { Avatar, Button, Empty, Modal, inputCls, useClickAway } from "./ui";
 import { Composer, DisappearingPicker, MessageList, disappearLabel } from "./Thread";
 import { CommunityInfo, NewCommunity } from "./Community";
 import { SearchChips, SearchResults, useGlobalSearch, type SearchHit, type SearchType } from "./GlobalSearch";
@@ -51,17 +51,29 @@ export function usePersonalChats() {
   const [chats, setChats] = useState<PersonalChat[] | null>(null);
   const [groups, setGroups] = useState<GroupChat[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
+  const [blocked, setBlocked] = useState<Person[]>([]); // people you blocked
   const version = versionOf(state);
   const load = useCallback(async () => {
     try {
       const r = await fetch("/api/people", { cache: "no-store" });
-      if (r.ok) { const d = await r.json(); setChats(d.chats); setGroups(d.groups ?? []); setCommunities(d.communities ?? []); }
+      if (r.ok) { const d = await r.json() as Partial<PeoplePayload>; setChats(d.chats ?? []); setGroups(d.groups ?? []); setCommunities(d.communities ?? []); setBlocked(d.blocked ?? []); }
       else if (r.status === 404) setChats([]); // demo server without the backend
     } catch { /* offline: keep what we have */ }
   }, []);
   useEffect(() => { load(); }, [load, version]);
   const unread = (chats ?? []).reduce((n, c) => n + c.unread, 0) + groups.reduce((n, g) => n + g.unread, 0);
-  return { chats, groups, communities, reload: load, unread };
+  return { chats, groups, communities, blocked, reload: load, unread };
+}
+
+/** Block / unblock a person in personal chats (themed confirm before blocking). */
+function useBlocking(reload: () => Promise<void>) {
+  const { act } = useStore();
+  const block = async (p: Person) => {
+    if (!(await ask({ title: `Block ${p.name}?`, message: "They won't be able to message you. They won't be told.", ok: "Block", danger: true }))) return;
+    await act("pm.block", { userId: p.id }, `${p.name} blocked`).then(reload).catch(() => {});
+  };
+  const unblock = (p: Person) => act("pm.unblock", { userId: p.id }, `${p.name} unblocked`).then(reload).catch(() => {});
+  return { block, unblock };
 }
 
 /** Search people (server side, debounced): name, email or phone number. */
@@ -90,7 +102,11 @@ export default function People() {
   const { state, act } = useStore();
   const router = useRouter();
   const me = (state as { me?: { id: string; name: string; role?: string } } | null)?.me;
-  const { chats, groups, communities, reload } = usePersonalChats();
+  const { chats, groups, communities, blocked, reload } = usePersonalChats();
+  const { block, unblock } = useBlocking(reload);
+  const [showBlocked, setShowBlocked] = useState(false);
+  const [menu, setMenu] = useState(false); // personal chat header menu
+  const menuRef = useClickAway<HTMLDivElement>(menu, () => setMenu(false));
   const [q, setQ] = useState("");
   const [type, setType] = useState<SearchType>("all");
   const { found, searching: searchingPeople } = usePeopleSearch(q);
@@ -170,7 +186,7 @@ export default function People() {
         return {
           id: m.id, audience: "customer", direction: mine ? "out" : "in", authorId: m.authorId, authorName: mine ? me?.name ?? "You" : chat.with.name,
           text: msgText(m, e2e.me), attachments: m.e2e ? filesOf(body, m.attachments) : m.attachments, createdAt: m.createdAt, expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
-          status: mine ? (chat.theirReadAt && chat.theirReadAt >= m.createdAt ? "read" : "delivered") : undefined,
+          status: mine ? (m.undelivered ? "sent" : chat.theirReadAt && chat.theirReadAt >= m.createdAt ? "read" : "delivered") : undefined,
         } as Message;
       });
     }
@@ -201,6 +217,10 @@ export default function People() {
   const header = open?.kind === "pm"
     ? { name: open.person.name, sub: `${open.person.role === "team" ? "Our team" : "Customer"}${open.person.hint ? ` · ${open.person.hint}` : ""}` }
     : null;
+  // you blocked the person in the open personal chat
+  const pmPerson = open?.kind === "pm" ? open.person : null;
+  const isBlocked = !!pmPerson && (!!chat?.blocked || blocked.some((p) => p.id === pmPerson.id));
+  useEffect(() => setMenu(false), [open]);
 
   return (
     <div className="flex h-full min-h-0">
@@ -213,6 +233,7 @@ export default function People() {
           <div className="flex gap-1">
             <Button size="sm" variant="outline" onClick={() => setNewGroup(true)} title="New group"><Users size={14} /> Group</Button>
             <Button size="sm" variant="outline" onClick={() => setNewCommunity(true)} title="New community"><Megaphone size={14} /> Community</Button>
+            <Button size="sm" variant="outline" onClick={() => setShowBlocked(true)} title="Blocked contacts" aria-label="Blocked contacts"><Ban size={14} />{blocked.length > 0 && ` ${blocked.length}`}</Button>
           </div>
         </div>
         <div className="px-3 pb-2">
@@ -247,7 +268,9 @@ export default function People() {
             <>
               <li className="px-4 pt-3 pb-1 text-[12px] font-semibold uppercase tracking-wide text-[var(--accent-strong)]">Start a new chat</li>
               {newPeople.map((p) => row(p.id, p.name, `${p.role === "team" ? "Our team" : "Customer"}${p.hint ? ` · ${p.hint}` : ""}`,
-                <span className="shrink-0 text-[12px] font-medium text-[var(--accent)]">Message</span>,
+                p.blocked || blocked.some((b) => b.id === p.id)
+                  ? <span className="shrink-0 text-[12px] font-medium text-[var(--muted)]">Blocked</span>
+                  : <span className="shrink-0 text-[12px] font-medium text-[var(--accent)]">Message</span>,
                 () => { setOpen({ kind: "pm", person: p }); setQ(""); }, open?.kind === "pm" && open.person.id === p.id && !chat))}
             </>
           )}
@@ -267,11 +290,26 @@ export default function People() {
                 <div className="truncate text-[12px] text-[var(--muted)]">{header.sub}</div>
               </div>
               {e2e.enabled && <span title="End-to-end encrypted: only the two of you can read these messages" className="flex items-center gap-1 rounded-full bg-[var(--accent)]/10 px-2 py-1 text-[11.5px] text-[var(--accent-strong)]"><Lock size={12} /> Encrypted</span>}
-              {chat && <DisappearingPicker value={chat.disappearSeconds} onChange={(v) => act("pm.disappearing", { chatId: chat.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />}
+              {chat && !isBlocked && <DisappearingPicker value={chat.disappearSeconds} onChange={(v) => act("pm.disappearing", { chatId: chat.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />}
+              <div ref={menuRef} className="relative">
+                <button onClick={() => setMenu((x) => !x)} title="More" aria-label="More" aria-expanded={menu} className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><MoreVertical size={19} /></button>
+                {menu && (
+                  <>
+                    <div className="animate-pop absolute top-full right-0 z-30 mt-1 min-w-[190px] overflow-hidden rounded-[16px] border border-[var(--border)] bg-[var(--panel-solid)] py-1 shadow-xl">
+                      <button onClick={() => { setMenu(false); if (!pmPerson) return; if (isBlocked) unblock(pmPerson); else block(pmPerson); }}
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[14px] hover:bg-[var(--hover)] ${isBlocked ? "" : "text-[var(--danger)]"}`}>
+                        <Ban size={15} /> {isBlocked ? "Unblock" : "Block"} {header.name}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </header>
             <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="pm.open" />
             <Composer
               allowViewOnce
+              disabled={isBlocked ? `You blocked ${header.name}. Tap to unblock.` : undefined}
+              onDisabledClick={isBlocked && pmPerson ? () => unblock(pmPerson) : undefined}
               encrypt={e2e.enabled}
               modes={[{ id: "pm", kind: "customer", label: "Message", hint: e2e.enabled ? `🔒 End-to-end encrypted — only ${header.name.split(" ")[0]} and you can read it` : `Only ${header.name.split(" ")[0]} and you can see this chat` }]}
               onSend={(_m, text, attachments, opts) => sendPm(text, attachments, opts?.viewOnce)}
@@ -282,7 +320,37 @@ export default function People() {
       {newCommunity && <NewCommunity groups={groups} onClose={() => setNewCommunity(false)} onCreated={async (id) => { setNewCommunity(false); await reload(); setCommunityId(id); }} />}
       {community && <CommunityInfo community={community} groups={groups} onClose={() => setCommunityId(null)} reload={reload} onOpenGroup={(id) => { setCommunityId(null); setOpen({ kind: "group", id }); }} />}
       {newGroup && <NewGroup onClose={() => setNewGroup(false)} onCreated={async (id) => { setNewGroup(false); await reload(); setOpen({ kind: "group", id }); }} />}
+      {showBlocked && <BlockedContacts blocked={blocked} onUnblock={unblock} onClose={() => setShowBlocked(false)} />}
     </div>
+  );
+}
+
+/** People you blocked in personal chats, each with Unblock. */
+function BlockedContacts({ blocked, onUnblock, onClose }: { blocked: Person[]; onUnblock: (p: Person) => Promise<unknown>; onClose: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  return (
+    <Modal open onClose={onClose} title="Blocked contacts">
+      <div className="space-y-3">
+        <p className="text-[12.5px] text-[var(--muted)]">Blocked people can&apos;t message you in personal chats. They aren&apos;t told.</p>
+        {blocked.length ? (
+          <ul className="scroll-thin max-h-80 divide-y divide-[var(--border)] overflow-y-auto rounded-[20px] border border-[var(--border)] bg-[var(--panel)]">
+            {blocked.map((p) => (
+              <li key={p.id} className="flex items-center gap-3 px-3 py-2">
+                <Avatar name={p.name} size={34} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[14px]">{p.name}</div>
+                  <div className="truncate text-[12px] text-[var(--muted)]">{p.role === "team" ? "Our team" : "Customer"}{p.hint ? ` · ${p.hint}` : ""}</div>
+                </div>
+                <Button size="sm" variant="outline" disabled={busy === p.id} onClick={async () => { setBusy(p.id); try { await onUnblock(p); } finally { setBusy(null); } }}>
+                  {busy === p.id ? <Loader2 size={14} className="animate-spin" /> : "Unblock"}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : <Empty icon={Ban} title="No blocked contacts" text="People you block in a chat show up here." />}
+        <div className="flex justify-end"><Button variant="ghost" size="sm" onClick={onClose}>Close</Button></div>
+      </div>
+    </Modal>
   );
 }
 
@@ -391,7 +459,7 @@ export function GroupView({ group, meId, onBack, reload, communities = [], group
 }
 
 export function NewGroup({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
-  const { act } = useStore();
+  const { act, toast } = useStore();
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<Person[]>([]);
   const [busy, setBusy] = useState(false);
@@ -405,7 +473,11 @@ export function NewGroup({ onClose, onCreated }: { onClose: () => void; onCreate
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button disabled={!name.trim() || !picked.length || busy} onClick={async () => {
             setBusy(true);
-            try { onCreated((await act("group.create", { name: name.trim(), memberIds: picked.map((p) => p.id) }, "Group created")) as string); } catch { /* toast */ } finally { setBusy(false); }
+            try {
+              const r = (await act("group.create", { name: name.trim(), memberIds: picked.map((p) => p.id) }, "Group created")) as { id: string; notAdded?: string[] };
+              if (r.notAdded?.length) toast(`${r.notAdded.join(", ")} can't be added`, "error");
+              onCreated(r.id);
+            } catch { /* toast */ } finally { setBusy(false); }
           }}>{busy ? <Loader2 size={15} className="animate-spin" /> : <Users size={15} />} Create group ({picked.length + 1})</Button>
         </div>
       </div>
@@ -449,7 +521,7 @@ function useGroupMembers(groupId: string | null, tick: number) {
 }
 
 function GroupInfo({ group, meId, onClose, onLeft, reload, onCommunity }: { group: GroupChat; meId?: string; onClose: () => void; onLeft: () => void; reload: () => Promise<void>; onCommunity?: () => void }) {
-  const { act } = useStore();
+  const { act, toast } = useStore();
   const [name, setName] = useState(group.name);
   const [renaming, setRenaming] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -457,7 +529,13 @@ function GroupInfo({ group, meId, onClose, onLeft, reload, onCommunity }: { grou
   const large = isLargeGroup(group);
   const count = memberCountOf(group);
   const [tick, setTick] = useState(0); // refetch the member page after an admin action
-  const run = (type: string, payload: Record<string, unknown>, ok?: string) => act(type, { groupId: group.id, ...payload }, ok).then(reload).then(() => setTick((n) => n + 1)).catch(() => {});
+  const run = (type: string, payload: Record<string, unknown>, ok?: string) => act(type, { groupId: group.id, ...payload }, ok)
+    .then((r) => {
+      // group.addMembers: people who can't be added are skipped, the rest are added
+      const notAdded = (r as { notAdded?: string[] } | null)?.notAdded;
+      if (notAdded?.length) toast(`${notAdded.join(", ")} can't be added`, "error");
+    })
+    .then(reload).then(() => setTick((n) => n + 1)).catch(() => {});
   const page = useGroupMembers(large ? group.id : null, tick);
   const members = large ? page.members ?? group.members : group.members;
   return (

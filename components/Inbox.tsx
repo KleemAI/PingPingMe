@@ -11,17 +11,29 @@ import { SearchChips, SearchResults, useGlobalSearch, type SearchHit, type Searc
 import { fuzzyScore } from "@/lib/fuzzy";
 import {
   Loader2, Search, ArrowLeft, PanelRightOpen, PanelRightClose, Tag, Plus, ClipboardList, Bell, Scale, Building2, User as UserIcon, Pencil, RefreshCw,
-  Phone, Mail, MapPin, MessageSquarePlus, Inbox as InboxIcon, AlertCircle, Users, Megaphone, X, Package, Download,
+  Phone, Mail, MapPin, MessageSquarePlus, Inbox as InboxIcon, AlertCircle, Users, Megaphone, X, Package, Download, MoreVertical, Ban,
 } from "lucide-react";
+import { ask } from "./Confirm";
 import { useTeam } from "@/lib/client/store";
 import type { Contact, Conversation, ContactType } from "@/lib/types";
 import { CONV_STATUS, PRIORITY, REQ_STATUS, ORDER_STATUS, CASE_STATUS, isUnanswered, listTime, rupees, relative } from "@/lib/format";
-import { Avatar, Button, Card, Empty, Field, Modal, Pill, StatusPill, Tabs, inputCls } from "./ui";
+import { Avatar, Button, Card, Empty, Field, Modal, Pill, StatusPill, Tabs, inputCls, useClickAway } from "./ui";
 import { Composer, MessageList, Ticks, DisappearingPicker, disappearLabel } from "./Thread";
 import { CreateRequestModal, OpenCaseModal, ReminderModal } from "./forms";
 import { plain } from "@/lib/chatFormat";
 
-type Filter = "open" | "all" | "mine" | "unassigned" | "unread" | "unanswered" | "failed" | "waiting_customer" | "waiting_reseller" | "resolved" | `label:${string}`;
+/** Team-wide block of a customer / contact: their new messages never reach the inbox. Any team member can block or unblock. */
+export function useContactBlock() {
+  const { act } = useTeam();
+  const block = async (ct: Contact) => {
+    if (!(await ask({ title: `Block ${ct.name}?`, message: "Their new messages won't reach the inbox and nobody on the team gets notified. They won't be told.", ok: "Block", danger: true }))) return;
+    await act("contact.block", { contactId: ct.id }, `${ct.name} blocked`).catch(() => {});
+  };
+  const unblock = (ct: Contact) => act("contact.unblock", { contactId: ct.id }, `${ct.name} unblocked`).catch(() => {});
+  return { block, unblock };
+}
+
+type Filter = "open" | "all" | "blocked" | "mine" | "unassigned" | "unread" | "unanswered" | "failed" | "waiting_customer" | "waiting_reseller" | "resolved" | `label:${string}`;
 
 export default function Inbox({ kind }: { kind: ContactType }) {
   const { team, now, act } = useTeam();
@@ -50,6 +62,8 @@ export default function Inbox({ kind }: { kind: ContactType }) {
     return convs
       .filter((c) => {
         // a search looks through every chat, like WhatsApp — the filter tabs apply only without a search
+        // blocked contacts show only in the Blocked tab (and in search results)
+        if (!term.text && (filter === "blocked") !== !!contactOf(c)?.blockedAt) return false;
         if (!term.text) switch (filter) {
           case "open": if (c.status === "resolved") return false; break;
           case "mine": if (c.assigneeId !== me.id || c.status === "resolved") return false; break;
@@ -131,7 +145,9 @@ export default function Inbox({ kind }: { kind: ContactType }) {
     router.replace(`?${sp.toString()}`, { scroll: false });
   };
 
-  const count = (f: (c: Conversation) => boolean) => convs.filter(f).length;
+  const count = (f: (c: Conversation) => boolean) => convs.filter((c) => !contactOf(c)?.blockedAt && f(c)).length;
+  const blockedCount = convs.filter((c) => !!contactOf(c)?.blockedAt).length;
+  const { unblock } = useContactBlock();
   const tabs: { id: Filter; label: string; count?: number }[] = [
     { id: "open", label: "Open", count: count((c) => c.status !== "resolved") },
     { id: "mine", label: "Mine", count: count((c) => c.assigneeId === me.id && c.status !== "resolved") },
@@ -144,6 +160,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
     { id: "failed", label: "Failed sends", count: count((c) => db.messages.some((m) => m.conversationId === c.id && m.status === "failed")) },
     { id: "all", label: "All" },
     ...db.settings.labels.map((l) => ({ id: `label:${l.id}` as Filter, label: l.name })),
+    ...(blockedCount || filter === "blocked" ? [{ id: "blocked" as Filter, label: "Blocked", count: blockedCount }] : []),
   ];
 
   return (
@@ -180,7 +197,9 @@ export default function Inbox({ kind }: { kind: ContactType }) {
                   <p className="mb-2 text-[var(--muted)]">Nobody with this number yet.</p>
                   <Button size="sm" onClick={() => setNewChat(true)}><MessageSquarePlus size={14} /> Add {q.trim()} as a new {kind === "business" ? "contact" : "customer"}</Button>
                 </li>
-              : <Empty icon={InboxIcon} title="Nothing here" text={term.text ? "No chat or contact matches your search." : "Try another filter or search."} />
+              : filter === "blocked" && !term.text
+                ? <Empty icon={Ban} title="No blocked contacts" text="Contacts you block from a chat show up here. Their new messages never reach the inbox." />
+                : <Empty icon={InboxIcon} title="Nothing here" text={term.text ? "No chat or contact matches your search." : "Try another filter or search."} />
           )}
           {rows.map((row) => {
             if (row.kind === "group") {
@@ -211,8 +230,9 @@ export default function Inbox({ kind }: { kind: ContactType }) {
             const last = lastMsg(c.id);
             const failed = db.messages.some((m) => m.conversationId === c.id && m.status === "failed");
             const assignee = db.users.find((u) => u.id === c.assigneeId);
+            const blockedRow = !!ct.blockedAt && filter === "blocked" && !term.text;
             return (
-              <li key={c.id}>
+              <li key={c.id} className="relative">
                 <button onClick={() => select(c.id)} className={`flex w-full items-center gap-3 px-3 text-left transition ${c.id === activeId ? "bg-[var(--active)]" : "hover:bg-[var(--hover)]"}`}>
                   <Avatar name={co?.name ?? ct.name} size={46} />
                   <div className="min-w-0 flex-1 border-b border-[var(--border)] py-2.5">
@@ -227,13 +247,19 @@ export default function Inbox({ kind }: { kind: ContactType }) {
                       {c.unread > 0 && <span className="ml-auto min-w-[19px] shrink-0 rounded-full bg-[var(--accent)] px-1.5 text-center text-[11px] font-semibold leading-[19px] text-white">{c.unread}</span>}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-1">
-                      <StatusPill meta={CONV_STATUS[c.status]} />
-                      {c.priority !== "normal" && <StatusPill meta={PRIORITY[c.priority]} />}
-                      {c.labels.map((id) => { const l = db.settings.labels.find((x) => x.id === id); return l ? <Tag key={id} size={12} style={{ color: l.color }} fill={l.color} /> : null; })}
-                      <span className="ml-auto truncate text-[11px] text-[var(--muted)]">{assignee ? assignee.name.split(" ")[0] : "Unassigned"}</span>
+                      {ct.blockedAt ? <BlockedPill /> : <>
+                        <StatusPill meta={CONV_STATUS[c.status]} />
+                        {c.priority !== "normal" && <StatusPill meta={PRIORITY[c.priority]} />}
+                        {c.labels.map((id) => { const l = db.settings.labels.find((x) => x.id === id); return l ? <Tag key={id} size={12} style={{ color: l.color }} fill={l.color} /> : null; })}
+                      </>}
+                      {!blockedRow && <span className="ml-auto truncate text-[11px] text-[var(--muted)]">{assignee ? assignee.name.split(" ")[0] : "Unassigned"}</span>}
                     </div>
                   </div>
                 </button>
+                {/* the Blocked tab is the team's list of blocked contacts */}
+                {blockedRow && (
+                  <button onClick={() => unblock(ct)} className="absolute right-3 bottom-2.5 rounded-full border border-[var(--border-strong)] bg-[var(--input)] px-2.5 py-0.5 text-[11.5px] font-medium text-[var(--accent)] hover:bg-[var(--hover)]">Unblock</button>
+                )}
               </li>
             );
           })}
@@ -304,6 +330,10 @@ function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBac
   const messages = db.messages.filter((m) => m.conversationId === conv.id && m.audience !== "reseller");
   const owner = db.users.find((u) => u.id === conv.assigneeId);
   const channel = { whatsapp: "WhatsApp", web: "Web chat", email: "Email" }[conv.channel];
+  const blocked = !!ct.blockedAt;
+  const { block, unblock } = useContactBlock();
+  const [menu, setMenu] = useState(false);
+  const menuRef = useClickAway<HTMLDivElement>(menu, () => setMenu(false));
 
   return (
     <div className="flex min-w-0 flex-1">
@@ -313,12 +343,28 @@ function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBac
           <Avatar name={co?.name ?? ct.name} size={40} />
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium">{co ? `${co.name} · ${ct.name}` : ct.name}</div>
-            <div className="truncate text-[12px] text-[var(--muted)]">{channel} · {ct.phone} · Owner: <b className="font-medium text-[var(--text)]">{owner?.name ?? "Unassigned"}</b></div>
+            <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-[var(--muted)]">
+              {blocked && <BlockedPill />}
+              <span className="truncate">{channel} · {ct.phone} · Owner: <b className="font-medium text-[var(--text)]">{owner?.name ?? "Unassigned"}</b></span>
+            </div>
           </div>
           <select value={conv.status} onChange={(e) => act("conv.update", { id: conv.id, status: e.target.value }, "Status updated")} className="hidden rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-2.5 py-1.5 text-[13px] outline-none focus:border-[var(--accent)] sm:block">
             {Object.entries(CONV_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
-          <DisappearingPicker value={conv.disappearSeconds} onChange={(v) => act("conv.disappearing", { conversationId: conv.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />
+          {!blocked && <DisappearingPicker value={conv.disappearSeconds} onChange={(v) => act("conv.disappearing", { conversationId: conv.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />}
+          <div ref={menuRef} className="relative">
+            <button onClick={() => setMenu((x) => !x)} title="More" aria-label="More" aria-expanded={menu} className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--active)]"><MoreVertical size={19} /></button>
+            {menu && (
+              <>
+                <div className="animate-pop absolute top-full right-0 z-30 mt-1 min-w-[200px] overflow-hidden rounded-[16px] border border-[var(--border)] bg-[var(--panel-solid)] py-1 shadow-xl">
+                  <button onClick={() => { setMenu(false); if (blocked) unblock(ct); else block(ct); }}
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[14px] hover:bg-[var(--hover)] ${blocked ? "" : "text-[var(--danger)]"}`}>
+                    <Ban size={15} /> {blocked ? "Unblock" : "Block"} {ct.name}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button onClick={() => setDetails(!details)} title="Details" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--active)]">{details ? <PanelRightClose size={19} /> : <PanelRightOpen size={19} />}</button>
         </header>
         <MessageList
@@ -333,6 +379,8 @@ function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBac
             { id: "internal", kind: "internal", label: "Internal note", hint: "Only your team can see this — never sent" },
           ]}
           allowViewOnce
+          disabled={blocked ? `${ct.name} is blocked. Tap to unblock.` : undefined}
+          onDisabledClick={blocked ? () => unblock(ct) : undefined}
           onSend={(mode, text, attachments, opts) => act("conv.send", { conversationId: conv.id, audience: mode, text, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce })}
         />
       </section>
@@ -355,6 +403,8 @@ function Details({ conv, onClose }: { conv: Conversation; onClose: () => void })
   const agents = db.users.filter((u) => u.role !== "reseller" && u.active);
   const files = db.messages.filter((m) => m.conversationId === conv.id).flatMap((m) => m.attachments);
   const lastIn = db.messages.filter((m) => m.conversationId === conv.id && m.direction === "in").at(-1);
+  const { block, unblock } = useContactBlock();
+  const blockedBy = db.users.find((u) => u.id === ct.blockedBy);
 
   return (
     <aside className="animate-slide fixed inset-0 z-30 flex flex-col bg-[var(--panel-solid)] sm:left-auto sm:w-[360px] sm:border-l sm:border-[var(--border)] sm:shadow-2xl 2xl:static 2xl:bg-transparent 2xl:shadow-none">
@@ -373,6 +423,7 @@ function Details({ conv, onClose }: { conv: Conversation; onClose: () => void })
               {ct.email && <div className="flex items-center justify-center gap-1.5"><Mail size={13} />{ct.email}</div>}
               {ct.city && <div className="flex items-center justify-center gap-1.5"><MapPin size={13} />{ct.city}</div>}
               {lastIn && <div>Last message {relative(lastIn.createdAt, now)}</div>}
+              {ct.blockedAt && <div className="flex items-center justify-center gap-1.5 text-[var(--danger)]"><Ban size={13} />Blocked{blockedBy ? ` by ${blockedBy.name}` : ""} · {relative(ct.blockedAt, now)}</div>}
             </div>
             <div className="mt-3 flex gap-2">
               <Button size="sm" variant="outline" onClick={() => setModal("contact")}><Pencil size={13} /> Edit</Button>
@@ -380,6 +431,9 @@ function Details({ conv, onClose }: { conv: Conversation; onClose: () => void })
                 <RefreshCw size={13} /> Make {ct.type === "customer" ? "business" : "customer"}
               </Button>
             </div>
+            <Button size="sm" variant={ct.blockedAt ? "outline" : "danger"} className="mt-2" onClick={() => (ct.blockedAt ? unblock(ct) : block(ct))}>
+              <Ban size={13} /> {ct.blockedAt ? "Unblock" : "Block"} {ct.name.split(" ")[0]}
+            </Button>
           </div>
         </Card>
 
@@ -499,6 +553,11 @@ function Details({ conv, onClose }: { conv: Conversation; onClose: () => void })
       <CompanyModal open={modal === "company"} onClose={() => setModal(null)} contactId={ct.id} />
     </aside>
   );
+}
+
+/** Muted label for a conversation whose contact the team blocked. */
+export function BlockedPill() {
+  return <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--input)] px-2 py-0.5 text-[11px] text-[var(--muted)]"><Ban size={11} /> Blocked</span>;
 }
 
 function EditContactModal({ open, onClose, contact }: { open: boolean; onClose: () => void; contact: Contact }) {

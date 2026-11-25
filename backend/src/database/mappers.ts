@@ -30,9 +30,18 @@ export const toConversation = (c: ConversationEntity): Conversation => {
 };
 
 export const toMessage = (m: MessageEntity): Message => {
-  const { seq, viewOnce, ...rest } = m; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { seq, viewOnce, hiddenFromTeam, ...rest } = m; // eslint-disable-line @typescript-eslint/no-unused-vars
   return clean({ ...rest, viewOnce: viewOnce || undefined }) as Message;
 };
+
+/** A contact as the customer themself gets it: the team-wide block is never shown to them. */
+export const toOwnContact = (c: ContactEntity): Contact => {
+  const { blockedAt, blockedBy, ...rest } = toContact(c); // eslint-disable-line @typescript-eslint/no-unused-vars
+  return rest;
+};
+
+/** Leaves out the messages that came from a contact while they were blocked (team views only). */
+export const teamVisible = <T extends Pick<MessageEntity, "hiddenFromTeam">>(list: T[]) => list.filter((m) => !m.hiddenFromTeam);
 
 /** Timer choices for disappearing messages (seconds): off, 24 hours, 7 days, 90 days — like WhatsApp. */
 export const DISAPPEAR_CHOICES = [0, 86_400, 604_800, 7_776_000];
@@ -67,7 +76,7 @@ export const toAssignment = (a: AssignmentEntity): Assignment =>
   clean({ resellerId: a.resellerId, assignedAt: a.assignedAt, assignedBy: a.assignedBy, outcome: a.outcome, respondedAt: a.respondedAt, reason: a.reason }) as Assignment;
 
 export const toRequest = (r: RequestEntity, assignments: AssignmentEntity[]): Request => {
-  const { feedbackRating, feedbackComment, contact, ...rest } = r; // eslint-disable-line @typescript-eslint/no-unused-vars
+  const { feedbackRating, feedbackComment, contact, hiddenFromTeam, ...rest } = r; // eslint-disable-line @typescript-eslint/no-unused-vars
   return clean({
     ...rest,
     assignments: assignments.map(toAssignment),

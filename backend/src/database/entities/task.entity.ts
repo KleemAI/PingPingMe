@@ -36,6 +36,8 @@ export class TaskEntity {
   /** pending | accepted | declined — own tasks are "accepted" */
   @Column({ type: "varchar", length: 10, default: "accepted" }) status: string;
   @Column({ name: "responded_at", ...TS_NULL }) respondedAt: number | null;
+  /** the owner turned this to-do's notifications off (it stays in the list) */
+  @Column({ default: false }) muted: boolean;
   /** last time it was marked done (repeating tasks move on instead of closing) — tells the giver */
   @Column({ name: "last_done_at", ...TS_NULL }) lastDoneAt: number | null;
   @Index() @Column({ default: false }) done: boolean;

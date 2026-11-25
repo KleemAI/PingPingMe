@@ -55,6 +55,10 @@ export default function More() {
       <Card title="Linked devices" icon="phone-portrait-outline">
         <Row title="Linked devices" subtitle="Phones and browsers signed in to your account" onPress={() => router.push("/devices")} />
       </Card>
+      <Card title="Privacy" icon="ban-outline">
+        <Row title="Blocked customers" subtitle={`${db.contacts.filter((x) => x.blockedAt).length} blocked from the team inbox`} right={chev} onPress={() => router.push("/blocked")} />
+        <Row title="Blocked contacts" subtitle="People you blocked in personal chats" right={chev} onPress={() => router.push("/people/blocked")} />
+      </Card>
       <Card title="Connection" icon="cloud-outline">
         <Row title="Server" subtitle={server || "same origin"} />
         <Row title="Channels" subtitle={db.settings.channels.map((ch) => `${ch.name}: ${ch.status.replace("_", " ")}`).join("\n")} />

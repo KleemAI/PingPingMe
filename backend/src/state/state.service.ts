@@ -11,7 +11,7 @@ import {
 } from "../database/entities";
 import {
   groupBy, toActivity, toCase, toCompany, toContact, toConversation, toMessage, toOrder, toQuote, toReminder, toRequest,
-  toProduct, toReseller, toSavedReply, toSettings, toUser, messagesFor } from "../database/mappers";
+  toProduct, toReseller, toSavedReply, toSettings, toUser, messagesFor, teamVisible } from "../database/mappers";
 import { UnitOfWork } from "../database/unit-of-work.service";
 import { CustomerService } from "../customer/customer.service";
 import { BroadcastsService } from "../broadcasts/broadcasts.service";
@@ -52,7 +52,7 @@ export class StateService {
       em.find(ConversationEntity, { order: { lastMessageAt: "DESC" } }),
       em.find(MessageEntity, { order: { createdAt: "ASC", seq: "ASC" } }),
       em.find(ResellerEntity, { order: { joinedAt: "ASC" } }),
-      em.find(RequestEntity, { order: { createdAt: "ASC" } }),
+      em.find(RequestEntity, { where: { hiddenFromTeam: false }, order: { createdAt: "ASC" } }),
       em.find(AssignmentEntity, { order: { seq: "ASC" } }),
       em.find(QuoteEntity, { order: { createdAt: "ASC" } }),
       em.find(QuoteRevisionEntity, { order: { rev: "ASC" } }),
@@ -83,7 +83,7 @@ export class StateService {
         companies: companies.map(toCompany),
         contacts: contacts.map(toContact),
         conversations: conversations.map(toConversation),
-        messages: messagesFor(messages, user),
+        messages: messagesFor(teamVisible(messages), user),
         resellers: resellers.map(toReseller),
         requests: requests.map((r) => toRequest(r, asg.get(r.id) ?? [])),
         quotes: quotes.map((q) => toQuote(q, revs.get(q.id) ?? [])),

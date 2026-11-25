@@ -19,7 +19,11 @@ const CHANNELS = ["whatsapp", "web", "email"];
  */
 @Injectable()
 export class InboundService {
-  async ingest(em: EntityManager, ev: InboundEvent): Promise<{ duplicate: boolean; conversationId?: string; messageId?: string }> {
+  /**
+   * `hidden`: the contact is blocked by the team — the message is stored hidden from the team (forever), the chat isn't
+   * reopened or bumped and nobody is notified. Callers then scope the live update away from the team.
+   */
+  async ingest(em: EntityManager, ev: InboundEvent): Promise<{ duplicate: boolean; conversationId?: string; messageId?: string; hidden?: boolean }> {
     if (!ev?.eventId || !ev.type) throw badRequest("eventId and type are required");
     const fresh: unknown[] = await em.query(
       `INSERT INTO processed_events(event_id, at) VALUES ($1, now()) ON CONFLICT DO NOTHING RETURNING event_id`,
@@ -50,19 +54,23 @@ export class InboundService {
       contact = em.create(ContactEntity, { id: newId("ct"), name: ev.name?.trim() || phone, phone, phoneDigits: digits(phone), type: "customer", createdAt: now });
       await em.save(contact);
     }
+    const hidden = !!contact.blockedAt;
     let conv = await em.findOne(ConversationEntity, { where: { contactId: contact.id, channel }, order: { lastMessageAt: "DESC" } });
     if (!conv) {
       conv = em.create(ConversationEntity, { id: newId("cv"), contactId: contact.id, channel, status: "open", priority: "normal", labels: [], unread: 0, lastMessageAt: now, createdAt: now });
+      if (hidden) await em.save(conv);
     }
-    if (conv.status === "resolved" || conv.status === "waiting_customer") { conv.status = "open"; conv.resolvedAt = null; }
-    conv.unread += 1;
-    conv.lastMessageAt = now;
-    await em.save(conv);
+    if (!hidden) {
+      if (conv.status === "resolved" || conv.status === "waiting_customer") { conv.status = "open"; conv.resolvedAt = null; }
+      conv.unread += 1;
+      conv.lastMessageAt = now;
+      await em.save(conv);
+    }
     const messageId = newId("m");
     await em.insert(MessageEntity, {
       id: messageId, audience: "customer", conversationId: conv.id, direction: "in", authorName: contact.name, text,
-      attachments: [], externalId: ev.externalId ?? null, createdAt: now, expiresAt: expiryFor(conv, now),
+      attachments: [], externalId: ev.externalId ?? null, createdAt: now, expiresAt: expiryFor(conv, now), hiddenFromTeam: hidden,
     });
-    return { duplicate: false, conversationId: conv.id, messageId };
+    return { duplicate: false, conversationId: conv.id, messageId, ...(hidden ? { hidden } : {}) };
   }
 }
