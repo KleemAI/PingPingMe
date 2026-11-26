@@ -134,7 +134,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }} /* Android too: edge-to-edge windows no longer resize for the keyboard */>
         <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }} onPress={onClose} />
         <View style={{ backgroundColor: c.card, backgroundImage: g.sheen, borderTopLeftRadius: 26, borderTopRightRadius: 26, borderWidth: 1, borderBottomWidth: 0, borderColor: g.border, maxHeight: "88%", paddingBottom: insets.bottom + 10, boxShadow: "0px -10px 30px rgba(0,0,0,0.35)" }}>
           <View style={{ alignItems: "center", paddingTop: 8 }}><View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: c.borderStrong }} /></View>

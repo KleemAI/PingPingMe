@@ -23,6 +23,8 @@ export class PersonalChatEntity {
   /** A timer picked by someone the other person has blocked: applies to their own view and sends only, never to the blocker. */
   @Column({ name: "hidden_disappear_by", type: "varchar", length: 40, nullable: true }) hiddenDisappearBy: string | null;
   @Column({ name: "hidden_disappear_seconds", type: "int", nullable: true }) hiddenDisappearSeconds: number | null;
+  /** pinned messages, newest first (at most 3, like WhatsApp) — everyone in the chat sees them */
+  @Column({ type: "text", array: true, default: () => "'{}'" }) pinned: string[];
 }
 
 @Entity("personal_messages")
@@ -43,6 +45,12 @@ export class PersonalMessageEntity {
   @Column({ name: "viewed_by", type: "varchar", length: 40, nullable: true }) viewedBy: string | null;
   /** sent while the recipient had blocked the author: the recipient never sees it, not even after unblocking */
   @Column({ name: "hidden_for_recipient", default: false }) hiddenForRecipient: boolean;
+  /** WhatsApp-style: the message this one answers (same chat) and "Forwarded" */
+  @Column({ name: "reply_to", type: "varchar", length: 40, nullable: true }) replyTo: string | null;
+  @Column({ default: false }) forwarded: boolean;
+  /** Edit (own text, within EDIT_WINDOW) and "Delete for everyone" (own, within EDIT_WINDOW: the content is wiped) */
+  @Column({ name: "edited_at", ...TS_NULL }) editedAt: number | null;
+  @Column({ name: "deleted_at", ...TS_NULL }) deletedAt: number | null;
 }
 
 /**
@@ -66,6 +74,8 @@ export class GroupChatEntity {
    * stale entity never overwrites it). Spares a count(*) over up to 200,000 rows per GET /people. NULL = not counted yet.
    */
   @Column({ name: "member_count", type: "int", nullable: true, update: false }) memberCount: number | null;
+  /** pinned messages, newest first (at most 3, like WhatsApp) — everyone in the chat sees them */
+  @Column({ type: "text", array: true, default: () => "'{}'" }) pinned: string[];
 }
 
 /** Communities (like WhatsApp): groups under one roof, with an announcement group for everyone in them. */
@@ -115,6 +125,12 @@ export class GroupMessageEntity {
   @Column({ type: "jsonb", default: () => "'{}'" }) views: Record<string, number>;
   /** view once: how many members opened it (one row each in group_message_views) */
   @Column({ type: "int", default: 0 }) opened: number;
+  /** WhatsApp-style: the message this one answers (same chat) and "Forwarded" */
+  @Column({ name: "reply_to", type: "varchar", length: 40, nullable: true }) replyTo: string | null;
+  @Column({ default: false }) forwarded: boolean;
+  /** Edit (own text, within EDIT_WINDOW) and "Delete for everyone" (own, within EDIT_WINDOW: the content is wiped) */
+  @Column({ name: "edited_at", ...TS_NULL }) editedAt: number | null;
+  @Column({ name: "deleted_at", ...TS_NULL }) deletedAt: number | null;
 }
 
 /** View once in a group: each member may open it one time (a row each — up to 200,000 per message). */
@@ -135,4 +151,23 @@ export class BlockEntity {
   @Column({ name: "created_at", ...TS }) createdAt: number;
   /** the blocker's read receipt in their chat at the moment of the block (frozen for the blocked person) */
   @Column({ name: "read_at", ...TS_NULL }) readAt: number | null;
+}
+
+/** Starred messages (personal chats and groups): only for the person who starred them. */
+@Entity("starred_messages")
+export class StarredMessageEntity {
+  @PrimaryColumn({ name: "user_id", type: "varchar", length: 40 }) userId: string;
+  @PrimaryColumn({ name: "message_id", type: "varchar", length: 40 }) messageId: string;
+  /** "pm" (personal chat) | "group" */
+  @Column({ type: "varchar", length: 10 }) kind: string;
+  @Column({ name: "chat_id", type: "varchar", length: 40 }) chatId: string;
+  @Column({ name: "starred_at", ...TS }) starredAt: number;
+}
+
+/** "Delete for me": a message one person removed from their own view of a personal chat or group. */
+@Entity("message_hides")
+export class HiddenMessageEntity {
+  @PrimaryColumn({ name: "user_id", type: "varchar", length: 40 }) userId: string;
+  @PrimaryColumn({ name: "message_id", type: "varchar", length: 40 }) messageId: string;
+  @Column({ name: "hidden_at", ...TS }) hiddenAt: number;
 }

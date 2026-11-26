@@ -75,7 +75,7 @@ export async function devicesOf(userIds: string[], api: Api): Promise<Record<str
 const opened = new Map<string, E2EBody | null>();
 export function openMessage(id: string, e: E2EEnvelope, me: MyDevice | null): E2EBody | null {
   if (!me) return null;
-  const k = `${me.id}:${id}`;
+  const k = `${me.id}:${id}:${e.nonce}`; // an edited message has a new envelope (new nonce)
   if (!opened.has(k)) opened.set(k, decryptMessage(e, me));
   return opened.get(k) ?? null;
 }
@@ -88,7 +88,8 @@ export function filesOf(body: E2EBody | null, server: Attachment[]): Attachment[
 }
 export const LOCKED_TEXT = "🔒 Waiting for this message. It was encrypted before this phone was set up, so it can't be opened here.";
 /** Text of a chat message for lists and bubbles — encrypted ones are opened on this phone. */
-export function msgText(m: { id: string; text: string; e2e?: E2EEnvelope }, dev: MyDevice | null) {
+export function msgText(m: { id: string; text: string; e2e?: E2EEnvelope; deleted?: boolean }, dev: MyDevice | null) {
+  if (m.deleted) return "🚫 This message was deleted";
   if (!m.e2e) return m.text;
   const b = openMessage(m.id, m.e2e, dev);
   return b ? b.text : dev ? LOCKED_TEXT : "🔒 Encrypted message";
@@ -156,6 +157,59 @@ export function useDecryptedUri(a: Attachment): string | null | undefined {
     return () => { live = false; };
   }, [a.id, a.e2e?.key]); // eslint-disable-line react-hooks/exhaustive-deps
   return uri;
+}
+
+/** The bytes of a file on the server, as stored (still encrypted for an encrypted file). */
+async function serverBytes(id: string, server: string, token: string | null): Promise<Uint8Array | null> {
+  const url = `${server.replace(/\/$/, "")}/api/v1/files/${id}`;
+  if (Platform.OS === "web") {
+    const r = await fetch(url, { headers: { Authorization: `Bearer ${token ?? ""}` } });
+    return r.ok ? new Uint8Array(await r.arrayBuffer()) : null;
+  }
+  const tmp = new File(Paths.cache, `fwd-${id}.bin`);
+  if (tmp.exists) tmp.delete();
+  const got = await File.createDownloadTask(url, tmp, { headers: { Authorization: `Bearer ${token ?? ""}` } }).downloadAsync();
+  if (!got) return null;
+  const bytes = await tmp.bytes();
+  tmp.delete();
+  return bytes;
+}
+
+async function uploadBytes(bytes: Uint8Array, name: string, type: string, api: Api): Promise<string> {
+  const fd = new FormData();
+  if (Platform.OS === "web") fd.append("file", new Blob([bytes as BlobPart], { type }), name);
+  else fd.append("file", formFile({ data: bytes }, name, type));
+  const res = await api("/api/v1/files", { method: "POST", body: fd });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(out.error ?? "Upload failed");
+  return out.id as string;
+}
+
+/**
+ * Forwarding a file into a chat of the other kind: a plain file going into an encrypted chat is encrypted on this phone
+ * (a new upload), and an encrypted file going into a chat that isn't encrypted (a large group) is opened here and sent plain.
+ */
+export async function convertForForward(a: Attachment, encrypt: boolean, api: Api, server: string, token: string | null): Promise<Attachment> {
+  const stored = await serverBytes(a.id, server, token);
+  if (!stored) throw new Error(`Couldn't open ${a.name}`);
+  if (encrypt) {
+    const { data, key, nonce } = encryptFile(stored);
+    return { id: await uploadBytes(data, "encrypted.bin", E2E_MIME, api), name: a.name, size: stored.length, mime: a.mime, e2e: { key, nonce } };
+  }
+  const plain = a.e2e ? decryptFile(stored, a.e2e.key, a.e2e.nonce) : stored;
+  if (!plain) throw new Error(`Couldn't open ${a.name}`);
+  return { id: await uploadBytes(plain, a.name, a.mime, api), name: a.name, size: plain.length, mime: a.mime };
+}
+
+/** Seal a message for these people now (forwarding into another chat). null = not all of them can get encrypted messages. */
+export async function sealTo(meId: string, people: string[], body: E2EBody, api: Api, session = ""): Promise<E2EEnvelope | null> {
+  const others = [...new Set(people)].filter((x) => x && x !== meId);
+  if (!others.length || others.length > E2E_GROUP_LIMIT) return null;
+  const me = await myDevice(meId, api, session);
+  if (!me) return null;
+  const k = await devicesOf([meId, ...others], api);
+  if (!k || !others.every((id) => (k[id]?.length ?? 0) > 0)) return null;
+  return encryptMessage(body, me, Object.values(k).flat());
 }
 
 /** Encryption for one chat — see the web version (lib/client/e2e.ts). Pass [] for a large group (not encrypted, no key fetch). */

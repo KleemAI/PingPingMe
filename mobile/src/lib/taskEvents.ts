@@ -46,7 +46,7 @@ export function useTaskEvents(userId: string | undefined, tasks: Task[] | undefi
       const one = events.length === 1 ? events[0] : { title: `📋 ${events.length} to-do updates`, body: events.map((e) => `${e.title} — ${e.body.split("\n")[0]}`).slice(0, 6).join("\n") };
       await Notifications.scheduleNotificationAsync({
         content: {
-          title: one.title, body: one.body, sound: "default",
+          title: one.title, body: one.body, sound: true,
           data: { planId: `event-${since.current}`, kind: "event", title: one.title, message: one.body },
           priority: Notifications.AndroidNotificationPriority.HIGH, color: "#2f7fe0",
         },

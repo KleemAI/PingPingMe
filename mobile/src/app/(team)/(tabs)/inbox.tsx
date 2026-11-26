@@ -6,7 +6,7 @@ import { membersLabel, usePersonalChats } from "@/lib/people";
 import { Ionicons } from "@expo/vector-icons";
 import { useTeam } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
-import type { ContactType, Conversation, GroupChat } from "@/lib/types";
+import type { ContactType, Conversation, GroupChat, PersonalChat } from "@/lib/types";
 import { CONV_STATUS, PRIORITY, isUnanswered, listTime } from "@/lib/format";
 import { Avatar, Chips, Empty, Input, Button, Pill, SearchBar, Sheet, StatusPill, T } from "@/components/ui";
 import { Ticks } from "@/components/Thread";
@@ -58,7 +58,7 @@ export default function Inbox() {
   // people found by the search who have no chat yet (contacts and app customers)
   const fresh = useMemo(() => newChatCandidates(db, kind, term), [db, kind, term]);
   // group chats live in the Customer inbox too (customers and the team together)
-  const { groups } = usePersonalChats();
+  const { chats: personal, groups } = usePersonalChats();
   const { me: myDev } = useE2E(me.id, []); // last line of encrypted groups
   // search filter chips: All · Business · Personal · Groups · Community · P2P
   const [stype, setStype] = useState<SearchType>("all");
@@ -69,8 +69,15 @@ export default function Inbox() {
   const shownGroups = kind !== "customer" || (searchingNow && stype === "business") ? [] : groups.filter((g) => term.text
     ? fuzzyScore(term.text, g.name) >= 0.55 || g.members.some((m) => fuzzyScore(term.text, m.name) >= 0.6) /* large groups list only a page of members */
     : filter === "open" || filter === "all" || (filter === "unread" && g.unread > 0));
-  type Item = { id: string; at: number; cv?: Conversation; g?: GroupChat };
-  const rows: Item[] = [...list.map((cv) => ({ id: cv.id, at: cv.lastMessageAt, cv })), ...shownGroups.map((g) => ({ id: g.id, at: g.lastMessageAt, g }))].sort((a, b) => b.at - a.at);
+  // personal chats too, like WhatsApp: one list, the latest chat on top (a search finds people through the results below)
+  const shownChats = kind !== "customer" || term.text ? [] : (personal ?? []).filter((pc) => pc.messages.length > 0 &&
+    (filter === "open" || filter === "all" || (filter === "unread" && pc.unread > 0)));
+  type Item = { id: string; at: number; cv?: Conversation; g?: GroupChat; pc?: PersonalChat };
+  const rows: Item[] = [
+    ...list.map((cv) => ({ id: cv.id, at: cv.lastMessageAt, cv })),
+    ...shownGroups.map((g) => ({ id: g.id, at: g.lastMessageAt, g })),
+    ...shownChats.map((pc) => ({ id: pc.id, at: pc.lastMessageAt, pc })),
+  ].sort((a, b) => b.at - a.at);
   const [starting, setStarting] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const startChat = async (n: NewChat) => {
@@ -148,6 +155,26 @@ export default function Inbox() {
           </View>
         ) : undefined}
         renderItem={({ item }) => {
+          if (item.pc) {
+            const pc = item.pc;
+            const last = pc.messages.at(-1);
+            return (
+              <Pressable onPress={() => router.push({ pathname: "/people/[id]", params: { id: pc.id } })} style={({ pressed }) => ({ flexDirection: "row", gap: 12, paddingLeft: 14, backgroundColor: pressed ? c.card2 : c.card })}>
+                <View style={{ paddingVertical: 10 }}><Avatar name={pc.with.name} size={50} /></View>
+                <View style={{ flex: 1, paddingVertical: 10, paddingRight: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: c.border, gap: 2 }}>
+                  <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+                    <T size={16} numberOfLines={1} style={{ flex: 1 }}>{pc.with.name}</T>
+                    <T size={12} color={pc.unread ? c.accent : c.muted} weight={pc.unread ? "600" : "400"}>{listTime(pc.lastMessageAt)}</T>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <T size={14} muted numberOfLines={1} style={{ flex: 1 }}>{last ? `${last.authorId === me.id ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : msgText(last, myDev) ? plain(msgText(last, myDev)) : "📎 Attachment"}` : ""}</T>
+                    {pc.unread > 0 && <View style={{ backgroundColor: c.accent, borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}><T size={11} color="#fff" weight="700">{pc.unread}</T></View>}
+                  </View>
+                  <T size={11.5} muted>{pc.with.role === "team" ? "Personal · our team" : "Personal"}</T>
+                </View>
+              </Pressable>
+            );
+          }
           if (item.g) {
             const g = item.g;
             const last = g.messages.at(-1);
@@ -185,7 +212,7 @@ export default function Inbox() {
                 {co && <T size={12.5} muted numberOfLines={1}>{ct.name}{ct.designation ? ` · ${ct.designation}` : ""}</T>}
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                   {failed(cv) ? <Ionicons name="alert-circle" size={14} color={c.danger} /> : last?.direction === "out" && last.audience === "customer" ? <Ticks m={last} size={15} /> : null}
-                  <T size={14} muted numberOfLines={1} style={{ flex: 1 }}>{last?.audience === "internal" ? `📝 ${plain(last.text)}` : last ? plain(last.text) : ""}</T>
+                  <T size={14} muted numberOfLines={1} style={{ flex: 1 }}>{last?.deleted ? "🚫 This message was deleted" : last?.audience === "internal" ? `📝 ${plain(last.text)}` : last ? plain(last.text) : ""}</T>
                   {cv.unread > 0 && <View style={{ backgroundColor: c.accent, borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}><T size={11} color="#fff" weight="700">{cv.unread}</T></View>}
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 }}>

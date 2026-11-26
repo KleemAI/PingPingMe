@@ -73,6 +73,7 @@ export class StateService {
     const oh = groupBy(orderHistory, (h) => h.orderId);
     const ev = groupBy(evidence, (e) => e.caseId);
     const ch = groupBy(caseHistory, (h) => h.caseId);
+    const hiddenForMe = new Set(((await em.query(`SELECT message_id FROM message_hides WHERE user_id = $1`, [user.id])) as { message_id: string }[]).map((r) => r.message_id));
     return {
       scope: "team",
       me: user,
@@ -83,7 +84,8 @@ export class StateService {
         companies: companies.map(toCompany),
         contacts: contacts.map(toContact),
         conversations: conversations.map(toConversation),
-        messages: messagesFor(teamVisible(messages), user),
+        // "Delete for me" leaves only this person's view
+        messages: messagesFor(teamVisible(messages).filter((m) => !hiddenForMe.has(m.id)), user),
         resellers: resellers.map(toReseller),
         requests: requests.map((r) => toRequest(r, asg.get(r.id) ?? [])),
         quotes: quotes.map((q) => toQuote(q, revs.get(q.id) ?? [])),

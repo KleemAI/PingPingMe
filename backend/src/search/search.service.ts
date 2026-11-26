@@ -90,7 +90,9 @@ export class SearchService {
       const rows: { id: string; conversation_id: string; text: string; created_at: Date }[] = await em.query(
         `SELECT id, conversation_id, text, created_at FROM messages
           WHERE conversation_id IS NOT NULL AND audience IN ('customer','internal') AND NOT hidden_from_team AND lower(text) LIKE $1
-            AND (expires_at IS NULL OR expires_at > now()) ORDER BY created_at DESC LIMIT 20`, [like(q)]);
+            AND (expires_at IS NULL OR expires_at > now()) AND deleted_at IS NULL
+            AND NOT EXISTS (SELECT 1 FROM message_hides h WHERE h.user_id = $2 AND h.message_id = messages.id)
+          ORDER BY created_at DESC LIMIT 20`, [like(q), user.id]);
       for (const r of rows) {
         const c = convs.find((x) => x.id === r.conversation_id);
         const contact = c && ct.get(c.contactId);
@@ -139,7 +141,8 @@ export class SearchService {
     }
     const rows: { id: string; chat_id: string; text: string; created_at: Date }[] = await this.em.query(
       `SELECT id, chat_id, text, created_at FROM personal_messages WHERE chat_id = ANY($1) AND NOT view_once AND lower(text) LIKE $2
-          AND (expires_at IS NULL OR expires_at > now()) AND NOT (hidden_for_recipient AND author_id <> $3)
+          AND (expires_at IS NULL OR expires_at > now()) AND NOT (hidden_for_recipient AND author_id <> $3) AND deleted_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM message_hides h WHERE h.user_id = $3 AND h.message_id = personal_messages.id)
         ORDER BY created_at DESC LIMIT 20`, [chats.map((c) => c.id), like(q), user.id]);
     for (const r of rows) {
       const c = chats.find((x) => x.id === r.chat_id)!;
@@ -162,7 +165,9 @@ export class SearchService {
     const joined = new Map(mine.map((m) => [m.groupId, m.joinedAt]));
     const rows: { id: string; group_id: string; text: string; created_at: Date }[] = await this.em.query(
       `SELECT id, group_id, text, created_at FROM group_messages WHERE group_id = ANY($1) AND NOT view_once AND NOT system AND lower(text) LIKE $2
-          AND (expires_at IS NULL OR expires_at > now()) ORDER BY created_at DESC LIMIT 40`, [[...joined.keys()], like(q)]);
+          AND (expires_at IS NULL OR expires_at > now()) AND deleted_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM message_hides h WHERE h.user_id = $3 AND h.message_id = group_messages.id)
+        ORDER BY created_at DESC LIMIT 40`, [[...joined.keys()], like(q), user.id]);
     for (const r of rows) {
       const at = new Date(r.created_at).getTime();
       if (at < (joined.get(r.group_id) ?? 0)) continue; // only messages from when you joined

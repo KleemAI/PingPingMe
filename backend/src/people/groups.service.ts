@@ -10,7 +10,7 @@ import { UnitOfWork, type Tx } from "../database/unit-of-work.service";
 import { disappearLabel, expiryFor, viewOnceFlag } from "../conversations/disappearing";
 import { FilesService } from "../files/files.service";
 import { PushService, preview } from "../push/push.service";
-import { canChat, whoBlocked } from "./people.service";
+import { MAX_PINS, canChat, whoBlocked } from "./people.service";
 
 /** Like Telegram: groups of up to 200,000 people. */
 export const MAX_GROUP_MEMBERS = 200_000;
@@ -39,6 +39,7 @@ type MemberRow = { group_id: string; user_id: string; role: string; joined_at: D
 type MessageRow = {
   id: string; group_id: string; author_id: string; text: string; attachments: Attachment[]; system: boolean; created_at: Date; seq: string;
   expires_at: Date | null; view_once: boolean; e2e: E2EEnvelope | null; viewed_at: Date | null; opened: number | null;
+  reply_to: string | null; forwarded: boolean; edited_at: Date | null; deleted_at: Date | null;
 };
 const ms = (d: Date | string) => new Date(d).getTime();
 const chunks = <T>(xs: T[], n: number) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
@@ -112,12 +113,14 @@ export class GroupsService implements OnModuleInit {
     const count = await memberCounts(em, groups);
     const large = ids.filter((id) => (count.get(id) ?? 0) > E2E_GROUP_LIMIT);
     const small = ids.filter((id) => (count.get(id) ?? 0) <= E2E_GROUP_LIMIT);
-    const msgCols = `m.id, m.group_id, m.author_id, m.text, m.attachments, m.system, m.created_at, m.seq, m.expires_at, m.view_once,
+    const msgCols = `m.id, m.group_id, m.author_id, m.text, m.attachments, m.system, m.created_at, m.seq, m.expires_at, m.view_once, m.reply_to, m.forwarded, m.edited_at, m.deleted_at,
         CASE WHEN m.e2e IS NOT NULL THEN (m.e2e - 'keys') || jsonb_build_object('keys',
           CASE WHEN m.e2e -> 'keys' ? $3::text THEN jsonb_build_object($3::text, m.e2e -> 'keys' -> $3::text) ELSE '{}'::jsonb END) END AS e2e,
         CASE WHEN m.view_once THEN (SELECT v.viewed_at FROM group_message_views v WHERE v.message_id = m.id AND v.user_id = $1::text) END AS viewed_at,
         CASE WHEN m.view_once THEN m.opened END AS opened`;
-    const msgWhere = `m.group_id = me.group_id AND m.created_at >= me.joined_at AND (m.expires_at IS NULL OR m.expires_at > now())`;
+    // "Delete for me" (message_hides) leaves only your view
+    const msgWhere = `m.group_id = me.group_id AND m.created_at >= me.joined_at AND (m.expires_at IS NULL OR m.expires_at > now())
+        AND NOT EXISTS (SELECT 1 FROM message_hides h WHERE h.user_id = $1::text AND h.message_id = m.id)`;
     const [members, messages, unread] = await Promise.all([
       em.query(
         `SELECT group_id, user_id, role, joined_at FROM group_members WHERE group_id = ANY($1)
@@ -167,6 +170,7 @@ export class GroupsService implements OnModuleInit {
         unread: unreadOf.get(g.id) ?? 0,
         memberCount, large: memberCount > E2E_GROUP_LIMIT || undefined,
         members: (membersOf.get(g.id) ?? []).map((m) => toMember(m.user_id, m.role, who.get(m.user_id))),
+        pinned: g.pinned?.length ? g.pinned.filter((id) => (messagesOf.get(g.id) ?? []).some((m) => m.id === id)) : undefined,
         messages: (messagesOf.get(g.id) ?? []).map((m) => {
           const mineMsg = m.author_id === user.id;
           const viewedAt = m.viewed_at ? ms(m.viewed_at) : undefined;
@@ -177,6 +181,8 @@ export class GroupsService implements OnModuleInit {
             attachments: m.view_once && (mineMsg || viewedAt) ? [] : m.attachments,
             viewedAt, opened: m.view_once ? Number(m.opened ?? 0) : undefined,
             e2e: m.e2e ?? undefined,
+            replyTo: m.reply_to ?? undefined, forwarded: m.forwarded || undefined,
+            editedAt: m.edited_at ? ms(m.edited_at) : undefined, deleted: m.deleted_at ? true : undefined,
           };
         }),
       };
@@ -354,7 +360,10 @@ export class GroupsService implements OnModuleInit {
       const c = await tx.em.findOne(CommunityEntity, { where: { id: g.communityId ?? "" } });
       if (!c?.admins.includes(tx.user.id)) throw forbidden("Only community admins can post announcements");
     }
+    const forwarded = p.forwarded === true;
+    // forwarded files were copied first (file.forward), so they are attached like new uploads
     const attachments = await this.files.attachments(tx, p.attachments);
+    const replyTo = await this.replyTarget(tx, g.id, me.joinedAt, p.replyTo);
     // end-to-end encrypted: the server keeps only what it can't read — except in large groups (> E2E_GROUP_LIMIT members)
     const e2e = readEnvelope(p.e2e);
     const size = (await memberCounts(tx.em, [g])).get(g.id) ?? 0;
@@ -365,10 +374,10 @@ export class GroupsService implements OnModuleInit {
     const text = e2e ? "" : optStr(p.text, MAX_MESSAGE) ?? "";
     if (!e2e && !text && !attachments.length) throw badRequest("Type a message or attach a file");
     const now = Date.now();
-    const viewOnce = viewOnceFlag(p.viewOnce, attachments);
+    const viewOnce = !forwarded && viewOnceFlag(p.viewOnce, attachments);
     await tx.em.insert(GroupMessageEntity, {
       id: newId("gm"), groupId: g.id, authorId: tx.user.id, text, attachments, system: false, createdAt: now,
-      expiresAt: expiryFor(g, now), viewOnce, views: {}, e2e,
+      expiresAt: expiryFor(g, now), viewOnce, views: {}, e2e, replyTo, forwarded,
     });
     g.lastMessageAt = now;
     await tx.em.save(g);
@@ -377,6 +386,30 @@ export class GroupsService implements OnModuleInit {
     tx.onlyGroup(g.id);
     this.push.notifyGroup(tx, g.id, { title: g.name, body: `${tx.user.name}: ${e2e ? lockedPreview(attachments.length) : preview(text, attachments, viewOnce)}`, data: { type: "group", id: g.id } });
     return g.id;
+  }
+
+  /** the message a reply answers: in this group, sent after you joined, not a notice, not gone */
+  private async replyTarget(tx: Tx, groupId: string, joinedAt: number, id: unknown) {
+    if (id === undefined || id === null || id === "") return null;
+    const m = await tx.em.findOne(GroupMessageEntity, { where: { id: str(id, "replyTo", 40), groupId } });
+    if (!m || m.system || m.createdAt < joinedAt || (m.expiresAt && m.expiresAt <= Date.now())) throw notFound("The message you're replying to");
+    return m.id;
+  }
+
+  /** group.pin { groupId, messageId, on } — pin / unpin for everyone (at most 3). Anyone who can post in the group may pin. */
+  async pin(tx: Tx, p: Payload) {
+    const { g, me } = await this.membership(tx, p.groupId);
+    if (g.announcement) {
+      const c = await tx.em.findOne(CommunityEntity, { where: { id: g.communityId ?? "" } });
+      if (!c?.admins.includes(tx.user.id)) throw forbidden("Only community admins can pin here");
+    }
+    const m = await tx.em.findOne(GroupMessageEntity, { where: { id: str(p.messageId, "messageId", 40), groupId: g.id } });
+    if (!m || m.system || m.createdAt < me.joinedAt) throw notFound("Message");
+    const rest = (g.pinned ?? []).filter((x) => x !== m.id);
+    g.pinned = p.on === false ? rest : [m.id, ...rest].slice(0, MAX_PINS);
+    await tx.em.save(g);
+    tx.onlyGroup(g.id);
+    return g.pinned;
   }
 
   /** group.read { groupId } */

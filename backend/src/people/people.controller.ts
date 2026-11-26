@@ -12,8 +12,8 @@ export class PeopleController {
 
   /** Your personal chats, your groups and communities, and the people you blocked (only your own list). */
   @Get() async list(@CurrentUser() u: User, @CurrentSession() sid?: string) {
-    const [{ chats, blocked }, groups, communities] = await Promise.all([this.people.list(u), this.groups.list(u, sid), this.communities.list(u)]);
-    return { chats, groups, communities, blocked };
+    const [{ chats, blocked }, groups, communities, starred] = await Promise.all([this.people.list(u), this.groups.list(u, sid), this.communities.list(u), this.people.starred(u)]);
+    return { chats, groups, communities, blocked, starred };
   }
 
   @Get("search") search(@CurrentUser() u: User, @Query("q") q?: string) { return this.people.search(u, q); }

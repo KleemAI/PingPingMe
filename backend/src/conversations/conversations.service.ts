@@ -1,7 +1,8 @@
 import { Injectable } from "@nestjs/common";
 import { PushService, preview } from "../push/push.service";
 import type { Attachment } from "../common/contract";
-import { badRequest, conflict, AppError } from "../common/errors";
+import { badRequest, conflict, forbidden, notFound, AppError } from "../common/errors";
+import { MAX_PINS, windowOver } from "../people/people.service";
 import { PRIORITIES, Payload, need, newId, oneOf, optStr, str, MAX_MESSAGE } from "../common/util";
 import { AuditService } from "../audit/audit.service";
 import { FilesService } from "../files/files.service";
@@ -33,7 +34,7 @@ export class ConversationsService {
    * Queue an outgoing customer-facing message. It is handed to the channel after the transaction commits.
    * Used by replies, quotes and order updates — the only path for anything that reaches a customer.
    */
-  async postToCustomer(tx: Tx, conversationId: string, text: string, attachments: Attachment[] = [], chat?: { viewOnce?: boolean }) {
+  async postToCustomer(tx: Tx, conversationId: string, text: string, attachments: Attachment[] = [], chat?: { viewOnce?: boolean; replyTo?: string | null }) {
     const conv = need(await tx.em.findOne(ConversationEntity, { where: { id: conversationId } }), "Conversation");
     refuseIfBlocked(await tx.em.findOne(ContactEntity, { where: { id: conv.contactId } }));
     const now = Date.now();
@@ -42,7 +43,7 @@ export class ConversationsService {
       id, audience: "customer", conversationId, direction: "out", authorId: tx.user.id, authorName: tx.user.name,
       text, attachments, status: "queued", retries: 0, createdAt: now,
       // only real chat messages follow the disappearing timer — quotes and order updates are records and stay
-      expiresAt: chat ? expiryFor(conv, now) : null, viewOnce: !!chat?.viewOnce,
+      expiresAt: chat ? expiryFor(conv, now) : null, viewOnce: !!chat?.viewOnce, replyTo: chat?.replyTo ?? null, fromChat: !!chat,
     });
     conv.lastMessageAt = now;
     conv.firstResponseAt ??= now;
@@ -62,15 +63,97 @@ export class ConversationsService {
     // a picture, document or voice note may go without text
     const text = attachments.length ? optStr(p.text, MAX_MESSAGE) ?? "" : str(p.text, "Message", MAX_MESSAGE);
     const conversationId = str(p.conversationId, "conversationId", 40);
+    const replyTo = await this.replyTarget(tx, conversationId, p.replyTo, audience);
     if (audience === "internal") {
       need(await tx.em.findOne(ConversationEntity, { where: { id: conversationId } }), "Conversation");
       await tx.em.insert(MessageEntity, {
         id: newId("m"), audience: "internal", conversationId, direction: "out", authorId: tx.user.id, authorName: tx.user.name,
-        text, attachments, createdAt: Date.now(),
+        text, attachments, createdAt: Date.now(), replyTo,
       });
       return null;
     }
-    return this.postToCustomer(tx, conversationId, text, attachments, { viewOnce: viewOnceFlag(p.viewOnce, attachments) });
+    return this.postToCustomer(tx, conversationId, text, attachments, { viewOnce: viewOnceFlag(p.viewOnce, attachments), replyTo });
+  }
+
+  /**
+   * The message a reply answers: same conversation, one the team can see. A reply to the customer may only quote what
+   * the customer can see too (never an internal note).
+   */
+  private async replyTarget(tx: Tx, conversationId: string, id: unknown, audience: "customer" | "internal") {
+    if (id === undefined || id === null || id === "") return null;
+    const m = await tx.em.findOne(MessageEntity, { where: { id: str(id, "replyTo", 40), conversationId } });
+    const gone = !m || m.hiddenFromTeam || m.audience === "reseller" || (m.expiresAt && m.expiresAt <= Date.now());
+    if (gone || (audience === "customer" && m.audience !== "customer")) throw notFound("The message you're replying to");
+    return m.id;
+  }
+
+  /** msg.edit for the inbox: your own internal note, within 50 minutes. (Customer messages already went out on their channel.) */
+  async editNote(tx: Tx, p: Payload) {
+    const m = await this.ownNote(tx, p.messageId);
+    const what = m.audience === "internal" ? "note" : "message";
+    if (m.deletedAt) throw badRequest(`This ${what} was deleted`);
+    if (windowOver(m.createdAt)) throw badRequest(`A ${what} can be edited only within 50 minutes of sending`);
+    if (!m.text.trim() || m.viewOnce || m.forwarded) throw badRequest(`This ${what} can't be edited`);
+    m.text = str(p.text, "Message", MAX_MESSAGE);
+    m.editedAt = Date.now();
+    await tx.em.save(m);
+    await this.audit.log(tx, "conversation", m.conversationId!, m.audience === "internal" ? "Edited an internal note" : "Edited a message to the customer");
+    return true;
+  }
+
+  /**
+   * msg.delete for the inbox: "for me" on any message, or "for everyone" on your own internal note or chat reply to an
+   * app customer (any time).
+   */
+  async deleteNote(tx: Tx, p: Payload) {
+    if (p.forEveryone !== true) {
+      // "Delete for me": any message the team sees, any time — it leaves only your view of the inbox
+      const m = await tx.em.findOne(MessageEntity, { where: { id: str(p.messageId, "messageId", 40) } });
+      if (!m || !m.conversationId || m.hiddenFromTeam || m.audience === "reseller") throw notFound("Message");
+      await tx.em.query(`INSERT INTO message_hides (user_id, message_id, hidden_at) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, [tx.user.id, m.id, new Date()]);
+      await tx.em.query(`DELETE FROM starred_messages WHERE user_id = $1 AND message_id = $2`, [tx.user.id, m.id]);
+      tx.onlyUsers(tx.user.id);
+      return true;
+    }
+    const m = await this.ownNote(tx, p.messageId);
+    if (m.deletedAt) return true;
+    // a business record: the text and files stay on the server for admins (audit), like disappeared messages —
+    // everyone else (the team, the customer's app) gets "This message was deleted" (messagesFor, FilesService.canSee)
+    m.deletedAt = Date.now();
+    await tx.em.save(m);
+    await tx.em.query(`UPDATE conversations SET pinned = array_remove(pinned, $2::varchar) WHERE id = $1 AND $2 = ANY(pinned)`, [m.conversationId, m.id]);
+    await tx.em.query(`DELETE FROM starred_messages WHERE message_id = $1`, [m.id]);
+    await this.audit.log(tx, "conversation", m.conversationId!, m.audience === "internal" ? "Deleted an internal note" : "Deleted a message to the customer");
+    return true;
+  }
+
+  /**
+   * A message of yours in the inbox that may change: an internal note, or a chat reply to an app / web-chat customer
+   * (their app shows the change). On WhatsApp or email it already sits on the customer's phone, so it can't.
+   */
+  private async ownNote(tx: Tx, id: unknown) {
+    const m = await tx.em.findOne(MessageEntity, { where: { id: str(id, "messageId", 40) } });
+    if (!m || !m.conversationId || m.hiddenFromTeam || m.audience === "reseller") throw notFound("Message");
+    if (m.audience === "customer") {
+      if (m.direction !== "out") throw badRequest("The customer's messages can't be edited or deleted");
+      const conv = need(await tx.em.findOne(ConversationEntity, { where: { id: m.conversationId } }), "Conversation");
+      if (conv.channel !== "web") throw badRequest("This message already went to the customer's WhatsApp — it can't be edited or deleted");
+      if (!m.fromChat) throw badRequest("Quotes, order updates and notices can't be edited or deleted");
+    }
+    if (m.authorId !== tx.user.id) throw forbidden("You can only change your own messages");
+    return m;
+  }
+
+  /** conv.pin { conversationId, messageId, on } — pin / unpin a message for the team (at most 3; the oldest pin drops off). */
+  async pin(tx: Tx, p: Payload) {
+    const conv = need(await tx.em.findOne(ConversationEntity, { where: { id: str(p.conversationId, "conversationId", 40) } }), "Conversation");
+    const m = await tx.em.findOne(MessageEntity, { where: { id: str(p.messageId, "messageId", 40), conversationId: conv.id } });
+    if (!m || m.hiddenFromTeam || m.audience === "reseller") throw notFound("Message");
+    if (p.on !== false && m.expiresAt && m.expiresAt <= Date.now()) throw notFound("Message");
+    const rest = (conv.pinned ?? []).filter((x) => x !== m.id);
+    conv.pinned = p.on === false ? rest : [m.id, ...rest].slice(0, MAX_PINS);
+    await tx.em.save(conv);
+    return conv.pinned;
   }
 
   /**
@@ -103,6 +186,7 @@ export class ConversationsService {
   /** conv.retry — re-send a failed message (optionally with corrected text). */
   async retry(tx: Tx, p: Payload) {
     const m = need(await tx.em.findOne(MessageEntity, { where: { id: String(p.messageId ?? ""), audience: "customer" } }), "Message");
+    if (m.deletedAt) throw conflict("This message was deleted");
     if (m.status !== "failed") throw conflict("Only failed messages can be retried");
     if ((m.retries ?? 0) >= 5) throw new AppError(429, "Retry limit reached");
     const conv = m.conversationId ? await tx.em.findOne(ConversationEntity, { where: { id: m.conversationId } }) : null;

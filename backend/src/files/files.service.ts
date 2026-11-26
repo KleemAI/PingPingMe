@@ -41,6 +41,9 @@ function looksLike(mime: string, b: Buffer) {
   }
 }
 
+/** Tables whose rows list files in an `attachments` jsonb array. */
+const USED_IN = ["personal_messages", "group_messages", "messages", "case_evidence", "p2p_messages"];
+
 @Injectable()
 export class FilesService {
   constructor(private readonly uow: UnitOfWork) {}
@@ -113,6 +116,13 @@ export class FilesService {
     // disappearing / view-once chat files: gone after the time runs out; a view-once file opens only for the person
     // who just tapped "Open" (message.open). Admins keep access for the audit trail.
     if (user.role !== "admin") {
+      // an inbox message deleted for everyone keeps its files for admins only (unless a live message uses the same file)
+      const deleted: { gone: boolean }[] = await em.query(
+        `SELECT EXISTS (SELECT 1 FROM messages WHERE deleted_at IS NOT NULL AND attachments @> $1::jsonb)
+            AND NOT EXISTS (SELECT 1 FROM messages WHERE deleted_at IS NULL AND attachments @> $1::jsonb) AS gone`,
+        [JSON.stringify([{ id: fileId }])],
+      );
+      if (deleted[0]?.gone) return false;
       const [g]: { view_once: boolean; viewed_at: Date | null; viewed_by: string | null; expires_at: Date | null }[] = await em.query(
         `SELECT view_once, viewed_at, viewed_by, expires_at FROM messages
           WHERE attachments @> $1::jsonb AND (view_once OR expires_at IS NOT NULL) LIMIT 1`,
@@ -140,7 +150,19 @@ export class FilesService {
       if (gg?.expires_at && new Date(gg.expires_at).getTime() <= now) return false;
       if (gg?.view_once) { const at = gg.viewed; return !!at && now - new Date(at).getTime() < VIEW_ONCE_WINDOW; }
     }
-    if (isTeam(user)) return true;
+    if (isTeam(user)) {
+      // the team sees the business files, but a file that is only in personal chats / groups is for the people of that
+      // chat (checked below), never for every team member who knows its id
+      const [w]: { private: boolean; business: boolean }[] = await em.query(
+        `SELECT (EXISTS (SELECT 1 FROM personal_messages WHERE attachments @> $1::jsonb)
+                 OR EXISTS (SELECT 1 FROM group_messages WHERE attachments @> $1::jsonb)) AS private,
+                (EXISTS (SELECT 1 FROM messages WHERE attachments @> $1::jsonb)
+                 OR EXISTS (SELECT 1 FROM case_evidence WHERE attachments @> $1::jsonb)
+                 OR EXISTS (SELECT 1 FROM p2p_messages WHERE attachments @> $1::jsonb)) AS business`,
+        [JSON.stringify([{ id: fileId }])],
+      );
+      if (!w?.private || w.business) return true;
+    }
     const own = await em.count(FileEntity, { where: { id: fileId, uploadedBy: user.id } });
     if (own) return true;
     // personal chats: the two people in the chat
@@ -204,6 +226,45 @@ export class FilesService {
       .createQueryBuilder(FileEntity, "f").addSelect("f.data").where("f.id = :id", { id }).getOne();
     if (!f || !f.data) throw notFound("File (demo attachments have no file)");
     return f;
+  }
+
+  /**
+   * Forwarding (WhatsApp style): files of a message you can open get their own copy for the new message, so the copy
+   * doesn't vanish with a disappearing original and opens for the people of the new chat. Encrypted files stay encrypted.
+   */
+  async forwardCopies(tx: Tx, ids: unknown): Promise<Attachment[]> {
+    if (!Array.isArray(ids) || !ids.length) return [];
+    if (ids.length > 10) throw badRequest("At most 10 attachments");
+    const out: Attachment[] = [];
+    for (const raw of ids) {
+      const fid = String(raw).slice(0, 40);
+      if (!(await this.canSee(tx.user, fid))) throw notFound("Attachment");
+      // like WhatsApp: a view-once photo / video is never copied (for anyone, admins included)
+      const once = JSON.stringify([{ id: fid }]);
+      const viewOnce: unknown[] = await tx.em.query(
+        `SELECT 1 FROM personal_messages WHERE view_once AND attachments @> $1::jsonb
+         UNION ALL SELECT 1 FROM group_messages WHERE view_once AND attachments @> $1::jsonb
+         UNION ALL SELECT 1 FROM messages WHERE view_once AND attachments @> $1::jsonb LIMIT 1`, [once]);
+      if (viewOnce.length) throw badRequest("View-once photos and videos can't be forwarded");
+      const id = newId("f");
+      const [row]: { name: string; size: number; mime: string }[] = await tx.em.query(
+        `INSERT INTO files (id, name, size, mime, data, uploaded_by, at)
+         SELECT $1, name, size, mime, data, $2, $3 FROM files WHERE id = $4 AND data IS NOT NULL
+         RETURNING name, size, mime`, [id, tx.user.id, new Date(), fid]);
+      if (!row) throw notFound("Attachment (file missing)");
+      out.push({ id, name: row.name, size: Number(row.size), mime: row.mime });
+    }
+    return out;
+  }
+
+  /**
+   * "Delete for everyone": remove these files of `userId` — but only the ones no message anywhere still uses
+   * (the same upload can be attached to more than one message).
+   */
+  async deleteUnused(tx: Tx, ids: string[], userId: string) {
+    if (!ids.length) return;
+    const unused = USED_IN.map((t) => `NOT EXISTS (SELECT 1 FROM ${t} x WHERE x.attachments @> jsonb_build_array(jsonb_build_object('id', f.id)))`).join(" AND ");
+    await tx.em.query(`DELETE FROM files f WHERE f.id = ANY($1::text[]) AND f.uploaded_by = $2 AND ${unused}`, [ids, userId]);
   }
 
   /** Turn attachment ids from a request body into attachment records. Resellers may only attach their own uploads. */

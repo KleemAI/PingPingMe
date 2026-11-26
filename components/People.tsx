@@ -8,11 +8,12 @@ import type { Attachment, Community, GroupChat, GroupMember, GroupMembersPage, M
 import { listTime } from "@/lib/format";
 import { plain } from "@/lib/chatFormat";
 import { Avatar, Button, Empty, Modal, inputCls, useClickAway } from "./ui";
-import { Composer, DisappearingPicker, MessageList, disappearLabel } from "./Thread";
+import { Composer, DisappearingPicker, MessageList, DELETED_TEXT, canDeleteOwn, canEditOwn, disappearLabel, snippet, usePendingEdits, type MessageTools } from "./Thread";
+import { Forward as ForwardIcon } from "lucide-react";
 import { CommunityInfo, NewCommunity } from "./Community";
 import { SearchChips, SearchResults, useGlobalSearch, type SearchHit, type SearchType } from "./GlobalSearch";
 import { fuzzyScore } from "@/lib/fuzzy";
-import { E2E_GROUP_LIMIT, LOCKED_TEXT, filesOf, openMessage, useE2E } from "@/lib/client/e2e";
+import { E2E_GROUP_LIMIT, LOCKED_TEXT, convertForForward, filesOf, openMessage, sealTo, useE2E } from "@/lib/client/e2e";
 import type { MyDevice } from "@/lib/e2eCore";
 import { ask } from "@/components/Confirm";
 
@@ -30,7 +31,8 @@ async function sealFor(e2e: ReturnType<typeof useE2E>, text: string, attachments
 }
 
 /** Text of a chat message for lists and bubbles — encrypted ones are opened on this device. */
-export function msgText(m: { id: string; text: string; e2e?: Parameters<typeof openMessage>[1] }, dev: MyDevice | null) {
+export function msgText(m: { id: string; text: string; e2e?: Parameters<typeof openMessage>[1]; deleted?: boolean }, dev: MyDevice | null) {
+  if (m.deleted) return `🚫 ${DELETED_TEXT}`;
   if (!m.e2e) return m.text;
   const b = openMessage(m.id, m.e2e, dev);
   return b ? b.text : dev ? LOCKED_TEXT : "🔒 Encrypted message";
@@ -46,23 +48,187 @@ export const isLargeGroup = (g: GroupChat) => !!g.large || memberCountOf(g) > E2
 export const LARGE_GROUP_TEXT = "Large group · messages are not end-to-end encrypted";
 
 /** Your personal chats and groups, refreshed whenever anything changes (live updates bump the state version). */
+/** The last /people answer for the signed-in person, so a chat opened again shows at once (not empty while it reloads). */
+let peopleCache: { who: string; d: Partial<PeoplePayload> } | null = null;
+
 export function usePersonalChats() {
   const { state } = useStore();
-  const [chats, setChats] = useState<PersonalChat[] | null>(null);
-  const [groups, setGroups] = useState<GroupChat[]>([]);
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [blocked, setBlocked] = useState<Person[]>([]); // people you blocked
+  const who = (state as { me?: { id: string } } | null)?.me?.id ?? "";
+  const cached = peopleCache && peopleCache.who === who ? peopleCache.d : null;
+  const [chats, setChats] = useState<PersonalChat[] | null>(cached?.chats ?? null);
+  const [groups, setGroups] = useState<GroupChat[]>(cached?.groups ?? []);
+  const [communities, setCommunities] = useState<Community[]>(cached?.communities ?? []);
+  const [blocked, setBlocked] = useState<Person[]>(cached?.blocked ?? []); // people you blocked
+  const [starred, setStarred] = useState<Set<string>>(() => new Set((cached?.starred ?? []).map((s) => s.messageId))); // messages you starred
   const version = versionOf(state);
   const load = useCallback(async () => {
     try {
       const r = await fetch("/api/people", { cache: "no-store" });
-      if (r.ok) { const d = await r.json() as Partial<PeoplePayload>; setChats(d.chats ?? []); setGroups(d.groups ?? []); setCommunities(d.communities ?? []); setBlocked(d.blocked ?? []); }
+      if (r.ok) {
+        const d = await r.json() as Partial<PeoplePayload>;
+        peopleCache = { who, d };
+        setChats(d.chats ?? []); setGroups(d.groups ?? []); setCommunities(d.communities ?? []); setBlocked(d.blocked ?? []);
+        setStarred(new Set((d.starred ?? []).map((s) => s.messageId)));
+      }
       else if (r.status === 404) setChats([]); // demo server without the backend
     } catch { /* offline: keep what we have */ }
-  }, []);
+  }, [who]);
   useEffect(() => { load(); }, [load, version]);
   const unread = (chats ?? []).reduce((n, c) => n + c.unread, 0) + groups.reduce((n, g) => n + g.unread, 0);
-  return { chats, groups, communities, blocked, reload: load, unread };
+  return { chats, groups, communities, blocked, starred, reload: load, unread };
+}
+
+/** Where a message can be forwarded: a personal chat or a group. */
+type ForwardTarget = { key: string; name: string; group: boolean; send: Record<string, unknown>; people: string[]; large: boolean; action: string; at: number; sub?: string };
+const MAX_FORWARD_CHATS = 5; // like WhatsApp
+const unreadable = (m: Message) => m.text === LOCKED_TEXT || m.text === "🔒 Encrypted message";
+
+/**
+ * Forward messages to up to 5 chats. Files get their own copy on the server (file.forward); encrypted chats get a new
+ * envelope sealed for the people there (an encrypted file keeps its key, the copy is the same ciphertext).
+ */
+async function forwardOne(m: Message, t: ForwardTarget, meId: string, act: ReturnType<typeof useStore>["act"]) {
+  // files of the same kind as the target chat get a server copy; the others are encrypted / opened here (convertForForward)
+  const filesFor = async (encrypt: boolean): Promise<Attachment[]> => {
+    const same = m.attachments.filter((a) => !!a.e2e === encrypt);
+    const copies = same.length ? (await act("file.forward", { ids: same.map((a) => a.id) })) as Attachment[] : [];
+    return Promise.all(m.attachments.map((a) => (!!a.e2e === encrypt ? { ...a, id: copies[same.indexOf(a)].id } : convertForForward(a, encrypt))));
+  };
+  // encrypted when everyone there can get encrypted messages (a large group never is)
+  if (!t.large && await sealTo(meId, t.people, { text: "", files: [] })) {
+    const files = await filesFor(true);
+    const env = await sealTo(meId, t.people, { text: m.text, files: files.map((a) => ({ id: a.id, key: a.e2e!.key, nonce: a.e2e!.nonce, name: a.name, mime: a.mime, size: a.size })) });
+    if (!env) throw new Error(`Couldn't encrypt for ${t.name} — try again`);
+    return act(t.action, { ...t.send, e2e: env, attachments: files.map((a) => a.id), forwarded: true });
+  }
+  // couldn't seal (they have no device key yet, or the key lookup failed): encrypted files stay encrypted — only a
+  // large group, which is never encrypted, gets them opened
+  if (!t.large && m.attachments.some((a) => a.e2e)) throw new Error(`Couldn't encrypt for ${t.name} — try again`);
+  const files = await filesFor(false);
+  return act(t.action, { ...t.send, text: m.text, ...(t.group ? { plain: true } : {}), attachments: files.map((a) => a.id), forwarded: true });
+}
+
+export function ForwardDialog({ msgs, meId, onClose }: { msgs: Message[]; meId: string; onClose: () => void }) {
+  const { act, toast } = useStore();
+  const { chats, groups, reload } = usePersonalChats();
+  const [q, setQ] = useState("");
+  const [picked, setPicked] = useState<ForwardTarget[]>([]); // kept as targets: a searched person stays picked after the search changes
+  const [busy, setBusy] = useState(false);
+  // like WhatsApp: the search also finds people you haven't chatted with yet (name, phone or email)
+  const { found, searching } = usePeopleSearch(q);
+  const targets: ForwardTarget[] = useMemo(() => [
+    ...(chats ?? []).filter((c) => !c.blocked).map((c) => ({ key: c.id, name: c.with.name, group: false, send: { chatId: c.id }, people: [c.with.id], large: false, action: "pm.send", at: c.lastMessageAt })),
+    ...groups.filter((g) => g.canSend !== false).map((g) => ({ key: g.id, name: g.name, group: true, send: { groupId: g.id }, people: g.members.map((x) => x.id), large: isLargeGroup(g), action: "group.send", at: g.lastMessageAt })),
+  ].sort((a, b) => b.at - a.at), [chats, groups]); // most recent chat first, like WhatsApp (where you just forwarded comes up top)
+  const t = q.trim().toLowerCase();
+  const shown = targets.filter((x) => !t || fuzzyScore(t, x.name) >= 0.55 || (x.group && groups.find((g) => g.id === x.key)?.members.some((m) => fuzzyScore(t, m.name) >= 0.6)));
+  const others: ForwardTarget[] = t ? (found ?? [])
+    .filter((p) => !p.blocked && p.id !== meId && !(chats ?? []).some((c) => c.with.id === p.id))
+    .map((p) => ({ key: `u:${p.id}`, name: p.name, group: false, send: { userId: p.id }, people: [p.id], large: false, action: "pm.send", at: 0, sub: p.role === "team" ? "Our team" : `Customer${p.hint ? ` · ${p.hint}` : ""}` })) : [];
+  const ok = msgs.filter((m) => !unreadable(m) && !m.viewOnce);
+  const isPicked = (x: ForwardTarget) => picked.some((p) => p.key === x.key);
+  const toggle = (x: ForwardTarget) => setPicked((p) => (p.some((y) => y.key === x.key) ? p.filter((y) => y.key !== x.key) : p.length >= MAX_FORWARD_CHATS ? (toast(`You can forward to up to ${MAX_FORWARD_CHATS} chats`, "error"), p) : [...p, x]));
+  const send = async () => {
+    setBusy(true);
+    let failed = 0;
+    try {
+      for (const target of picked) {
+        // a new chat: the first message creates it, the next ones go to that chat
+        let to = target;
+        for (const m of [...ok].sort((a, b) => a.createdAt - b.createdAt)) {
+          try {
+            const chatId = await forwardOne(m, to, meId, act);
+            if (typeof chatId === "string" && "userId" in to.send) to = { ...to, send: { chatId } };
+          } catch (e) { failed++; toast(e instanceof Error ? e.message : "Couldn't forward", "error"); }
+        }
+      }
+      if (!failed) toast(picked.length === 1 ? `Forwarded to ${picked[0].name}` : `Forwarded to ${picked.length} chats`);
+      await reload();
+      onClose();
+    } finally { setBusy(false); }
+  };
+  return (
+    <Modal open onClose={onClose} title={`Forward ${ok.length === 1 ? "message" : `${ok.length} messages`}`}>
+      <div className="space-y-3">
+        {ok.length < msgs.length && <p className="text-[12.5px] text-[var(--muted)]">{msgs.length - ok.length} can&apos;t be forwarded (view once, or not opened on this device).</p>}
+        {ok[0] && <div className="rounded-[12px] border-l-4 border-[var(--accent)] bg-[var(--input)] px-3 py-1.5 text-[12.5px] text-[var(--muted)]"><span className="line-clamp-2">{snippet(ok[0])}{ok.length > 1 && ` · +${ok.length - 1} more`}</span></div>}
+        <label className="flex items-center gap-2 rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-3 py-2 focus-within:border-[var(--accent)]">
+          <Search size={15} className="text-[var(--muted)]" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, phone, email or group" className="w-full bg-transparent text-sm outline-none" autoFocus />
+          {searching && <Loader2 size={14} className="shrink-0 animate-spin text-[var(--muted)]" />}
+        </label>
+        <ul className="scroll-thin max-h-64 overflow-y-auto">
+          {!chats && <li className="flex justify-center py-6"><Loader2 className="animate-spin text-[var(--muted)]" /></li>}
+          {chats && !shown.length && !others.length && <li className="px-2 py-3 text-[13px] text-[var(--muted)]">{searching ? "Searching…" : t ? `Nobody found for \u201c${q.trim()}\u201d.` : "No chats yet — search for someone."}</li>}
+          {[...shown, ...others].map((x, i) => {
+            const on = isPicked(x);
+            return (
+              <li key={x.key}>
+                {x.key.startsWith("u:") && i === shown.length && <div className="px-2 pt-2 pb-1 text-[11.5px] font-semibold uppercase tracking-wide text-[var(--accent-strong)]">Other people</div>}
+                <button onClick={() => toggle(x)} className="flex w-full items-center gap-3 rounded-[14px] px-2 py-1.5 text-left hover:bg-[var(--hover)]">
+                  <Avatar name={x.name} size={34} group={x.group} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px]">{x.name}</span>
+                    {x.sub && <span className="block truncate text-[12px] text-[var(--muted)]">{x.sub}</span>}
+                  </span>
+                  <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${on ? "border-[var(--accent)] bg-[var(--accent)] text-white" : "border-[var(--border-strong)]"}`}>{on && <Check size={13} />}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[12px] text-[var(--muted)]">{picked.length} of {MAX_FORWARD_CHATS} chats</span>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button disabled={!picked.length || !ok.length || busy} onClick={send}>{busy ? <Loader2 size={15} className="animate-spin" /> : <ForwardIcon size={15} />} Forward</Button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Reply / forward / star / pin / edit / delete for one personal chat, group or customer chat. */
+export function useMessageTools({ starred, pinned, canPin, pin, reload, onReply, onForward, meId, mine, onEdit, deleteForMe = true, editable, onDeleted }: {
+  starred: Set<string>; pinned?: string[]; canPin: boolean; reload: () => Promise<void>;
+  pin: (messageId: string, on: boolean) => Promise<unknown>; onReply: (m: Message) => void; onForward: (ms: Message[]) => void;
+  meId?: string;
+  /** which messages are yours (edit / delete for everyone) */
+  mine: (m: Message) => boolean;
+  onEdit: (m: Message) => void;
+  /** false in the shared customer inbox */
+  deleteForMe?: boolean;
+  /** extra rule for what may be edited / deleted for everyone (the inbox: internal notes only) */
+  editable?: (m: Message) => boolean;
+  /** after deleting: the screen drops an edit / reply that points at these */
+  onDeleted?: (ids: string[]) => void;
+}): MessageTools {
+  const { act, toast } = useStore();
+  const ok = (m: Message) => !editable || editable(m);
+  return {
+    starred, pinned: pinned ?? [], canPin, onReply, onForward, meId,
+    canEdit: (m) => ok(m) && canEditOwn(m, mine(m)),
+    onEdit,
+    deleteForMe,
+    canDeleteForEveryone: (m) => ok(m) && canDeleteOwn(m, mine(m)),
+    onDelete: async (ms, forEveryone) => {
+      let done = 0;
+      const gone: string[] = [];
+      for (const m of ms) { try { await act("msg.delete", { messageId: m.id, forEveryone }); done++; gone.push(m.id); } catch { /* the error was shown */ } }
+      if (gone.length) onDeleted?.(gone);
+      if (done) toast(done > 1 ? `${done} messages deleted` : "Message deleted");
+      await reload();
+    },
+    onStar: async (ms, on) => {
+      try {
+        for (const m of ms) await act("msg.star", { messageId: m.id, on });
+        toast(on ? (ms.length > 1 ? `${ms.length} messages starred` : "Starred") : ms.length > 1 ? `${ms.length} messages unstarred` : "Unstarred");
+      } catch { /* the error was shown */ }
+      await reload();
+    },
+    onPin: async (m, on) => { try { await pin(m.id, on); } catch { /* shown */ } await reload(); },
+  };
 }
 
 /** Block / unblock a person in personal chats (themed confirm before blocking). */
@@ -84,13 +250,15 @@ function usePeopleSearch(q: string) {
     const t = q.trim();
     if (!t) { setFound(null); return; }
     setSearching(true);
+    let live = true; // an older answer never overwrites a newer search
     const id = setTimeout(async () => {
       try {
         const r = await fetch(`/api/people/search?q=${encodeURIComponent(t)}`, { cache: "no-store" });
-        setFound(r.ok ? (await r.json()).people : []);
-      } catch { setFound([]); } finally { setSearching(false); }
+        const people = r.ok ? (await r.json()).people : [];
+        if (live) setFound(people);
+      } catch { if (live) setFound([]); } finally { if (live) setSearching(false); }
     }, 300);
-    return () => clearTimeout(id);
+    return () => { live = false; clearTimeout(id); };
   }, [q]);
   return { found, searching };
 }
@@ -102,8 +270,12 @@ export default function People() {
   const { state, act } = useStore();
   const router = useRouter();
   const me = (state as { me?: { id: string; name: string; role?: string } } | null)?.me;
-  const { chats, groups, communities, blocked, reload } = usePersonalChats();
+  const { chats, groups, communities, blocked, starred, reload } = usePersonalChats();
   const { block, unblock } = useBlocking(reload);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [editing, setEditing] = useState<Message | null>(null);
+  const pmEdits = usePendingEdits();
+  const [forwarding, setForwarding] = useState<Message[] | null>(null);
   const [showBlocked, setShowBlocked] = useState(false);
   const [menu, setMenu] = useState(false); // personal chat header menu
   const menuRef = useClickAway<HTMLDivElement>(menu, () => setMenu(false));
@@ -187,6 +359,7 @@ export default function People() {
           id: m.id, audience: "customer", direction: mine ? "out" : "in", authorId: m.authorId, authorName: mine ? me?.name ?? "You" : chat.with.name,
           text: msgText(m, e2e.me), attachments: m.e2e ? filesOf(body, m.attachments) : m.attachments, createdAt: m.createdAt, expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
           status: mine ? (m.undelivered ? "sent" : chat.theirReadAt && chat.theirReadAt >= m.createdAt ? "read" : "delivered") : undefined,
+          replyTo: m.replyTo, forwarded: m.forwarded, editedAt: m.editedAt, deleted: m.deleted, encrypted: !!m.e2e,
         } as Message;
       });
     }
@@ -195,12 +368,32 @@ export default function People() {
 
   const sendPm = async (text: string, attachments: Attachment[], viewOnce?: boolean) => {
     if (open?.kind !== "pm") return;
+    if (editing) {
+      // shows at once; an encrypted message gets a new envelope with the same files, a plain one stays plain
+      const m = editing;
+      setEditing(null);
+      pmEdits.run(m.id, text, async () => {
+        const sealed = m.encrypted ? await sealFor(e2e, text, m.attachments) : { text };
+        await act("msg.edit", { messageId: m.id, ...sealed });
+        await reload();
+      });
+      return;
+    }
     const target = chat ? { chatId: chat.id } : { userId: open.person.id };
     const sealed = await sealFor(e2e, text, attachments);
-    const id = (await act("pm.send", { ...target, ...sealed, attachments: attachments.map((a) => a.id), viewOnce })) as string;
+    const id = (await act("pm.send", { ...target, ...sealed, attachments: attachments.map((a) => a.id), viewOnce, replyTo: replyTo?.id })) as string;
+    setReplyTo(null);
     setOpen((o) => (o?.kind === "pm" ? { ...o, chatId: id } : o));
     await reload();
   };
+  const openKey = open?.kind === "pm" ? `pm:${open.person.id}` : open?.kind === "group" ? `g:${open.id}` : "";
+  useEffect(() => { setReplyTo(null); setEditing(null); }, [openKey]);
+  const pmTools = useMessageTools({
+    starred, pinned: chat?.pinned, canPin: !!chat && !chat.blocked, reload, onReply: (m) => { setEditing(null); setReplyTo(m); }, onForward: setForwarding,
+    mine: (m) => m.direction === "out" && !chat?.blocked, onEdit: (m) => { setReplyTo(null); setEditing(m); },
+    onDeleted: (ids) => { setEditing((e) => (e && ids.includes(e.id) ? null : e)); setReplyTo((r) => (r && ids.includes(r.id) ? null : r)); },
+    pin: (messageId, on) => act("pm.pin", { chatId: chat?.id, messageId, on }, on ? "Pinned" : "Unpinned"),
+  });
 
   const row = (key: string, name: string, sub: React.ReactNode, right: React.ReactNode, onClick: () => void, active: boolean, isGroup = false, kind?: "community" | "announcement") => (
     <li key={key}>
@@ -278,7 +471,7 @@ export default function People() {
         )}
       </section>
       <section className={`min-w-0 flex-1 flex-col ${open ? "flex" : "hidden md:flex"}`}>
-        {group ? <GroupView key={group.id} group={group} meId={me?.id} onBack={() => setOpen(null)} reload={reload} communities={communities} groups={groups} onOpenGroup={(id) => setOpen({ kind: "group", id })} /> : !open || !header ? (
+        {group ? <GroupView key={group.id} group={group} meId={me?.id} onBack={() => setOpen(null)} reload={reload} communities={communities} groups={groups} starred={starred} onOpenGroup={(id) => setOpen({ kind: "group", id })} /> : !open || !header ? (
           <div className="flex flex-1 items-center justify-center"><Empty icon={MessagesSquare} title="Chats" text="Search someone on the left and say hello — or make a group." /></div>
         ) : (
           <>
@@ -305,9 +498,13 @@ export default function People() {
                 )}
               </div>
             </header>
-            <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="pm.open" />
+            <MessageList messages={pmEdits.apply(messages)} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="pm.open" tools={chat ? pmTools : undefined} />
             <Composer
               allowViewOnce
+              replyTo={replyTo}
+              onCancelReply={() => setReplyTo(null)}
+              editing={editing}
+              onCancelEdit={() => setEditing(null)}
               disabled={isBlocked ? `You blocked ${header.name}. Tap to unblock.` : undefined}
               onDisabledClick={isBlocked && pmPerson ? () => unblock(pmPerson) : undefined}
               encrypt={e2e.enabled}
@@ -321,6 +518,7 @@ export default function People() {
       {community && <CommunityInfo community={community} groups={groups} onClose={() => setCommunityId(null)} reload={reload} onOpenGroup={(id) => { setCommunityId(null); setOpen({ kind: "group", id }); }} />}
       {newGroup && <NewGroup onClose={() => setNewGroup(false)} onCreated={async (id) => { setNewGroup(false); await reload(); setOpen({ kind: "group", id }); }} />}
       {showBlocked && <BlockedContacts blocked={blocked} onUnblock={unblock} onClose={() => setShowBlocked(false)} />}
+      {forwarding && me && <ForwardDialog msgs={forwarding} meId={me.id} onClose={() => setForwarding(null)} />}
     </div>
   );
 }
@@ -397,11 +595,22 @@ function PeoplePicker({ picked, setPicked, exclude = [], max = ADD_BATCH }: { pi
 }
 
 /** One group chat: header (calls, disappearing, info), messages and the message box. Used by Chats and the Customer inbox. */
-export function GroupView({ group, meId, onBack, reload, communities = [], groups = [], onOpenGroup }: {
+export function GroupView({ group, meId, onBack, reload, communities = [], groups = [], onOpenGroup, starred }: {
   group: GroupChat; meId?: string; onBack: () => void; reload: () => Promise<void>;
   communities?: Community[]; groups?: GroupChat[]; onOpenGroup?: (id: string) => void;
+  starred?: Set<string>;
 }) {
   const { act } = useStore();
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [editing, setEditing] = useState<Message | null>(null);
+  const edits = usePendingEdits();
+  const [forwarding, setForwarding] = useState<Message[] | null>(null);
+  const tools = useMessageTools({
+    starred: starred ?? new Set(), pinned: group.pinned, canPin: group.canSend !== false, reload, onReply: (m) => { setEditing(null); setReplyTo(m); }, onForward: setForwarding,
+    mine: (m) => m.authorId === meId, onEdit: (m) => { setReplyTo(null); setEditing(m); },
+    onDeleted: (ids) => { setEditing((e) => (e && ids.includes(e.id) ? null : e)); setReplyTo((r) => (r && ids.includes(r.id) ? null : r)); },
+    pin: (messageId, on) => act("group.pin", { groupId: group.id, messageId, on }, on ? "Pinned" : "Unpinned"),
+  });
   const [info, setInfo] = useState(false);
   const [showCommunity, setShowCommunity] = useState(false);
   const large = isLargeGroup(group);
@@ -416,7 +625,7 @@ export function GroupView({ group, meId, onBack, reload, communities = [], group
   const messages: Message[] = useMemo(() => group.messages.map((m) => ({
     id: m.id, audience: "customer", direction: m.authorId === meId ? "out" : "in", authorId: m.authorId, authorName: m.authorName,
     text: msgText(m, e2e.me), attachments: m.e2e ? filesOf(m.e2e ? openMessage(m.id, m.e2e, e2e.me) : null, m.attachments) : m.attachments, createdAt: m.createdAt, expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
-    opened: m.opened, system: m.system,
+    opened: m.opened, system: m.system, replyTo: m.replyTo, forwarded: m.forwarded, editedAt: m.editedAt, deleted: m.deleted, encrypted: !!m.e2e,
   } as Message)), [group, meId, e2e.me]);
   return (
     <>
@@ -437,19 +646,35 @@ export function GroupView({ group, meId, onBack, reload, communities = [], group
         {e2e.enabled && <span title="End-to-end encrypted: only the members can read these messages" className="flex items-center gap-1 rounded-full bg-[var(--accent)]/10 px-2 py-1 text-[11.5px] text-[var(--accent-strong)]"><Lock size={12} /> Encrypted</span>}
         <button onClick={openInfo} title="Group info" aria-label="Group info" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><Info size={19} /></button>
       </header>
-      <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="group.open" />
+      <MessageList messages={edits.apply(messages)} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="group.open" tools={tools} />
       <Composer
         allowViewOnce
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+        editing={editing}
+        onCancelEdit={() => setEditing(null)}
         disabled={group.canSend === false ? "Only community admins can send messages" : undefined}
         encrypt={e2e.enabled}
         modes={[{ id: "group", kind: "customer", label: "Message", hint: large ? LARGE_GROUP_TEXT : e2e.enabled ? `🔒 End-to-end encrypted — only members of ${group.name} can read it` : `Everyone in ${group.name} sees this` }]}
         onSend={async (_m, text, attachments, opts) => {
+          if (editing) {
+            const m = editing;
+            setEditing(null);
+            edits.run(m.id, text, async () => {
+              const sealed = m.encrypted ? await sealFor(e2e, text, m.attachments) : { text };
+              await act("msg.edit", { messageId: m.id, ...sealed });
+              await reload();
+            });
+            return;
+          }
           const sealed = await sealFor(e2e, text, attachments);
           // plain: this app knows the message isn't encrypted (the server turns away plain text from old apps in bigger groups)
-          await act("group.send", { groupId: group.id, ...sealed, plain: "text" in sealed || undefined, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce });
+          await act("group.send", { groupId: group.id, ...sealed, plain: "text" in sealed || undefined, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce, replyTo: replyTo?.id });
+          setReplyTo(null);
           await reload();
         }}
       />
+      {forwarding && meId && <ForwardDialog msgs={forwarding} meId={meId} onClose={() => setForwarding(null)} />}
       {info && <GroupInfo group={group} meId={meId} onClose={() => setInfo(false)} onLeft={() => { setInfo(false); onBack(); reload(); }} reload={reload}
         onCommunity={community ? () => { setInfo(false); setShowCommunity(true); } : undefined} />}
       {showCommunity && community && <CommunityInfo community={community} groups={groups} onClose={() => setShowCommunity(false)} reload={reload}

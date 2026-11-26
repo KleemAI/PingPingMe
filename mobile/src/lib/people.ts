@@ -15,25 +15,36 @@ export const LARGE_GROUP_TEXT = "Large group · messages are not end-to-end encr
 /** Member count with digit grouping, e.g. "200,000 members". */
 export const membersLabel = (g: Pick<GroupChat, "memberCount" | "members">) => `${(g.memberCount ?? g.members.length).toLocaleString("en-US")} members`;
 
+/** The last /people answer for the signed-in person, so a chat opened again shows at once (not empty while it reloads). */
+let peopleCache: { who: string; d: { chats?: PersonalChat[]; groups?: GroupChat[]; communities?: Community[]; blocked?: Person[]; starred?: { messageId: string }[] } } | null = null;
+
 /** Your personal chats and groups, re-read whenever anything changes (live updates bump the state version). */
 export function usePersonalChats() {
   const { api, state, token } = useStore();
   const role = (state as { me?: { role?: string } } | null)?.me?.role;
-  const [chats, setChats] = useState<PersonalChat[] | null>(null);
-  const [groups, setGroups] = useState<GroupChat[]>([]);
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [blocked, setBlocked] = useState<Person[]>([]); // people you blocked (only your own list)
+  const who = `${(state as { me?: { id?: string } } | null)?.me?.id ?? ""}:${token ?? ""}`;
+  const cached = peopleCache && peopleCache.who === who ? peopleCache.d : null;
+  const [chats, setChats] = useState<PersonalChat[] | null>(cached?.chats ?? null);
+  const [groups, setGroups] = useState<GroupChat[]>(cached?.groups ?? []);
+  const [communities, setCommunities] = useState<Community[]>(cached?.communities ?? []);
+  const [blocked, setBlocked] = useState<Person[]>(cached?.blocked ?? []); // people you blocked (only your own list)
+  const [starred, setStarred] = useState<Set<string>>(() => new Set((cached?.starred ?? []).map((x) => x.messageId))); // messages you starred
   const version = versionOf(state);
   const load = useCallback(async () => {
     if (!token || !canUsePeople(role)) { setChats([]); setGroups([]); setCommunities([]); setBlocked([]); return; }
     try {
       const r = await api("/api/v1/people");
-      if (r.ok) { const d = await r.json(); setChats(d.chats); setGroups(d.groups ?? []); setCommunities(d.communities ?? []); setBlocked(d.blocked ?? []); }
+      if (r.ok) {
+        const d = await r.json();
+        peopleCache = { who, d };
+        setChats(d.chats); setGroups(d.groups ?? []); setCommunities(d.communities ?? []); setBlocked(d.blocked ?? []);
+        setStarred(new Set(((d.starred ?? []) as { messageId: string }[]).map((x) => x.messageId)));
+      }
     } catch { /* offline: keep what we have */ }
-  }, [api, token, role]);
+  }, [api, token, role, who]);
   useEffect(() => { load(); }, [load, version]);
   const unread = (chats ?? []).reduce((n, c) => n + c.unread, 0) + groups.reduce((n, g) => n + g.unread, 0);
-  return { chats, groups, communities, blocked, reload: load, unread, enabled: canUsePeople(role) };
+  return { chats, groups, communities, blocked, starred, reload: load, unread, enabled: canUsePeople(role) };
 }
 
 /** Search / page a group's members on the server (large groups list only a page). q = name or phone; "" = everyone. */

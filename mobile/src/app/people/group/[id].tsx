@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { KeyboardAvoidingView, Pressable, View } from "react-native";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,8 +8,9 @@ import { useTheme } from "@/lib/theme";
 import { LARGE_GROUP_TEXT, membersLabel, usePersonalChats } from "@/lib/people";
 import type { Message } from "@/lib/types";
 import { Avatar, Empty, T } from "@/components/ui";
-import { Composer, DisappearingButton, MessageList, disappearLabel } from "@/components/Thread";
+import { Composer, DisappearingButton, MessageList, disappearLabel, usePendingEdits } from "@/components/Thread";
 import { filesOf, msgText, openMessage, useE2E } from "@/lib/e2e";
+import { ForwardSheet, useMessageTools } from "@/components/MessageTools";
 
 /** A group chat. Tap the title for group info (members, add / remove, admins, rename, leave). */
 export default function GroupChatScreen() {
@@ -18,8 +19,18 @@ export default function GroupChatScreen() {
   const { act, state } = useStore();
   const me = (state as { me?: { id: string } } | null)?.me;
   const headerHeight = useHeaderHeight();
-  const { chats, groups, reload } = usePersonalChats();
+  const { chats, groups, starred, reload } = usePersonalChats();
   const group = groups.find((g) => g.id === id) ?? null;
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [editing, setEditing] = useState<Message | null>(null);
+  const edits = usePendingEdits();
+  const [forwarding, setForwarding] = useState<Message[] | null>(null);
+  const tools = useMessageTools({
+    starred, pinned: group?.pinned, canPin: group?.canSend !== false, reload, onReply: (m) => { setEditing(null); setReplyTo(m); }, onForward: setForwarding,
+    mine: (m) => m.authorId === me?.id, onEdit: (m) => { setReplyTo(null); setEditing(m); },
+    onDeleted: (ids) => { setEditing((e) => (e && ids.includes(e.id) ? null : e)); setReplyTo((r) => (r && ids.includes(r.id) ? null : r)); },
+    pin: (messageId, on) => act("group.pin", { groupId: id, messageId, on }, on ? "Pinned" : "Unpinned"),
+  });
 
   useEffect(() => {
     if (group?.unread) act("group.read", { groupId: group.id }).then(reload).catch(() => {});
@@ -31,7 +42,7 @@ export default function GroupChatScreen() {
   const messages: Message[] = useMemo(() => (group?.messages ?? []).map((m) => ({
     id: m.id, audience: "customer", direction: m.authorId === me?.id ? "out" : "in", authorId: m.authorId, authorName: m.authorName,
     text: msgText(m, e2e.me), attachments: m.e2e ? filesOf(openMessage(m.id, m.e2e, e2e.me), m.attachments) : m.attachments, createdAt: m.createdAt, expiresAt: m.expiresAt, viewOnce: m.viewOnce, viewedAt: m.viewedAt,
-    opened: m.opened, system: m.system,
+    opened: m.opened, system: m.system, replyTo: m.replyTo, forwarded: m.forwarded, editedAt: m.editedAt, deleted: m.deleted, encrypted: !!m.e2e,
   } as Message)), [group, me?.id, e2e.me]);
 
   if (!group) return chats ? <Empty icon="people-outline" title="Group not found" text="You may have left it or been removed." /> : null;
@@ -62,20 +73,36 @@ export default function GroupChatScreen() {
             <T size={12} muted numberOfLines={1}>{LARGE_GROUP_TEXT}</T>
           </View>
         )}
-        <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="group.open" />
+        <MessageList messages={edits.apply(messages)} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="group.open" tools={tools} />
         <Composer
           allowViewOnce
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          editing={editing}
+          onCancelEdit={() => setEditing(null)}
           disabled={group.canSend === false ? "Only community admins can send messages" : undefined}
           encrypt={e2e.enabled}
           modes={[{ id: "group", kind: "customer", label: "Message", hint: large ? LARGE_GROUP_TEXT : e2e.enabled ? `🔒 End-to-end encrypted — only members of ${group.name} can read it` : `Everyone in ${group.name} sees this` }]}
           onSend={async (_m, text, attachments, opts) => {
+            if (editing) {
+              const m = editing;
+              setEditing(null);
+              edits.run(m.id, text, async () => {
+                const sealed = m.encrypted ? await e2e.sealFor(text, m.attachments) : { text };
+                await act("msg.edit", { messageId: m.id, ...sealed });
+                await reload();
+              });
+              return;
+            }
             const sealed = await e2e.sealFor(text, attachments);
             // plain: this app knows the message isn't encrypted (the server turns away plain text from old apps in bigger groups)
-            await act("group.send", { groupId: group.id, ...sealed, plain: "text" in sealed || undefined, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce });
+            await act("group.send", { groupId: group.id, ...sealed, plain: "text" in sealed || undefined, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce, replyTo: replyTo?.id });
+            setReplyTo(null);
             await reload();
           }}
         />
       </KeyboardAvoidingView>
+      <ForwardSheet msgs={forwarding} meId={me?.id} onClose={() => setForwarding(null)} />
     </View>
   );
 }

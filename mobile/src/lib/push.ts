@@ -32,7 +32,7 @@ async function getToken(): Promise<string | null> {
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync(CHANNEL, {
       name: "Messages", description: "New chat messages", importance: Notifications.AndroidImportance.HIGH,
-      sound: "default", vibrationPattern: [0, 250, 250, 250], lightColor: "#2f7fe0", lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+      vibrationPattern: [0, 250, 250, 250], lightColor: "#2f7fe0", lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
     });
     // new P2P orders on your ads ring loud, like a delivery app
     await Notifications.setNotificationChannelAsync(ORDERS, {

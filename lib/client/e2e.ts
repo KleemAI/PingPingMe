@@ -72,7 +72,7 @@ const opened = new Map<string, E2EBody | null>();
 /** Message text + files after decryption (cached per message). */
 export function openMessage(id: string, e: E2EEnvelope, me: MyDevice | null): E2EBody | null {
   if (!me) return null;
-  const k = `${me.id}:${id}`;
+  const k = `${me.id}:${id}:${e.nonce}`; // an edited message has a new envelope (new nonce)
   if (!opened.has(k)) opened.set(k, decryptMessage(e, me));
   return opened.get(k) ?? null;
 }
@@ -99,6 +99,31 @@ export async function uploadEncrypted(picked: File): Promise<Attachment> {
   const out = await res.json().catch(() => ({ error: `Upload failed (${res.status})` }));
   if (!res.ok) throw new Error(out.error ?? "Upload failed");
   return { id: out.id, name: f.name, size: f.size, mime: f.type || "application/octet-stream", e2e: { key, nonce } };
+}
+
+/**
+ * Forwarding a file into a chat of the other kind: a plain file going into an encrypted chat is encrypted in this browser
+ * (a new upload), and an encrypted file going into a chat that isn't encrypted (a large group) is opened here and sent plain.
+ */
+export async function convertForForward(a: Attachment, encrypt: boolean): Promise<Attachment> {
+  const r = await fetch(`/api/files/${a.id}`).catch(() => null);
+  if (!r?.ok) throw new Error(`Couldn't open ${a.name}`);
+  const stored = new Uint8Array(await r.arrayBuffer());
+  const upload = async (bytes: Uint8Array, name: string, type: string) => {
+    const fd = new FormData();
+    fd.append("file", new File([bytes as BlobPart], name, { type }));
+    const res = await fetch("/api/upload", { method: "POST", body: fd });
+    const out = await res.json().catch(() => ({ error: `Upload failed (${res.status})` }));
+    if (!res.ok) throw new Error(out.error ?? "Upload failed");
+    return out.id as string;
+  };
+  if (encrypt) {
+    const { data, key, nonce } = encryptFile(stored);
+    return { id: await upload(data, "encrypted.bin", E2E_MIME), name: a.name, size: stored.length, mime: a.mime, e2e: { key, nonce } };
+  }
+  const plain = a.e2e ? decryptFile(stored, a.e2e.key, a.e2e.nonce) : stored;
+  if (!plain) throw new Error(`Couldn't open ${a.name}`);
+  return { id: await upload(plain, a.name, a.mime), name: a.name, size: plain.length, mime: a.mime };
 }
 
 const urls = new Map<string, Promise<string | null>>();
@@ -136,6 +161,17 @@ export function useFileUrl(a: Attachment): string | null | undefined {
  * one device with a key (otherwise messages go as before, without the lock). `seal` encrypts for all their devices.
  * Pass [] for a large group (more than E2E_GROUP_LIMIT members): no keys are fetched and nothing is encrypted.
  */
+/** Seal a message for these people now (forwarding into another chat). null = not all of them can get encrypted messages. */
+export async function sealTo(meId: string, people: string[], body: E2EBody): Promise<E2EEnvelope | null> {
+  const others = [...new Set(people)].filter((x) => x && x !== meId);
+  if (!others.length || others.length > E2E_GROUP_LIMIT) return null;
+  const me = await myDevice(meId);
+  if (!me) return null;
+  const k = await devicesOf([meId, ...others]);
+  if (!k || !others.every((id) => (k[id]?.length ?? 0) > 0)) return null;
+  return encryptMessage(body, me, Object.values(k).flat());
+}
+
 export function useE2E(meId: string | undefined, people: string[]) {
   const [me, setMe] = useState<MyDevice | null>(null);
   const [keys, setKeys] = useState<Record<string, DeviceKey[]> | null>(null);

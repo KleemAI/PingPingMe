@@ -25,13 +25,13 @@ export const toContact = (c: ContactEntity): Contact => {
 };
 
 export const toConversation = (c: ConversationEntity): Conversation => {
-  const { contact, ...rest } = c; // eslint-disable-line @typescript-eslint/no-unused-vars
-  return clean(rest) as Conversation;
+  const { contact, pinned, ...rest } = c; // eslint-disable-line @typescript-eslint/no-unused-vars
+  return clean({ ...rest, pinned: pinned?.length ? pinned : undefined }) as Conversation;
 };
 
 export const toMessage = (m: MessageEntity): Message => {
-  const { seq, viewOnce, hiddenFromTeam, ...rest } = m; // eslint-disable-line @typescript-eslint/no-unused-vars
-  return clean({ ...rest, viewOnce: viewOnce || undefined }) as Message;
+  const { seq, viewOnce, hiddenFromTeam, forwarded, deletedAt, fromChat, ...rest } = m; // eslint-disable-line @typescript-eslint/no-unused-vars
+  return clean({ ...rest, viewOnce: viewOnce || undefined, forwarded: forwarded || undefined, deleted: deletedAt ? true : undefined, fromChat: fromChat || undefined }) as Message;
 };
 
 /** A contact as the customer themself gets it: the team-wide block is never shown to them. */
@@ -65,6 +65,11 @@ export function messagesFor(list: MessageEntity[], viewer: User, now = Date.now(
     const msg = toMessage(m);
     if (gone) msg.disappeared = true;
     if (m.viewOnce && !admin && (m.viewedAt || isSender(m, viewer))) msg.attachments = [];
+    // deleted for everyone: admins still get the content (audit, shown as deleted); everyone else gets nothing of it
+    if (m.deletedAt && !admin) {
+      msg.text = ""; msg.attachments = [];
+      delete msg.replyTo; delete msg.forwarded; delete msg.editedAt; delete msg.viewOnce;
+    }
     out.push(msg);
   }
   return out;

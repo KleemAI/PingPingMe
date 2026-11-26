@@ -41,7 +41,9 @@ export class QueryService {
   async conversation(id: string, user: User) {
     const c = await this.em.findOne(ConversationEntity, { where: { id }, relations: { contact: true } });
     if (!c) throw notFound("Conversation");
-    const messages = await this.em.find(MessageEntity, { where: { conversationId: id, audience: In(["customer", "internal"]), hiddenFromTeam: false }, order: { createdAt: "ASC", seq: "ASC" } });
+    const hidden = new Set(((await this.em.query(`SELECT message_id FROM message_hides WHERE user_id = $1`, [user.id])) as { message_id: string }[]).map((r) => r.message_id));
+    const messages = (await this.em.find(MessageEntity, { where: { conversationId: id, audience: In(["customer", "internal"]), hiddenFromTeam: false }, order: { createdAt: "ASC", seq: "ASC" } }))
+      .filter((m) => !hidden.has(m.id)); // "Delete for me"
     const requests = await this.em.find(RequestEntity, { where: { conversationId: id, hiddenFromTeam: false } });
     const company = c.contact?.companyId ? await this.em.findOne(CompanyEntity, { where: { id: c.contact.companyId } }) : null;
     return { conversation: toConversation(c), contact: toContact(c.contact!), company: company ? toCompany(company) : undefined, messages: messagesFor(messages, user), requestIds: requests.map((r) => r.id) };

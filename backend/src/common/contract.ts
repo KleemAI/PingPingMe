@@ -62,6 +62,7 @@ export type Conversation = {
   createdAt: number;
   resolvedAt?: number;
   disappearSeconds?: number; // disappearing messages timer, 0/absent = off
+  pinned?: string[]; // pinned message ids, newest first (team only)
 };
 
 export type Attachment = {
@@ -96,6 +97,11 @@ export type Message = {
   viewOnce?: boolean; // view-once photo / video
   viewedAt?: number; // when the other side opened it
   viewedBy?: string;
+  replyTo?: string; // the message this one answers
+  forwarded?: boolean;
+  editedAt?: number; // "Edited"
+  deleted?: boolean; // "This message was deleted"
+  fromChat?: boolean; // inbox: a chat reply typed by the team (quotes, order updates and notices are records and never change)
 };
 
 export type ResellerStatus = "pending" | "active" | "suspended";
@@ -543,12 +549,18 @@ export type PersonalMessage = {
   expiresAt?: number; viewOnce?: boolean; viewedAt?: number;
   e2e?: E2EEnvelope; // encrypted: text is empty, the app decrypts this
   undelivered?: boolean; // your message wasn't delivered (show a single tick, never "read")
+  replyTo?: string; // id of the message this one answers (same chat; the app shows a quote of it)
+  forwarded?: boolean; // shown as "Forwarded"
+  editedAt?: number; deleted?: boolean; // "Edited" / "This message was deleted"
 };
 export type PersonalChat = { id: string; with: Person; lastMessageAt: number; unread: number; theirReadAt?: number; disappearSeconds?: number; messages: PersonalMessage[];
   blocked?: boolean; // you blocked this person: they can't message you, you can't message them until you unblock
+  pinned?: string[]; // pinned message ids, newest first (at most 3) — both people see them
 };
 /** GET /people: your chats, groups, communities and the people you blocked (only your own list). */
-export type PeoplePayload = { chats: PersonalChat[]; groups: GroupChat[]; communities: Community[]; blocked: Person[] };
+export type PeoplePayload = { chats: PersonalChat[]; groups: GroupChat[]; communities: Community[]; blocked: Person[]; starred?: StarredMessage[] };
+/** A message you starred (only you see your stars). Find it in `chats` / `groups` by chatId + messageId. */
+export type StarredMessage = { messageId: string; kind: "pm" | "group" | "conv"; chatId: string; starredAt: number };
 
 /** Group chats. `messages` start from when you joined; view-once files show only until you opened them. */
 export type GroupMember = Person & { admin: boolean };
@@ -556,6 +568,8 @@ export type GroupMessage = {
   id: string; authorId: string; authorName: string; text: string; attachments: Attachment[]; createdAt: number; system?: boolean;
   expiresAt?: number; viewOnce?: boolean; viewedAt?: number; opened?: number; // opened = how many members opened a view-once message
   e2e?: E2EEnvelope; // encrypted: text is empty, the app decrypts this
+  replyTo?: string; forwarded?: boolean; // reply quote / "Forwarded", as in personal chats
+  editedAt?: number; deleted?: boolean;
 };
 export type GroupChat = {
   id: string; name: string; members: GroupMember[]; admin: boolean; lastMessageAt: number; unread: number; disappearSeconds?: number; messages: GroupMessage[];
@@ -567,6 +581,7 @@ export type GroupChat = {
    * not end-to-end encrypted (send { text }, never e2e) and only the last 200 are listed. Find others with GroupMembersPage.
    */
   memberCount: number; large?: boolean;
+  pinned?: string[]; // pinned message ids, newest first (at most 3) — everyone in the group sees them
 };
 /** GET /people/groups/:id/members?q=&offset= → 50 members at a time (admins first), matching a name / phone; next = the offset for more. */
 export type GroupMembersPage = { members: GroupMember[]; next?: number };

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { matches, newChatCandidates, searchTerm, type NewChat } from "@/lib/inboxSearch";
-import { GroupView, NewGroup, memberCountOf, msgText, usePersonalChats } from "./People";
+import { ForwardDialog, GroupView, NewGroup, memberCountOf, msgText, useMessageTools, usePersonalChats } from "./People";
 import { useE2E } from "@/lib/client/e2e";
 import { NewCommunity } from "./Community";
 import { SearchChips, SearchResults, useGlobalSearch, type SearchHit, type SearchType } from "./GlobalSearch";
@@ -15,10 +15,10 @@ import {
 } from "lucide-react";
 import { ask } from "./Confirm";
 import { useTeam } from "@/lib/client/store";
-import type { Contact, Conversation, ContactType } from "@/lib/types";
+import type { Contact, Conversation, ContactType, Message } from "@/lib/types";
 import { CONV_STATUS, PRIORITY, REQ_STATUS, ORDER_STATUS, CASE_STATUS, isUnanswered, listTime, rupees, relative } from "@/lib/format";
 import { Avatar, Button, Card, Empty, Field, Modal, Pill, StatusPill, Tabs, inputCls, useClickAway } from "./ui";
-import { Composer, MessageList, Ticks, DisappearingPicker, disappearLabel } from "./Thread";
+import { Composer, MessageList, Ticks, DisappearingPicker, disappearLabel, usePendingEdits } from "./Thread";
 import { CreateRequestModal, OpenCaseModal, ReminderModal } from "./forms";
 import { plain } from "@/lib/chatFormat";
 
@@ -95,7 +95,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
 
   const active = convs.find((c) => c.id === activeId) ?? null;
   // group chats live in the Customer inbox too (customers and the team together)
-  const { groups, communities, reload: reloadGroups } = usePersonalChats();
+  const { chats: personal, groups, communities, starred, reload: reloadGroups } = usePersonalChats();
   const { me: myDevice } = useE2E(me.id, []); // to show the last line of encrypted group messages
   const [newGroup, setNewGroup] = useState(false);
   const [newCommunity, setNewCommunity] = useState(false);
@@ -120,9 +120,13 @@ export default function Inbox({ kind }: { kind: ContactType }) {
   const shownGroups = kind !== "customer" || (term.text && stype === "business") ? [] : groups.filter((g) => term.text
     ? fuzzyScore(term.text, g.name) >= 0.55 || g.members.some((m) => fuzzyScore(term.text, m.name) >= 0.6)
     : filter === "open" || filter === "all" || (filter === "unread" && g.unread > 0));
+  // personal chats too, like WhatsApp: one list, the latest chat on top (a search finds people through the results below)
+  const shownChats = kind !== "customer" || term.text ? [] : (personal ?? []).filter((pc) => pc.messages.length > 0 &&
+    (filter === "open" || filter === "all" || (filter === "unread" && pc.unread > 0)));
   const rows = [
     ...list.map((c) => ({ kind: "conv" as const, c, at: c.lastMessageAt })),
     ...shownGroups.map((g) => ({ kind: "group" as const, g, at: g.lastMessageAt })),
+    ...shownChats.map((pc) => ({ kind: "pm" as const, pc, at: pc.lastMessageAt })),
   ].sort((a, b) => b.at - a.at);
   const selectGroup = (id: string | null) => {
     const sp = new URLSearchParams(params.toString());
@@ -202,6 +206,29 @@ export default function Inbox({ kind }: { kind: ContactType }) {
                 : <Empty icon={InboxIcon} title="Nothing here" text={term.text ? "No chat or contact matches your search." : "Try another filter or search."} />
           )}
           {rows.map((row) => {
+            if (row.kind === "pm") {
+              const pc = row.pc;
+              const last = pc.messages.at(-1);
+              const open = () => router.push(`/people?u=${encodeURIComponent(pc.with.id)}&name=${encodeURIComponent(pc.with.name)}&role=${pc.with.role}`);
+              return (
+                <li key={pc.id}>
+                  <button onClick={open} className="flex w-full items-center gap-3 px-3 text-left transition hover:bg-[var(--hover)]">
+                    <Avatar name={pc.with.name} size={46} />
+                    <div className="min-w-0 flex-1 border-b border-[var(--border)] py-2.5">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-[15px]">{pc.with.name}</span>
+                        <span className={`shrink-0 text-[11.5px] ${pc.unread ? "font-semibold text-[var(--accent)]" : "text-[var(--muted)]"}`}>{listTime(pc.lastMessageAt)}</span>
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-1 text-[13px] text-[var(--muted)]">
+                        <span className="truncate">{last ? `${last.authorId === me.id ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : msgText(last, myDevice) ? plain(msgText(last, myDevice)) : "📎 Attachment"}` : ""}</span>
+                        {pc.unread > 0 && <span className="ml-auto min-w-[19px] shrink-0 rounded-full bg-[var(--accent)] px-1.5 text-center text-[11px] font-semibold leading-[19px] text-white">{pc.unread}</span>}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1"><span className="rounded-full border border-[var(--border)] bg-[var(--input)] px-2 py-0.5 text-[11px] text-[var(--muted)]">{pc.with.role === "team" ? "Personal · our team" : "Personal"}</span></div>
+                    </div>
+                  </button>
+                </li>
+              );
+            }
             if (row.kind === "group") {
               const g = row.g;
               const last = g.messages.at(-1);
@@ -243,7 +270,7 @@ export default function Inbox({ kind }: { kind: ContactType }) {
                     {co && <div className="truncate text-[12px] text-[var(--muted)]">{ct.name}{ct.designation ? ` · ${ct.designation}` : ""}</div>}
                     <div className="mt-0.5 flex items-center gap-1 text-[13px] text-[var(--muted)]">
                       {failed ? <AlertCircle size={13} className="shrink-0 text-rose-500" /> : last?.direction === "out" && last.audience === "customer" && <Ticks m={last} />}
-                      <span className="truncate">{last?.audience === "internal" ? `📝 ${plain(last.text)}` : last ? plain(last.text) : ""}</span>
+                      <span className="truncate">{last?.deleted ? "🚫 This message was deleted" : last?.audience === "internal" ? `📝 ${plain(last.text)}` : last ? plain(last.text) : ""}</span>
                       {c.unread > 0 && <span className="ml-auto min-w-[19px] shrink-0 rounded-full bg-[var(--accent)] px-1.5 text-center text-[11px] font-semibold leading-[19px] text-white">{c.unread}</span>}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -293,10 +320,10 @@ export default function Inbox({ kind }: { kind: ContactType }) {
       {/* chat */}
       {activeGroup ? (
         <section className="flex min-w-0 flex-1 flex-col">
-          <GroupView key={activeGroup.id} group={activeGroup} meId={me.id} onBack={() => selectGroup(null)} reload={reloadGroups} communities={communities} groups={groups} onOpenGroup={selectGroup} />
+          <GroupView key={activeGroup.id} group={activeGroup} meId={me.id} onBack={() => selectGroup(null)} reload={reloadGroups} communities={communities} groups={groups} starred={starred} onOpenGroup={selectGroup} />
         </section>
       ) : active ? (
-        <Chat key={active.id} conv={active} onBack={() => select(null)} details={details} setDetails={setDetails} />
+        <Chat key={active.id} conv={active} onBack={() => select(null)} details={details} setDetails={setDetails} meId={me.id} starred={starred} reloadStars={reloadGroups} />
       ) : (
         <div className="hidden flex-1 flex-col items-center justify-center gap-3 bg-transparent text-center text-[var(--muted)] md:flex">
           {moved ? (
@@ -322,7 +349,10 @@ export default function Inbox({ kind }: { kind: ContactType }) {
   );
 }
 
-function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBack: () => void; details: boolean; setDetails: (v: boolean) => void }) {
+function Chat({ conv, onBack, details, setDetails, meId, starred, reloadStars }: {
+  conv: Conversation; onBack: () => void; details: boolean; setDetails: (v: boolean) => void;
+  meId: string; starred: Set<string>; reloadStars: () => Promise<void>;
+}) {
   const { team, act } = useTeam();
   const db = team!.db;
   const ct = db.contacts.find((c) => c.id === conv.contactId)!;
@@ -334,6 +364,20 @@ function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBac
   const { block, unblock } = useContactBlock();
   const [menu, setMenu] = useState(false);
   const menuRef = useClickAway<HTMLDivElement>(menu, () => setMenu(false));
+  // WhatsApp-style tools: reply, forward (to personal chats / groups), star (only for you), pin (for the team, at most 3)
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [editing, setEditing] = useState<Message | null>(null);
+  const edits = usePendingEdits();
+  const [forwarding, setForwarding] = useState<Message[] | null>(null);
+  const tools = useMessageTools({
+    starred, pinned: conv.pinned, canPin: true, reload: reloadStars, onReply: (m) => { setEditing(null); setReplyTo(m); }, onForward: setForwarding, meId,
+    // Delete for me: any message. Edit (50 minutes) / delete for everyone: your own notes and app / web-chat replies
+    // your notes, and your chat replies to a customer on the app / web chat (WhatsApp messages are already on their phone)
+    mine: (m) => m.authorId === meId && !blocked, editable: (m) => m.audience === "internal" || (m.audience === "customer" && m.direction === "out" && !!m.fromChat && conv.channel === "web"),
+    onEdit: (m) => { setReplyTo(null); setEditing(m); },
+    onDeleted: (ids) => { setEditing((e) => (e && ids.includes(e.id) ? null : e)); setReplyTo((r) => (r && ids.includes(r.id) ? null : r)); },
+    pin: (messageId, on) => act("conv.pin", { conversationId: conv.id, messageId, on }, on ? "Pinned" : "Unpinned"),
+  });
 
   return (
     <div className="flex min-w-0 flex-1">
@@ -368,9 +412,10 @@ function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBac
           <button onClick={() => setDetails(!details)} title="Details" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--active)]">{details ? <PanelRightClose size={19} /> : <PanelRightOpen size={19} />}</button>
         </header>
         <MessageList
-          messages={messages}
+          messages={edits.apply(messages)}
           side={(m) => (m.direction === "out" ? "right" : "left")}
           onRetry={(m) => act("conv.retry", { messageId: m.id, text: m.text.replace("[fail]", "").trim() }, "Retrying…")}
+          tools={tools}
         />
         <Composer
           savedReplies={db.savedReplies}
@@ -381,9 +426,26 @@ function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBac
           allowViewOnce
           disabled={blocked ? `${ct.name} is blocked. Tap to unblock.` : undefined}
           onDisabledClick={blocked ? () => unblock(ct) : undefined}
-          onSend={(mode, text, attachments, opts) => act("conv.send", { conversationId: conv.id, audience: mode, text, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce })}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          editing={editing}
+          onCancelEdit={() => setEditing(null)}
+          meId={meId}
+          onSend={async (mode, text, attachments, opts) => {
+            if (editing) {
+              const m = editing;
+              setEditing(null);
+              edits.run(m.id, text, () => act("msg.edit", { messageId: m.id, text })); // shows at once
+              return;
+            }
+            // a reply to the customer can only quote what the customer can see
+            const quote = replyTo && (mode === "internal" || replyTo.audience === "customer") ? replyTo.id : undefined;
+            await act("conv.send", { conversationId: conv.id, audience: mode, text, attachments: attachments.map((a) => a.id), viewOnce: opts?.viewOnce, replyTo: quote });
+            setReplyTo(null);
+          }}
         />
       </section>
+      {forwarding && <ForwardDialog msgs={forwarding} meId={meId} onClose={() => setForwarding(null)} />}
       {details && <Details conv={conv} onClose={() => setDetails(false)} />}
     </div>
   );

@@ -21,7 +21,7 @@ function useFileSource(a: Attachment) {
   return { uri: `${server.replace(/\/$/, "")}/api/v1/files/${a.id}`, headers: { Authorization: `Bearer ${token ?? ""}` } };
 }
 
-function VoicePlayer({ a, src: given }: { a: Attachment; src?: { uri: string } }) {
+function VoicePlayer({ a, src: given, onLongPress, onPressInstead }: { a: Attachment; src?: { uri: string } } & MediaPress) {
   const { c } = useTheme();
   const own = useFileSource(a);
   const src = given ?? own;
@@ -33,7 +33,7 @@ function VoicePlayer({ a, src: given }: { a: Attachment; src?: { uri: string } }
     player.play();
   };
   return (
-    <Pressable onPress={toggle} accessibilityLabel={st.playing ? "Pause voice message" : "Play voice message"}
+    <Pressable onPress={onPressInstead ?? toggle} onLongPress={onLongPress} delayLongPress={350} accessibilityLabel={st.playing ? "Pause voice message" : "Play voice message"}
       style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 18, paddingHorizontal: 10, paddingVertical: 6, marginTop: 4, minWidth: 170 }}>
       <Ionicons name={st.playing ? "pause" : "play"} size={20} color={c.accentStrong} />
       <View style={{ flex: 1, height: 3, backgroundColor: c.borderStrong, borderRadius: 2 }}>
@@ -45,12 +45,15 @@ function VoicePlayer({ a, src: given }: { a: Attachment; src?: { uri: string } }
 }
 
 /** A file in a chat: pictures inline, voice notes with a player, anything else (video, PDF…) opens with the phone's apps. */
-export function MediaAttachment({ a }: { a: Attachment }) {
-  return a.e2e ? <EncryptedAttachment a={a} /> : <PlainAttachment a={a} />;
+/** In a chat with message tools: a long press selects the message, and while selecting a tap toggles it (instead of opening the file). */
+export type MediaPress = { onLongPress?: () => void; onPressInstead?: () => void };
+
+export function MediaAttachment({ a, onLongPress, onPressInstead }: { a: Attachment } & MediaPress) {
+  return a.e2e ? <EncryptedAttachment a={a} onLongPress={onLongPress} onPressInstead={onPressInstead} /> : <PlainAttachment a={a} onLongPress={onLongPress} onPressInstead={onPressInstead} />;
 }
 
 /** A file of an end-to-end encrypted chat: downloaded and decrypted on the phone, then shown like any other. */
-function EncryptedAttachment({ a }: { a: Attachment }) {
+function EncryptedAttachment({ a, onLongPress, onPressInstead }: { a: Attachment } & MediaPress) {
   const { c } = useTheme();
   const { toast } = useStore();
   const uri = useDecryptedUri(a);
@@ -69,15 +72,15 @@ function EncryptedAttachment({ a }: { a: Attachment }) {
   }
   if (a.mime.startsWith("image/")) {
     return (
-      <Pressable onPress={share} style={{ marginTop: 4 }} accessibilityLabel={`Photo ${a.name}`}>
+      <Pressable onPress={onPressInstead ?? share} onLongPress={onLongPress} delayLongPress={350} style={{ marginTop: 4 }} accessibilityLabel={`Photo ${a.name}`}>
         <Image source={{ uri }} style={{ width: 220, height: 165, borderRadius: 8, backgroundColor: "rgba(0,0,0,0.08)" }} resizeMode="cover" />
       </Pressable>
     );
   }
-  if (a.mime.startsWith("audio/") && Platform.OS !== "web") return <VoicePlayer a={a} src={{ uri }} />;
+  if (a.mime.startsWith("audio/") && Platform.OS !== "web") return <VoicePlayer a={a} src={{ uri }} onLongPress={onLongPress} onPressInstead={onPressInstead} />;
   const icon = a.mime.startsWith("video/") ? "videocam" : a.mime === "application/pdf" ? "document-text" : "attach";
   return (
-    <Pressable onPress={share} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, marginTop: 4 }}>
+    <Pressable onPress={onPressInstead ?? share} onLongPress={onLongPress} delayLongPress={350} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, marginTop: 4 }}>
       <Ionicons name={icon} size={16} color={c.muted} />
       <T size={12.5} numberOfLines={1} style={{ flexShrink: 1 }}>{a.name}</T>
       <T size={11.5} muted>{(a.size / 1024 / 1024).toFixed(1)} MB</T>
@@ -85,21 +88,21 @@ function EncryptedAttachment({ a }: { a: Attachment }) {
   );
 }
 
-function PlainAttachment({ a }: { a: Attachment }) {
+function PlainAttachment({ a, onLongPress, onPressInstead }: { a: Attachment } & MediaPress) {
   const { c } = useTheme();
   const { openFile } = useStore();
   const src = useFileSource(a);
   if (a.mime.startsWith("image/")) {
     return (
-      <Pressable onPress={() => openFile(a)} style={{ marginTop: 4 }} accessibilityLabel={`Photo ${a.name}`}>
+      <Pressable onPress={onPressInstead ?? (() => openFile(a))} onLongPress={onLongPress} delayLongPress={350} style={{ marginTop: 4 }} accessibilityLabel={`Photo ${a.name}`}>
         <Image source={src} style={{ width: 220, height: 165, borderRadius: 8, backgroundColor: "rgba(0,0,0,0.08)" }} resizeMode="cover" />
       </Pressable>
     );
   }
-  if (a.mime.startsWith("audio/") && Platform.OS !== "web") return <VoicePlayer a={a} />;
+  if (a.mime.startsWith("audio/") && Platform.OS !== "web") return <VoicePlayer a={a} onLongPress={onLongPress} onPressInstead={onPressInstead} />;
   const icon = a.mime.startsWith("video/") ? "videocam" : a.mime === "application/pdf" ? "document-text" : "attach";
   return (
-    <Pressable onPress={() => openFile(a)} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, marginTop: 4 }}>
+    <Pressable onPress={onPressInstead ?? (() => openFile(a))} onLongPress={onLongPress} delayLongPress={350} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.06)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, marginTop: 4 }}>
       <Ionicons name={icon} size={16} color={c.muted} />
       <T size={12.5} numberOfLines={1} style={{ flexShrink: 1 }}>{a.name}</T>
       <T size={11.5} muted>{(a.size / 1024 / 1024).toFixed(1)} MB</T>

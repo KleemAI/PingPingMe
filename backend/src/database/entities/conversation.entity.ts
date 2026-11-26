@@ -21,6 +21,8 @@ export class ConversationEntity {
   @Column({ name: "resolved_at", ...TS_NULL }) resolvedAt: number | null;
   /** Disappearing messages: new chat messages vanish from the chat this many seconds after sending (0 = off). */
   @Column({ name: "disappear_seconds", type: "int", default: 0 }) disappearSeconds: number;
+  /** Pinned messages (newest first, at most 3). Team only — the customer never sees them. */
+  @Column({ type: "text", array: true, default: () => "'{}'" }) pinned: string[];
 }
 
 /**
@@ -54,4 +56,13 @@ export class MessageEntity {
   @Column({ name: "viewed_by", type: "varchar", length: 40, nullable: true }) viewedBy: string | null;
   /** From a contact that was blocked when it arrived: never shown to the team, not even after unblocking. The sender still sees it. */
   @Column({ name: "hidden_from_team", default: false }) hiddenFromTeam: boolean;
+  /** The message this one answers (same conversation). */
+  @Column({ name: "reply_to", type: "varchar", length: 40, nullable: true }) replyTo: string | null;
+  /** Sent with Forward from another chat. */
+  @Column({ default: false }) forwarded: boolean;
+  /** A chat reply typed by the team (true) — not a quote, order update or notice, which are records and never change. */
+  @Column({ name: "from_chat", default: false }) fromChat: boolean;
+  /** Internal notes and chat replies to app customers: edited / deleted by their author within EDIT_WINDOW (a deleted one's content is wiped). */
+  @Column({ name: "edited_at", ...TS_NULL }) editedAt: number | null;
+  @Column({ name: "deleted_at", ...TS_NULL }) deletedAt: number | null;
 }
