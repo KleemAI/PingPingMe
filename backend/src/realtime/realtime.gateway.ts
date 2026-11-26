@@ -20,6 +20,8 @@ import { RateLimiter } from "../security/rate-limiter.service";
  *   socket.on("ready",   ({ user, version }) => …);
  *   socket.on("changed", ({ version }) => refetch GET /api/v1/state?v=<your version>);
  *   socket.on("p2p_order", (o) => …)  // someone ordered from your ad (only the ad owner gets it)
+ *   socket.on("call_incoming", (CallIncoming) => …)  // ring: someone calls you / starts a call in your group
+ *   socket.on("call_update", (CallUpdate) => …)      // accepted / declined / ended / missed / busy / joined / left
  *   socket.on("auth_error", …)  // bad/expired token → sign in again
  *
  * "changed" carries only a version number; the data itself always comes through the role-scoped API,

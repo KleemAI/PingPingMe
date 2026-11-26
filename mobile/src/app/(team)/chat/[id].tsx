@@ -9,6 +9,8 @@ import { CONV_STATUS, relative } from "@/lib/format";
 import { Avatar, Button, Empty, Sheet, T } from "@/components/ui";
 import { confirm } from "@/components/Confirm";
 import { Composer, DisappearingButton, MessageList, disappearLabel } from "@/components/Thread";
+import { callsSupported } from "@/lib/livekit";
+import { startCall } from "@/lib/calls";
 
 export default function Chat() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -32,6 +34,10 @@ export default function Chat() {
   // team-wide block on the contact: their new messages never reach the inbox, and nobody can message them until unblocked
   const blocked = !!ct.blockedAt;
   const blockedBy = db.users.find((u) => u.id === ct.blockedBy);
+  // 📞 / 🎥 only for contacts with an app account (WhatsApp / SMS-only contacts can't be called)
+  const linkedUser = db.customers?.find((u) => u.contactId === ct.id && u.active);
+  const canCall = callsSupported && !blocked && !!linkedUser;
+  const call = (video: boolean) => startCall(act, { conversationId: conv.id }, video).catch(() => {});
   const openInfo = () => { setMenu(false); router.push({ pathname: "/chat/info", params: { id: conv.id } }); };
   const block = async () => {
     setMenu(false);
@@ -47,7 +53,7 @@ export default function Chat() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{
         headerTitle: () => (
-          <Pressable onPress={() => router.push({ pathname: "/chat/info", params: { id: conv.id } })} style={{ flexDirection: "row", alignItems: "center", gap: 10, maxWidth: Math.min(260, width - 170) /* leaves room for the header buttons */ }}>
+          <Pressable onPress={() => router.push({ pathname: "/chat/info", params: { id: conv.id } })} style={{ flexDirection: "row", alignItems: "center", gap: 10, maxWidth: Math.min(260, width - (canCall ? 230 : 170)) /* leaves room for the header buttons */ }}>
             <Avatar name={co?.name ?? ct.name} size={36} />
             <View style={{ flexShrink: 1 }}>
               <T weight="600" numberOfLines={1}>{co ? co.name : ct.name}</T>
@@ -57,6 +63,10 @@ export default function Chat() {
         ),
         headerRight: () => (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+            {canCall && <>
+              <Pressable onPress={() => call(false)} hitSlop={8} accessibilityLabel="Voice call"><Ionicons name="call-outline" size={22} color={c.text} /></Pressable>
+              <Pressable onPress={() => call(true)} hitSlop={8} accessibilityLabel="Video call"><Ionicons name="videocam-outline" size={24} color={c.text} /></Pressable>
+            </>}
             {!blocked && <DisappearingButton value={conv.disappearSeconds}
               onChange={(v) => act("conv.disappearing", { conversationId: conv.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />}
             <Pressable onPress={() => setMenu(true)} hitSlop={10} accessibilityLabel="Chat options">

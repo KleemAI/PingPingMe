@@ -7,6 +7,7 @@ import { useReseller } from "@/lib/client/store";
 import { ORDER_STATUS, REQ_STATUS, dateTime, rupees, relative } from "@/lib/format";
 import { Button, Card, Empty, Field, Modal, Pill, StatusPill, inputCls } from "@/components/ui";
 import { Composer, DisappearingPicker, MessageList, disappearLabel } from "@/components/Thread";
+import { CallButtons, useCalls } from "@/components/Calls";
 
 export default function PortalRequest({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -15,6 +16,7 @@ export default function PortalRequest({ params }: { params: Promise<{ id: string
   const r = s.requests.find((x) => x.id === id);
   const [modal, setModal] = useState<null | "decline" | "clarify">(null);
   const [reason, setReason] = useState("");
+  const calls = useCalls();
   if (!r) return <Empty icon={FileText} title="Request not found" text="It may have been reassigned to another partner." />;
 
   const mine = r.resellerId === s.reseller.id;
@@ -78,8 +80,10 @@ export default function PortalRequest({ params }: { params: Promise<{ id: string
         </div>
 
         <Card className="flex h-[560px] flex-col overflow-hidden">
-          <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-2.5 text-[14px] font-semibold">
-            Messages with our team
+          <div className="flex items-center gap-1 border-b border-[var(--border)] px-4 py-2.5 text-[14px] font-semibold">
+            <span className="mr-auto">Messages with our team</span>
+            {/* rings this request's coordinator, or our whole team when nobody owns it */}
+            {mine && <CallButtons disabled={calls.busy} onCall={(video) => calls.start({ requestId: r.id }, video)} />}
             {mine && <DisappearingPicker value={r.resellerDisappearSeconds} onChange={(v) => act("portal.disappearing", { requestId: r.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />}
           </div>
           <MessageList viewer="reseller" messages={msgs} side={(m) => (m.direction === "in" ? "right" : "left")} wallpaper={false} />

@@ -95,6 +95,7 @@ export type Message = {
   viewedBy?: string;
   system?: boolean; // group notices ("… added …", "… left") — shown as a small centred line
   opened?: number; // groups: how many members opened a view-once message
+  call?: CallLog; // a call history line (inbox / request thread), shown as a system line
 };
 
 export type ResellerStatus = "pending" | "active" | "suspended";
@@ -417,6 +418,7 @@ export type PersonalMessage = {
   expiresAt?: number; viewOnce?: boolean; viewedAt?: number;
   e2e?: E2EEnvelope; // encrypted: text is empty, the app decrypts this
   undelivered?: boolean; // your message wasn't delivered (show a single tick, never "read")
+  call?: CallLog; // a call history line (author = the caller)
 };
 export type PersonalChat = { id: string; with: Person; lastMessageAt: number; unread: number; theirReadAt?: number; disappearSeconds?: number; messages: PersonalMessage[];
   blocked?: boolean; // you blocked this person: they can't message you, you can't message them until you unblock
@@ -430,6 +432,7 @@ export type GroupMessage = {
   id: string; authorId: string; authorName: string; text: string; attachments: Attachment[]; createdAt: number; system?: boolean;
   expiresAt?: number; viewOnce?: boolean; viewedAt?: number; opened?: number; // opened = how many members opened a view-once message
   e2e?: E2EEnvelope; // encrypted: text is empty, the app decrypts this
+  call?: CallLog; // a call history line (system message)
 };
 export type GroupChat = {
   id: string; name: string; members: GroupMember[]; admin: boolean; lastMessageAt: number; unread: number; disappearSeconds?: number; messages: GroupMessage[];
@@ -441,6 +444,7 @@ export type GroupChat = {
    * not end-to-end encrypted (send { text }, never e2e) and only the last 200 are listed. Find others with GroupMembersPage.
    */
   memberCount: number; large?: boolean;
+  call?: CallInfo; // a call going on in this group right now (the "Join" banner)
 };
 /** GET /people/groups/:id/members?q=&offset= → 50 members at a time (admins first), matching a name / phone; next = the offset for more. */
 export type GroupMembersPage = { members: GroupMember[]; next?: number };
@@ -449,3 +453,46 @@ export type Community = {
   id: string; name: string; description?: string; admin: boolean; announcementGroupId: string; memberCount: number;
   groups: { id: string; name: string; member: boolean; announcement: boolean; memberCount: number }[];
 };
+
+/**
+ * Voice / video calls (LiveKit). Signalling over Socket.IO: "call_incoming" (CallIncoming) rings you, "call_update"
+ * (CallUpdate) follows the call. Media goes to the LiveKit server with a token from POST /calls/:id/token (CallToken).
+ */
+export type CallStatus = "ringing" | "active" | "ended" | "missed" | "declined" | "busy";
+export type CallParticipant = { id: string; name: string; state: "ringing" | "joined" | "left" | "declined" | "missed"; joinedAt?: number; leftAt?: number };
+export type CallInfo = {
+  id: string; kind: "personal" | "group"; video: boolean; status: CallStatus;
+  chatId?: string; groupId?: string; groupName?: string;
+  startedBy: { id: string; name: string }; startedAt: number; answeredAt?: number; endedAt?: number;
+  participants: CallParticipant[];
+  maxParticipants: number; // 32 voice / 16 video
+  large?: boolean; // a large group (> 1,000 members): nobody is rung — join from the banner
+  /** a call with a customer (inbox / support chat) or a reseller; kind is then "personal" (two people once answered) */
+  via?: "inbox" | "reseller";
+  conversationId?: string; requestId?: string; resellerId?: string;
+  peerName?: string; // the customer / reseller, as our team sees the call
+  peerIds?: string[]; // the customer / reseller side of the call (everyone else is our team)
+  businessName?: string; // the business, as the customer / reseller sees the call
+  teamRing?: boolean; // ringing our team: the first to answer gets the call
+  answeredBy?: { id: string; name: string };
+};
+/**
+ * call.start payloads: a person / personal chat / group, or — new — an inbox conversation (team → its app customer),
+ * the support chat (customer → our team), a reseller or a request's reseller (team → reseller), or our team
+ * (reseller → team; with requestId from the request screen).
+ */
+export type CallTarget = {
+  userId?: string; chatId?: string; groupId?: string;
+  conversationId?: string; support?: boolean; resellerId?: string; requestId?: string; team?: boolean;
+};
+/** "call_incoming": ring this phone / tab. */
+export type CallIncoming = { call: CallInfo; from: { id: string; name: string }; title: string /* caller or group name */ };
+export type CallEvent = "accepted" | "declined" | "ended" | "missed" | "busy" | "joined" | "left";
+/** "call_update": something happened in a call you're in or were rung for. `by` = who did it (joined / left / declined…). */
+export type CallUpdate = { call: CallInfo; event: CallEvent; by?: { id: string; name: string } };
+/** POST /calls/:id/token → connect with LiveKit (room.connect(url, token)). Only for people in the call. */
+export type CallToken = { url: string; token: string; room: string; identity: string; expiresAt: number };
+/** A call history line on a personal / group message ("Missed voice call", "Video call · 3 min"). */
+export type CallLog = { callId: string; video: boolean; status: "ended" | "missed" | "declined" | "busy"; durationSec?: number };
+/** GET /calls → whether calls are set up on the server, and the calls ringing you / you're in right now. */
+export type CallsPayload = { configured: boolean; calls: CallInfo[] };

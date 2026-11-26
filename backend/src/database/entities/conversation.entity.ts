@@ -1,7 +1,7 @@
 import { Column, Entity, Generated, Index, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
 import { TS, TS_NULL } from "../transformers";
 import { ContactEntity } from "./contact.entity";
-import type { Attachment } from "../../common/contract";
+import type { Attachment, CallLog } from "../../common/contract";
 
 @Entity("conversations")
 @Index(["contactId", "channel"])
@@ -54,4 +54,6 @@ export class MessageEntity {
   @Column({ name: "viewed_by", type: "varchar", length: 40, nullable: true }) viewedBy: string | null;
   /** From a contact that was blocked when it arrived: never shown to the team, not even after unblocking. The sender still sees it. */
   @Column({ name: "hidden_from_team", default: false }) hiddenFromTeam: boolean;
+  /** a call history line ("Missed voice call", "Video call · 3 min"); never sent to WhatsApp / SMS (status null) */
+  @Column({ type: "jsonb", nullable: true }) call: CallLog | null;
 }

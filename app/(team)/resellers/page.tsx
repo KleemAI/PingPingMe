@@ -7,6 +7,7 @@ import { Search, Plus, ShieldCheck, Ban, CheckCircle2, Pencil, Phone, Mail, MapP
 import { useTeam } from "@/lib/client/store";
 import type { Reseller } from "@/lib/types";
 import { REQ_STATUS, duration, dateTime } from "@/lib/format";
+import { CallButtons, useCalls } from "@/components/Calls";
 import { Avatar, Button, Card, Empty, Field, Modal, PageHeader, Pill, StatusPill, Tabs, inputCls, type Tone } from "@/components/ui";
 
 const STATUS_TONE: Record<Reseller["status"], Tone> = { active: "green", pending: "amber", suspended: "red" };
@@ -99,12 +100,18 @@ function Detail({ r, onClose, onEdit }: { r: Reseller; onClose: () => void; onEd
   const responded = as.filter((a) => a.respondedAt);
   const avgResp = responded.length ? responded.reduce((s, a) => s + a.respondedAt! - a.assignedAt, 0) / responded.length : 0;
   const portalUser = db.users.find((u) => u.resellerId === r.id);
+  const canCall = db.users.some((u) => u.resellerId === r.id && u.active); // rings their portal / app login(s)
+  const calls = useCalls();
 
   return (
     <aside className="animate-slide fixed inset-0 z-30 overflow-y-auto bg-[var(--bg-app)] xl:static xl:w-[420px] xl:shrink-0 xl:border-l xl:border-[var(--border)] xl:bg-transparent">
       <div className="glass-bar sticky top-0 z-10 flex items-center justify-between border-b border-[var(--border)] px-4 py-3">
         <span className="font-semibold">Reseller profile</span>
-        <button onClick={onClose} className="rounded-full p-1 text-[var(--muted)] hover:bg-[var(--hover)]"><X size={18} /></button>
+        <div className="flex items-center gap-0.5">
+          <CallButtons disabled={!canCall || calls.busy} hint={canCall ? undefined : "This reseller has no app login"}
+            onCall={(video) => calls.start({ resellerId: r.id }, video)} />
+          <button onClick={onClose} className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><X size={18} /></button>
+        </div>
       </div>
       <div className="space-y-3 p-3">
         <Card>

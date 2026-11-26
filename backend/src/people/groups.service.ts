@@ -1,16 +1,18 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { lockedPreview, readEnvelope } from "../common/e2e";
 import { In, type EntityManager } from "typeorm";
-import type { Attachment, E2EEnvelope, GroupChat, GroupMember, GroupMembersPage, User } from "../common/contract";
+import type { Attachment, CallLog, E2EEnvelope, GroupChat, GroupMember, GroupMembersPage, User } from "../common/contract";
 import { badRequest, conflict, forbidden, notFound } from "../common/errors";
 import { MAX_MESSAGE, newId, optStr, str, type Payload } from "../common/util";
-import { CommunityEntity, GroupChatEntity, GroupMemberEntity, GroupMessageEntity, UserEntity } from "../database/entities";
+import { CallEntity, CommunityEntity, GroupChatEntity, GroupMemberEntity, GroupMessageEntity, UserEntity } from "../database/entities";
 import { DISAPPEAR_CHOICES } from "../database/mappers";
 import { UnitOfWork, type Tx } from "../database/unit-of-work.service";
 import { disappearLabel, expiryFor, viewOnceFlag } from "../conversations/disappearing";
 import { FilesService } from "../files/files.service";
 import { PushService, preview } from "../push/push.service";
 import { canChat, whoBlocked } from "./people.service";
+import { LIVE_CALL, toCallInfo } from "../calls/call-info";
+import { groupMemberGone } from "../calls/member-gone";
 
 /** Like Telegram: groups of up to 200,000 people. */
 export const MAX_GROUP_MEMBERS = 200_000;
@@ -38,7 +40,7 @@ type PersonRow = { id: string; name: string; role: string; email: string | null;
 type MemberRow = { group_id: string; user_id: string; role: string; joined_at: Date };
 type MessageRow = {
   id: string; group_id: string; author_id: string; text: string; attachments: Attachment[]; system: boolean; created_at: Date; seq: string;
-  expires_at: Date | null; view_once: boolean; e2e: E2EEnvelope | null; viewed_at: Date | null; opened: number | null;
+  expires_at: Date | null; view_once: boolean; e2e: E2EEnvelope | null; viewed_at: Date | null; opened: number | null; call: CallLog | null;
 };
 const ms = (d: Date | string) => new Date(d).getTime();
 const chunks = <T>(xs: T[], n: number) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
@@ -112,13 +114,13 @@ export class GroupsService implements OnModuleInit {
     const count = await memberCounts(em, groups);
     const large = ids.filter((id) => (count.get(id) ?? 0) > E2E_GROUP_LIMIT);
     const small = ids.filter((id) => (count.get(id) ?? 0) <= E2E_GROUP_LIMIT);
-    const msgCols = `m.id, m.group_id, m.author_id, m.text, m.attachments, m.system, m.created_at, m.seq, m.expires_at, m.view_once,
+    const msgCols = `m.id, m.group_id, m.author_id, m.text, m.attachments, m.system, m.created_at, m.seq, m.expires_at, m.view_once, m.call,
         CASE WHEN m.e2e IS NOT NULL THEN (m.e2e - 'keys') || jsonb_build_object('keys',
           CASE WHEN m.e2e -> 'keys' ? $3::text THEN jsonb_build_object($3::text, m.e2e -> 'keys' -> $3::text) ELSE '{}'::jsonb END) END AS e2e,
         CASE WHEN m.view_once THEN (SELECT v.viewed_at FROM group_message_views v WHERE v.message_id = m.id AND v.user_id = $1::text) END AS viewed_at,
         CASE WHEN m.view_once THEN m.opened END AS opened`;
     const msgWhere = `m.group_id = me.group_id AND m.created_at >= me.joined_at AND (m.expires_at IS NULL OR m.expires_at > now())`;
-    const [members, messages, unread] = await Promise.all([
+    const [members, messages, unread, calls] = await Promise.all([
       em.query(
         `SELECT group_id, user_id, role, joined_at FROM group_members WHERE group_id = ANY($1)
          UNION ALL
@@ -142,6 +144,8 @@ export class GroupsService implements OnModuleInit {
              SELECT 1 FROM group_messages m WHERE ${msgWhere}
                 AND NOT m.system AND m.author_id <> $1 AND m.created_at > coalesce(me.read_at, me.joined_at) LIMIT ${UNREAD_CAP}) x) AS n
            FROM group_members me WHERE me.user_id = $1`, [user.id]) as Promise<{ group_id: string; n: string }[]>,
+      // calls going on in your groups (the "Join" banner)
+      em.find(CallEntity, { where: { groupId: In(ids), status: In(LIVE_CALL) } }),
     ]);
     const unreadOf = new Map(unread.map((u) => [u.group_id, Number(u.n)]));
     const authorIds = [...new Set([...members.map((m) => m.user_id), ...messages.map((m) => m.author_id)])];
@@ -166,6 +170,7 @@ export class GroupsService implements OnModuleInit {
         canSend: !g.announcement || !!community?.admins.includes(user.id),
         unread: unreadOf.get(g.id) ?? 0,
         memberCount, large: memberCount > E2E_GROUP_LIMIT || undefined,
+        call: ((c) => (c ? toCallInfo(c, g.name, memberCount > E2E_GROUP_LIMIT) : undefined))(calls.find((c) => c.groupId === g.id)),
         members: (membersOf.get(g.id) ?? []).map((m) => toMember(m.user_id, m.role, who.get(m.user_id))),
         messages: (messagesOf.get(g.id) ?? []).map((m) => {
           const mineMsg = m.author_id === user.id;
@@ -177,6 +182,7 @@ export class GroupsService implements OnModuleInit {
             attachments: m.view_once && (mineMsg || viewedAt) ? [] : m.attachments,
             viewedAt, opened: m.view_once ? Number(m.opened ?? 0) : undefined,
             e2e: m.e2e ?? undefined,
+            call: m.call ?? undefined,
           };
         }),
       };
@@ -289,6 +295,8 @@ export class GroupsService implements OnModuleInit {
   private async deleteMember(tx: Tx, m: GroupMemberEntity) {
     const r = await tx.em.delete(GroupMemberEntity, { id: m.id });
     if (r.affected) await addCount(tx, m.groupId, -r.affected);
+    // out of the group → out of its live call too (and kicked from the LiveKit room)
+    if (r.affected) await groupMemberGone.run(tx, m.groupId, m.userId);
   }
 
   /** "Rahul added Rixit" style line in the chat. */

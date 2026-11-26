@@ -172,7 +172,7 @@ export function MessageList({ messages: all, side, onRetry, viewer = "team", wal
             <View style={{ backgroundColor: c.bubbleIn, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}><T size={12} muted>{dayDivider(m.createdAt)}</T></View>
           </View>
         );
-        if (m.system) {
+        if (m.system || m.call) {
           return (
             <Fragment key={m.id}>
               {divider}

@@ -12,7 +12,10 @@
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
-        }
+        },
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     },
     "android": {
@@ -23,7 +26,15 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.yourcompany.businessmessaging"
+      "package": "com.yourcompany.businessmessaging",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.USE_FULL_SCREEN_INTENT"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -37,14 +48,17 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow $(PRODUCT_NAME) to record voice notes for your chats."
+          "microphonePermission": "Allow $(PRODUCT_NAME) to use the microphone for voice notes and calls."
         }
       ],
       [
         "expo-notifications",
         {
           "color": "#2f7fe0",
-          "sounds": ["./assets/sounds/new_order.wav"]
+          "sounds": [
+            "./assets/sounds/new_order.wav",
+            "./assets/sounds/call_ring.wav"
+          ]
         }
       ],
       [
@@ -60,6 +74,21 @@
         {
           "photosPermission": "Allow $(PRODUCT_NAME) to add your photos to notes.",
           "cameraPermission": "Allow $(PRODUCT_NAME) to take photos for your notes."
+        }
+      ],
+      [
+        "@livekit/react-native-expo-plugin",
+        {
+          "android": {
+            "audioType": "communication"
+          }
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera for video calls.",
+          "microphonePermission": "Allow $(PRODUCT_NAME) to use the microphone for voice notes and calls."
         }
       ]
     ],

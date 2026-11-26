@@ -31,7 +31,8 @@ export const toConversation = (c: ConversationEntity): Conversation => {
 
 export const toMessage = (m: MessageEntity): Message => {
   const { seq, viewOnce, hiddenFromTeam, ...rest } = m; // eslint-disable-line @typescript-eslint/no-unused-vars
-  return clean({ ...rest, viewOnce: viewOnce || undefined }) as Message;
+  // a call history line shows as a small centred line
+  return clean({ ...rest, viewOnce: viewOnce || undefined, system: rest.call ? true : undefined }) as Message;
 };
 
 /** A contact as the customer themself gets it: the team-wide block is never shown to them. */

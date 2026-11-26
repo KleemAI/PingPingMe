@@ -15,6 +15,7 @@ import { fuzzyScore } from "@/lib/fuzzy";
 import { E2E_GROUP_LIMIT, LOCKED_TEXT, filesOf, openMessage, useE2E } from "@/lib/client/e2e";
 import type { MyDevice } from "@/lib/e2eCore";
 import { ask } from "@/components/Confirm";
+import { CallButtons, GroupCallBanner, useCalls } from "./Calls";
 
 /**
  * What to send: encrypted ({ e2e }) when the chat is encrypted, else plain ({ text }). Files uploaded encrypted can
@@ -104,6 +105,7 @@ export default function People() {
   const me = (state as { me?: { id: string; name: string; role?: string } } | null)?.me;
   const { chats, groups, communities, blocked, reload } = usePersonalChats();
   const { block, unblock } = useBlocking(reload);
+  const calls = useCalls();
   const [showBlocked, setShowBlocked] = useState(false);
   const [menu, setMenu] = useState(false); // personal chat header menu
   const menuRef = useClickAway<HTMLDivElement>(menu, () => setMenu(false));
@@ -290,6 +292,7 @@ export default function People() {
                 <div className="truncate text-[12px] text-[var(--muted)]">{header.sub}</div>
               </div>
               {e2e.enabled && <span title="End-to-end encrypted: only the two of you can read these messages" className="flex items-center gap-1 rounded-full bg-[var(--accent)]/10 px-2 py-1 text-[11.5px] text-[var(--accent-strong)]"><Lock size={12} /> Encrypted</span>}
+              {pmPerson && <CallButtons disabled={calls.busy} onCall={(video) => calls.start(chat ? { chatId: chat.id } : { userId: pmPerson.id }, video)} />}
               {chat && !isBlocked && <DisappearingPicker value={chat.disappearSeconds} onChange={(v) => act("pm.disappearing", { chatId: chat.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />}
               <div ref={menuRef} className="relative">
                 <button onClick={() => setMenu((x) => !x)} title="More" aria-label="More" aria-expanded={menu} className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><MoreVertical size={19} /></button>
@@ -402,6 +405,7 @@ export function GroupView({ group, meId, onBack, reload, communities = [], group
   communities?: Community[]; groups?: GroupChat[]; onOpenGroup?: (id: string) => void;
 }) {
   const { act } = useStore();
+  const calls = useCalls();
   const [info, setInfo] = useState(false);
   const [showCommunity, setShowCommunity] = useState(false);
   const large = isLargeGroup(group);
@@ -432,11 +436,13 @@ export function GroupView({ group, meId, onBack, reload, communities = [], group
             </div>
           </div>
         </button>
+        {group.canSend !== false && <CallButtons disabled={calls.busy} onCall={(video) => calls.start({ groupId: group.id }, video)} />}
         {group.canSend !== false && <DisappearingPicker value={group.disappearSeconds} onChange={(v) => act("group.disappearing", { groupId: group.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off").then(reload).catch(() => {})} />}
         {large && <span title={LARGE_GROUP_TEXT} className="shrink-0 rounded-full bg-[var(--panel-2)] px-2 py-1 text-[11.5px] text-[var(--muted)]">Large group · not encrypted</span>}
         {e2e.enabled && <span title="End-to-end encrypted: only the members can read these messages" className="flex items-center gap-1 rounded-full bg-[var(--accent)]/10 px-2 py-1 text-[11.5px] text-[var(--accent-strong)]"><Lock size={12} /> Encrypted</span>}
         <button onClick={openInfo} title="Group info" aria-label="Group info" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]"><Info size={19} /></button>
       </header>
+      <GroupCallBanner group={group} meId={meId} />
       <MessageList messages={messages} side={(m) => (m.direction === "out" ? "right" : "left")} openAction="group.open" />
       <Composer
         allowViewOnce

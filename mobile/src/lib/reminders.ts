@@ -38,6 +38,8 @@ function setHandler() {
     // while the app is open ours show as an in-app pop-up (see below) instead of a second banner
     handleNotification: async (n) => {
       const ours = typeof n.request.content.data?.planId === "string";
+      // a call push while the app is open: the in-app ring screen is already up (socket)
+      if (n.request.content.data?.type === "call") return { shouldShowBanner: false, shouldShowList: false, shouldPlaySound: false, shouldSetBadge: false };
       return { shouldShowBanner: !ours, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false };
     },
   });

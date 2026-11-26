@@ -26,6 +26,8 @@ import { CatalogService } from "../catalog/catalog.service";
 import { CustomerService } from "../customer/customer.service";
 import { BroadcastsService } from "../broadcasts/broadcasts.service";
 import { TasksService } from "../tasks/tasks.service";
+import { CallsService } from "../calls/calls.service";
+import { forViewer } from "../calls/call-info";
 
 type Handler = (tx: Tx, p: Payload) => Promise<unknown>;
 
@@ -62,6 +64,7 @@ export class ActionsService {
     people: PeopleService,
     groups: GroupsService,
     communities: CommunitiesService,
+    calls: CallsService,
   ) {
     // to-do tasks — everyone has their own (sharing with everyone is checked inside: team only)
     const todo: Record<string, Handler> = {
@@ -74,6 +77,16 @@ export class ActionsService {
       "task.clearDone": (t) => tasks.clearDone(t),
       "list.save": (t, p) => tasks.saveList(t, p),
       "list.delete": (t, p) => tasks.deleteList(t, p),
+    };
+    // voice / video / group calls (LiveKit) — customers and the team; resellers only call our team (calls.service gates each kind)
+    const calling: Record<string, Handler> = {
+      // (forViewer: a customer / reseller who rang our team doesn't get the team roster back)
+      "call.start": async (t, p) => forViewer(await calls.start(t, p), t.user.id),
+      "call.accept": async (t, p) => forViewer(await calls.accept(t, p), t.user.id),
+      "call.decline": async (t, p) => forViewer(await calls.decline(t, p), t.user.id),
+      "call.join": async (t, p) => forViewer(await calls.join(t, p), t.user.id),
+      "call.leave": async (t, p) => forViewer(await calls.leave(t, p), t.user.id),
+      "call.end": async (t, p) => forViewer(await calls.end(t, p), t.user.id),
     };
     // P2P market — the same commands for everyone who trades (team, resellers, customers)
     const market: Record<string, Handler> = {
@@ -122,6 +135,7 @@ export class ActionsService {
       "community.removeGroup": (t, p) => communities.removeGroup(t, p),
       "community.setAdmin": (t, p) => communities.setAdmin(t, p),
       "community.leave": (t, p) => communities.leave(t, p),
+      ...calling,
       "request.disappearing": (t, p) => requests.disappearing(t, p),
       "message.open": (t, p) => openViewOnce(t, p),
       "inbound.simulate": (t, p) => conversations.simulateInbound(t, p),
@@ -181,6 +195,7 @@ export class ActionsService {
       "portal.availability": (t, p) => resellers.setOwnAvailability(t, p),
       "me.password": (t, p) => users.changeOwnPassword(t, p),
       "portal.product": (t, p) => catalog.propose(t, p),
+      ...calling, // calls with our team (from a request or the portal header)
       ...todo,
       ...market,
     };
@@ -210,6 +225,7 @@ export class ActionsService {
       "community.removeGroup": (t, p) => communities.removeGroup(t, p),
       "community.setAdmin": (t, p) => communities.setAdmin(t, p),
       "community.leave": (t, p) => communities.leave(t, p),
+      ...calling,
       "message.open": (t, p) => openViewOnce(t, p),
       ...todo,
       "me.password": (t, p) => users.changeOwnPassword(t, p),

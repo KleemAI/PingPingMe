@@ -11,6 +11,8 @@ import { Avatar, Button, Sheet, T } from "@/components/ui";
 import { confirm } from "@/components/Confirm";
 import { Composer, DisappearingButton, MessageList, disappearLabel } from "@/components/Thread";
 import { filesOf, msgText, openMessage, useE2E } from "@/lib/e2e";
+import { callsSupported } from "@/lib/livekit";
+import { startCall } from "@/lib/calls";
 
 /** One personal chat (`id` = chat id, or "new" with the person found by search). */
 export default function PersonalChatScreen() {
@@ -37,6 +39,12 @@ export default function PersonalChatScreen() {
     if (!person) return;
     setMenu(false);
     act("pm.unblock", { userId: person.id }, `${person.name} unblocked`).then(reload).catch(() => {});
+  };
+
+  // 📞 / 🎥: ring them (the server says "Calls aren't set up yet" until LiveKit keys are set)
+  const call = (video: boolean) => {
+    if (!person) return;
+    startCall(act, chat ? { chatId: chat.id } : { userId: person.id }, video).catch(() => {});
   };
 
   useEffect(() => {
@@ -67,7 +75,15 @@ export default function PersonalChatScreen() {
             </View>
           </View>
         ) : null,
-        headerRight: () => person ? <Pressable onPress={() => setMenu(true)} hitSlop={10} accessibilityLabel="Chat options"><Ionicons name="ellipsis-vertical" size={22} color={c.text} /></Pressable> : null,
+        headerRight: () => person ? (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
+            {callsSupported && !blocked && <>
+              <Pressable onPress={() => call(false)} hitSlop={8} accessibilityLabel="Voice call"><Ionicons name="call-outline" size={22} color={c.text} /></Pressable>
+              <Pressable onPress={() => call(true)} hitSlop={8} accessibilityLabel="Video call"><Ionicons name="videocam-outline" size={24} color={c.text} /></Pressable>
+            </>}
+            <Pressable onPress={() => setMenu(true)} hitSlop={10} accessibilityLabel="Chat options"><Ionicons name="ellipsis-vertical" size={22} color={c.text} /></Pressable>
+          </View>
+        ) : null,
       }} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={headerHeight}>
         {chat && !blocked && <DisappearingButton row value={chat.disappearSeconds}

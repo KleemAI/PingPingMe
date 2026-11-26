@@ -52,6 +52,15 @@ export function myDevice(userId: string, api: Api, session = ""): Promise<MyDevi
 /** Forget the cached device (after signing out the session changes). */
 export const resetE2E = () => devices.clear();
 
+/**
+ * Register this phone's key as soon as someone signs in (mounted once in app/_layout.tsx), not only when a chat
+ * screen opens: a message sent to you before that is sealed without this phone and can't be opened here.
+ */
+export function useDeviceKey(meId: string | undefined, canChat: boolean) {
+  const { api, token } = useStore();
+  useEffect(() => { if (meId && token && canChat) void myDevice(meId, api, token); }, [meId, token, canChat, api]);
+}
+
 /** The server answers up to 300 people per call (and keeps the address short), so bigger groups ask in chunks. */
 const KEYS_PER_CALL = 300;
 const MAX_E2E_DEVICES = 5_000;

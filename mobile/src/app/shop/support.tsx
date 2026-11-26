@@ -1,9 +1,13 @@
 import { useEffect } from "react";
-import { KeyboardAvoidingView, View } from "react-native";
+import { KeyboardAvoidingView, Pressable, View } from "react-native";
 import { Stack } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
+import { Ionicons } from "@expo/vector-icons";
 import { useCustomer } from "@/lib/store";
 import { useTeamChatSeen } from "@/lib/seen";
+import { useTheme } from "@/lib/theme";
+import { callsSupported } from "@/lib/livekit";
+import { startCall } from "@/lib/calls";
 import { Avatar, T } from "@/components/ui";
 import { Composer, DisappearingButton, MessageList, disappearLabel } from "@/components/Thread";
 
@@ -15,6 +19,9 @@ export default function SupportChat() {
   const count = cs.messages.length;
   useEffect(() => { markSeen(); }, [count, markSeen]); // open = read
   const b = cs.business;
+  const { c } = useTheme();
+  // 📞 / 🎥 rings our team (the chat's owner, else everyone on the team); the first to answer takes it
+  const call = (video: boolean) => startCall(act, { support: true }, video).catch(() => {});
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{
@@ -27,6 +34,12 @@ export default function SupportChat() {
             </View>
           </View>
         ),
+        headerRight: callsSupported ? () => (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
+            <Pressable onPress={() => call(false)} hitSlop={8} accessibilityLabel="Voice call"><Ionicons name="call-outline" size={22} color={c.text} /></Pressable>
+            <Pressable onPress={() => call(true)} hitSlop={8} accessibilityLabel="Video call"><Ionicons name="videocam-outline" size={24} color={c.text} /></Pressable>
+          </View>
+        ) : undefined,
       }} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={headerHeight}>
         <DisappearingButton row value={cs.disappearSeconds}

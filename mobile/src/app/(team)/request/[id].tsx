@@ -12,6 +12,8 @@ import { ScrollPad } from "@/components/ScrollPad";
 import { Composer, MessageList, DisappearingButton, disappearLabel } from "@/components/Thread";
 import { OrderCard } from "@/components/OrderCard";
 import { OpenCaseSheet, PRIOS, ReasonSheet, ReminderSheet } from "@/components/forms";
+import { callsSupported } from "@/lib/livekit";
+import { startCall } from "@/lib/calls";
 
 const STEPS: Request["status"][] = ["new", "assigned", "accepted", "quoting", "approved", "fulfilment", "completed"];
 type Tab = "details" | "reseller" | "customer" | "deal";
@@ -40,6 +42,9 @@ export default function RequestWorkspace() {
   const stepIdx = STEPS.indexOf(r.status);
   const name = (uid: string) => db.users.find((u) => u.id === uid)?.name ?? "—";
   const delivered = orders.some((o) => o.status === "delivered");
+  // 📞 / 🎥 the assigned reseller (their portal logins); the call line lands in the reseller thread
+  const canCall = callsSupported && !!res && db.users.some((u) => u.resellerId === res.id && u.active);
+  const call = (video: boolean) => startCall(act, { requestId: r.id }, video).catch(() => {});
 
   const tabs: { id: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
     { id: "details", label: "Details", icon: "information-circle-outline" },
@@ -51,7 +56,13 @@ export default function RequestWorkspace() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: r.ref, headerRight: () => (
-        <Pressable onPress={() => setSheet("reminder")} hitSlop={10}><Ionicons name="alarm-outline" size={23} color={c.text} /></Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
+          {canCall && <>
+            <Pressable onPress={() => call(false)} hitSlop={8} accessibilityLabel={`Voice call ${res!.name}`}><Ionicons name="call-outline" size={22} color={c.text} /></Pressable>
+            <Pressable onPress={() => call(true)} hitSlop={8} accessibilityLabel={`Video call ${res!.name}`}><Ionicons name="videocam-outline" size={24} color={c.text} /></Pressable>
+          </>}
+          <Pressable onPress={() => setSheet("reminder")} hitSlop={10} accessibilityLabel="Reminder"><Ionicons name="alarm-outline" size={23} color={c.text} /></Pressable>
+        </View>
       ) }} />
       <View style={{ flexDirection: "row", backgroundColor: c.header, borderBottomWidth: 1, borderColor: c.border }}>
         {tabs.map((t) => {

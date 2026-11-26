@@ -3,11 +3,14 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { io, type Socket } from "socket.io-client";
-import type { AppState, ResellerState, TeamState, Attachment } from "../types";
+import type { AppState, ResellerState, TeamState, Attachment, CallIncoming, CallUpdate } from "../types";
 import { shrinkPhoto } from "./media";
 import { emitOrder, type NewOrder } from "./orderAlerts";
 import { NewOrderAlert } from "@/components/NewOrderAlert";
+import { emitCallIncoming, emitCallResync, emitCallUpdate } from "./calls";
+import { CallHost } from "@/components/Calls";
 import { ConfirmHost } from "@/components/Confirm";
+import { myDevice } from "./e2e";
 
 
 /** NestJS backend address for Socket.IO (set from API_URL in next.config.mjs). Empty = built-in server, polling only. */
@@ -75,6 +78,11 @@ export function StoreProvider({ children, expect }: { children: React.ReactNode;
     setState(s);
   }, [allowedKey, router]);
 
+  // This browser's encryption key, right after sign-in (not only when a chat opens): a message sent to you before the
+  // key is registered is sealed without this browser and can't be opened here. Resellers have no encrypted chats.
+  const meId = state && state.scope !== "reseller" ? state.me.id : undefined;
+  useEffect(() => { if (meId) void myDevice(meId); }, [meId]);
+
   // Live updates. With the NestJS backend, Socket.IO pushes "changed" after every write
   // (signed in with the session cookie); a slow poll stays on as a safety net.
   // With the built-in server, poll a cheap version check every 3 s.
@@ -84,9 +92,11 @@ export function StoreProvider({ children, expect }: { children: React.ReactNode;
     let live = false;
     if (REALTIME_URL) {
       socket = io(realtimeOrigin(), { withCredentials: true, transports: ["websocket", "polling"] });
-      socket.on("ready", () => { live = true; refresh(); });
+      socket.on("ready", () => { live = true; refresh(); emitCallResync(); });
       socket.on("changed", () => refresh());
       socket.on("p2p_order", (o: NewOrder) => emitOrder(o)); // someone ordered on my P2P ad → ring
+      socket.on("call_incoming", (c: CallIncoming) => emitCallIncoming(c)); // someone is calling me → ring
+      socket.on("call_update", (u: CallUpdate) => emitCallUpdate(u)); // accepted / declined / ended / joined / left…
       socket.on("disconnect", () => { live = false; });
       socket.on("auth_error", () => router.replace("/login"));
     }
@@ -137,6 +147,7 @@ export function StoreProvider({ children, expect }: { children: React.ReactNode;
     <StoreCtx.Provider value={{ state, act, refresh, toast, upload, now }}>
       {children}
       <NewOrderAlert />
+      <CallHost />
       <ConfirmHost />
       <div className="pointer-events-none fixed bottom-4 left-1/2 z-[100] flex -translate-x-1/2 flex-col items-center gap-2">
         {toasts.map((t) => (

@@ -10,6 +10,7 @@
     "mobile:web": "node scripts/export-mobile-web.mjs"
   },
   "dependencies": {
+    "livekit-client": "2.25.0",
     "lucide-react": "^1.73.0",
     "next": "16.4.6",
     "react": "^19.2.0",

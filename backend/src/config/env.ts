@@ -51,6 +51,14 @@ export const env = {
    * On by default only outside production and while SMTP isn't set.
    */
   get emailDevCodes() { return bool(process.env.EMAIL_DEV_CODES, !env.isProd && !env.mailReady); },
+  /**
+   * Voice / video calls (LiveKit Cloud or a self-hosted LiveKit server). Calls work once all three are set:
+   * LIVEKIT_URL (wss://…), LIVEKIT_API_KEY, LIVEKIT_API_SECRET. The secret only signs tokens here — never sent to the apps.
+   */
+  get livekit() {
+    return { url: (process.env.LIVEKIT_URL ?? "").trim(), apiKey: (process.env.LIVEKIT_API_KEY ?? "").trim(), apiSecret: (process.env.LIVEKIT_API_SECRET ?? "").trim() };
+  },
+  get callsReady() { const l = env.livekit; return !!(l.url && l.apiKey && l.apiSecret); },
   get corsOrigins() {
     return (process.env.CORS_ORIGINS ?? process.env.WEB_ORIGIN ?? "http://localhost:3000").split(",").map((s) => s.trim()).filter(Boolean);
   },

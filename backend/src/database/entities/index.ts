@@ -12,6 +12,7 @@ import { TaskEntity, TaskListEntity } from "./task.entity";
 import { SessionEntity } from "./session.entity";
 import { BlockEntity, CommunityEntity, GroupChatEntity, GroupMemberEntity, GroupMessageEntity, GroupMessageViewEntity, PersonalChatEntity, PersonalMessageEntity } from "./people.entity";
 import { PushTokenEntity } from "./push.entity";
+import { CallEntity } from "./call.entity";
 import { ActivityEntity, CounterEntity, FileEntity, ProcessedEventEntity, ReminderEntity, SavedReplyEntity, SettingsEntity } from "./misc.entity";
 
 export * from "./user.entity";
@@ -29,10 +30,11 @@ export * from "./task.entity";
 export * from "./session.entity";
 export * from "./people.entity";
 export * from "./push.entity";
+export * from "./call.entity";
 
 export const ENTITIES = [
   UserEntity, EmailCodeEntity, CompanyEntity, ContactEntity, ConversationEntity, MessageEntity, ResellerEntity, RequestEntity, AssignmentEntity,
   QuoteEntity, QuoteRevisionEntity, OrderEntity, OrderHistoryEntity, CaseEntity, CaseEvidenceEntity, CaseHistoryEntity,
   ActivityEntity, SavedReplyEntity, ReminderEntity, SettingsEntity, FileEntity, ProcessedEventEntity, CounterEntity, ProductEntity,
-  P2PAdEntity, P2POrderEntity, P2PMessageEntity, P2PProfileEntity, BroadcastEntity, TaskEntity, TaskListEntity, SessionEntity, PersonalChatEntity, PersonalMessageEntity, PushTokenEntity, GroupChatEntity, GroupMemberEntity, GroupMessageEntity, GroupMessageViewEntity, CommunityEntity, BlockEntity,
+  P2PAdEntity, P2POrderEntity, P2PMessageEntity, P2PProfileEntity, BroadcastEntity, TaskEntity, TaskListEntity, SessionEntity, PersonalChatEntity, PersonalMessageEntity, PushTokenEntity, GroupChatEntity, GroupMemberEntity, GroupMessageEntity, GroupMessageViewEntity, CommunityEntity, BlockEntity, CallEntity,
 ];

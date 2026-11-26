@@ -1,7 +1,7 @@
 import { Column, Entity, Generated, Index, PrimaryColumn } from "typeorm";
 import type { E2EEnvelope } from "../../common/contract";
 import { TS, TS_NULL } from "../transformers";
-import type { Attachment } from "../../common/contract";
+import type { Attachment, CallLog } from "../../common/contract";
 
 /**
  * Personal chats: one-to-one chats between customers and the team (people find each other by name or phone).
@@ -43,6 +43,8 @@ export class PersonalMessageEntity {
   @Column({ name: "viewed_by", type: "varchar", length: 40, nullable: true }) viewedBy: string | null;
   /** sent while the recipient had blocked the author: the recipient never sees it, not even after unblocking */
   @Column({ name: "hidden_for_recipient", default: false }) hiddenForRecipient: boolean;
+  /** a call history line ("Missed voice call", "Video call · 3 min"); author = the caller */
+  @Column({ type: "jsonb", nullable: true }) call: CallLog | null;
 }
 
 /**
@@ -115,6 +117,8 @@ export class GroupMessageEntity {
   @Column({ type: "jsonb", default: () => "'{}'" }) views: Record<string, number>;
   /** view once: how many members opened it (one row each in group_message_views) */
   @Column({ type: "int", default: 0 }) opened: number;
+  /** a call history line (system message); author = who started the call */
+  @Column({ type: "jsonb", nullable: true }) call: CallLog | null;
 }
 
 /** View once in a group: each member may open it one time (a row each — up to 200,000 per message). */

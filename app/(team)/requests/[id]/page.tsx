@@ -10,6 +10,7 @@ import type { Order, OrderStatus, Quote, Request } from "@/lib/types";
 import { PRIORITY, REQ_STATUS, ORDER_STATUS, CASE_STATUS, dateTime, duration, relative, rupees, resellerOverdue } from "@/lib/format";
 import { Avatar, Button, Card, Empty, Field, Modal, Pill, StatusPill, inputCls } from "@/components/ui";
 import { Composer, DisappearingPicker, MessageList, disappearLabel } from "@/components/Thread";
+import { CallButtons, useCalls } from "@/components/Calls";
 import { OrderPanel } from "@/components/OrderPanel";
 import { OpenCaseModal, ReminderModal } from "@/components/forms";
 
@@ -22,6 +23,7 @@ export default function RequestWorkspace({ params }: { params: Promise<{ id: str
   const r = db.requests.find((x) => x.id === id);
   const [tab, setTab] = useState<"customer" | "reseller">("reseller");
   const [modal, setModal] = useState<null | "assign" | "reminder" | "case" | "cancel" | "feedback">(null);
+  const calls = useCalls();
 
   if (!r) return <Empty icon={FileText} title="Request not found" />;
 
@@ -40,6 +42,7 @@ export default function RequestWorkspace({ params }: { params: Promise<{ id: str
   const od = resellerOverdue(r, now);
   const stepIdx = STEPS.indexOf(r.status);
   const name = (uid: string) => db.users.find((u) => u.id === uid)?.name ?? "—";
+  const resCanCall = !!res && db.users.some((u) => u.resellerId === res.id && u.active);
 
   return (
     <div className="pb-10">
@@ -147,7 +150,10 @@ export default function RequestWorkspace({ params }: { params: Promise<{ id: str
           {tab === "reseller" ? (
             <>
               {res && (
-                <div className="flex justify-end border-b border-[var(--border)] px-2 py-1">
+                <div className="flex items-center justify-end gap-0.5 border-b border-[var(--border)] px-2 py-1">
+                  <span className="mr-auto truncate pl-2 text-[12.5px] text-[var(--muted)]">{res.name}</span>
+                  <CallButtons disabled={!resCanCall || calls.busy} hint={resCanCall ? undefined : "This reseller has no app login"}
+                    onCall={(video) => calls.start({ requestId: r.id }, video)} />
                   <DisappearingPicker value={r.resellerDisappearSeconds} onChange={(v) => act("request.disappearing", { id: r.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />
                 </div>
               )}

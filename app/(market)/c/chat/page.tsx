@@ -5,12 +5,14 @@ import { useStore } from "@/lib/client/store";
 import type { CustomerState } from "@/lib/types";
 import { Composer, DisappearingPicker, MessageList, disappearLabel } from "@/components/Thread";
 import { Avatar } from "@/components/ui";
+import { CallButtons, useCalls } from "@/components/Calls";
 
 /** The customer's chat with our team (text, photos, videos, documents, voice notes). It lands in the team's Customer inbox. */
 export default function CustomerChat() {
   const { state, act } = useStore();
   const cs = state as CustomerState;
   const b = cs.business;
+  const calls = useCalls();
   return (
     <div className="flex h-full flex-col">
       <header className="flex shrink-0 items-center gap-3 glass-bar border-b border-[var(--border)] px-4 py-2.5">
@@ -23,6 +25,8 @@ export default function CustomerChat() {
             {b.email && <a href={`mailto:${b.email}`} className="hidden items-center gap-1 hover:underline sm:flex"><Mail size={12} /> {b.email}</a>}
           </p>
         </div>
+        {/* rings our team: the chat's owner, or everyone on the team when nobody owns it */}
+        <CallButtons disabled={calls.busy} onCall={(video) => calls.start({ support: true }, video)} />
         <DisappearingPicker value={cs.disappearSeconds} onChange={(v) => act("chat.disappearing", { seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />
       </header>
       {/* "in" = from the customer to us → their own messages on the right */}

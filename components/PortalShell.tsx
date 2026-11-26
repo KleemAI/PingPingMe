@@ -8,11 +8,13 @@ import { DevicesButton } from "./LinkedDevices";
 import { useDark } from "./TeamShell";
 import { ReminderAlerts, RemindersButton } from "./Reminders";
 import { TodoAlerts, TodoButton } from "./Todo";
+import { CallButtons, useCalls } from "./Calls";
 
 export default function PortalShell({ children }: { children: React.ReactNode }) {
   const { rs, act } = useReseller();
   const path = usePathname();
   const { dark, toggle } = useDark();
+  const calls = useCalls();
   if (!rs) return <div className="flex h-dvh items-center justify-center"><Loader2 className="animate-spin text-[var(--accent)]" size={32} /></div>;
 
   const needs = rs.requests.filter((r) => r.resellerId === rs.reseller.id && (r.resellerResponse === "pending" || r.resellerResponse === "clarification")).length;
@@ -45,6 +47,8 @@ export default function PortalShell({ children }: { children: React.ReactNode })
               className="hidden rounded-full border border-[var(--border-strong)] bg-[var(--input)] px-3 py-1 text-[12.5px] outline-none focus:border-[var(--accent)] md:block" title="Your availability">
               <option value="available">🟢 Available</option><option value="busy">🟡 Busy</option><option value="unavailable">⚪ Unavailable</option>
             </select>
+            {/* call our team (everyone active rings; first to answer takes it) */}
+            <CallButtons disabled={calls.busy} onCall={(video) => calls.start({ team: true }, video)} />
             <TodoButton />
             <RemindersButton />
             <button onClick={toggle} title="Theme" aria-label="Toggle theme" className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--hover)]">{dark ? <Sun size={17} /> : <Moon size={17} />}</button>

@@ -11,6 +11,8 @@ import { Button, Card, Empty, Input, Pill, StatusPill, T } from "@/components/ui
 import { ScrollPad } from "@/components/ScrollPad";
 import { Composer, MessageList, DisappearingButton, disappearLabel } from "@/components/Thread";
 import { ReasonSheet } from "@/components/forms";
+import { callsSupported } from "@/lib/livekit";
+import { startCall } from "@/lib/calls";
 
 export default function PortalRequest() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,11 +30,18 @@ export default function PortalRequest() {
   const quote = rs.quotes.find((q) => q.requestId === r.id && q.status !== "superseded");
   const orders = rs.orders.filter((o) => o.requestId === r.id);
   const canRespond = mine && (r.resellerResponse === "pending" || r.resellerResponse === "clarification");
+  // 📞 / 🎥 our team about this request (its owner, else everyone on the team)
+  const call = (video: boolean) => startCall(act, { requestId: r.id }, video).catch(() => {});
   const canQuote = mine && r.resellerResponse === "accepted" && ["accepted", "quoting"].includes(r.status);
 
   return (
     <View style={{ flex: 1 }}>
-      <Stack.Screen options={{ title: r.ref }} />
+      <Stack.Screen options={{ title: r.ref, headerRight: callsSupported && mine ? () => (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
+          <Pressable onPress={() => call(false)} hitSlop={8} accessibilityLabel="Voice call our team"><Ionicons name="call-outline" size={22} color={c.text} /></Pressable>
+          <Pressable onPress={() => call(true)} hitSlop={8} accessibilityLabel="Video call our team"><Ionicons name="videocam-outline" size={24} color={c.text} /></Pressable>
+        </View>
+      ) : undefined }} />
       <View style={{ flexDirection: "row", backgroundColor: c.header, borderBottomWidth: 1, borderColor: c.border }}>
         {([["job", "Job", "briefcase-outline"], ["chat", `Messages (${msgs.length})`, "chatbubbles-outline"]] as const).map(([k, l, ic]) => (
           <Pressable key={k} onPress={() => setTab(k)} style={{ flex: 1, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6, paddingVertical: 12, borderBottomWidth: 2, borderColor: tab === k ? c.reseller : "transparent" }}>

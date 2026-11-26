@@ -6,7 +6,7 @@ import { membersLabel, usePersonalChats } from "@/lib/people";
 import { Ionicons } from "@expo/vector-icons";
 import { useTeam } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
-import type { ContactType, Conversation, GroupChat } from "@/lib/types";
+import type { ContactType, Conversation, GroupChat, PersonalChat } from "@/lib/types";
 import { CONV_STATUS, PRIORITY, isUnanswered, listTime } from "@/lib/format";
 import { Avatar, Chips, Empty, Input, Button, Pill, SearchBar, Sheet, StatusPill, T } from "@/components/ui";
 import { Ticks } from "@/components/Thread";
@@ -57,20 +57,31 @@ export default function Inbox() {
   }, [db, kind, filter, term, now]); // eslint-disable-line react-hooks/exhaustive-deps
   // people found by the search who have no chat yet (contacts and app customers)
   const fresh = useMemo(() => newChatCandidates(db, kind, term), [db, kind, term]);
-  // group chats live in the Customer inbox too (customers and the team together)
-  const { groups } = usePersonalChats();
+  // group chats and your personal chats (teammates, customers in the app) live in the Customer inbox too, like WhatsApp
+  const { groups, chats } = usePersonalChats();
   const { me: myDev } = useE2E(me.id, []); // last line of encrypted groups
   // search filter chips: All · Business · Personal · Groups · Community · P2P
   const [stype, setStype] = useState<SearchType>("all");
   const searchingNow = term.text.replace(/\s/g, "").length >= 2;
   const { hits, searching } = useGlobalSearch(stype === "business" ? "" : q, stype);
   const serverOnly = searchingNow && stype !== "all" && stype !== "business";
-  const extra = searchingNow && stype === "all" ? (hits ?? []).filter((h) => h.type === "personal" || h.type === "community" || h.type === "p2p" || (h.type === "group" && h.id.startsWith("m:"))) : [];
+  // teammates you haven't chatted with yet come as "person" hits (customers are already under START A NEW CHAT)
+  const shownChats = kind !== "customer" || (searchingNow && stype === "business") ? [] : (chats ?? []).filter((ch) => term.text
+    ? fuzzyScore(term.text, ch.with.name) >= 0.55
+    : filter === "open" || filter === "all" || (filter === "unread" && ch.unread > 0));
+  const listedChats = new Set(shownChats.map((ch) => ch.id));
+  const extra = searchingNow && stype === "all" ? (hits ?? []).filter((h) => (h.type === "personal" && !(h.target.kind === "pm" && listedChats.has(h.target.chatId)))
+    || h.type === "community" || h.type === "p2p" || (h.type === "group" && h.id.startsWith("m:"))
+    || (h.type === "person" && h.target.kind === "person" && h.target.role === "team")) : [];
   const shownGroups = kind !== "customer" || (searchingNow && stype === "business") ? [] : groups.filter((g) => term.text
     ? fuzzyScore(term.text, g.name) >= 0.55 || g.members.some((m) => fuzzyScore(term.text, m.name) >= 0.6) /* large groups list only a page of members */
     : filter === "open" || filter === "all" || (filter === "unread" && g.unread > 0));
-  type Item = { id: string; at: number; cv?: Conversation; g?: GroupChat };
-  const rows: Item[] = [...list.map((cv) => ({ id: cv.id, at: cv.lastMessageAt, cv })), ...shownGroups.map((g) => ({ id: g.id, at: g.lastMessageAt, g }))].sort((a, b) => b.at - a.at);
+  type Item = { id: string; at: number; cv?: Conversation; g?: GroupChat; pm?: PersonalChat };
+  const rows: Item[] = [
+    ...list.map((cv) => ({ id: cv.id, at: cv.lastMessageAt, cv })),
+    ...shownGroups.map((g) => ({ id: g.id, at: g.lastMessageAt, g })),
+    ...shownChats.map((pm) => ({ id: pm.id, at: pm.lastMessageAt, pm })),
+  ].sort((a, b) => b.at - a.at);
   const [starting, setStarting] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const startChat = async (n: NewChat) => {
@@ -148,6 +159,26 @@ export default function Inbox() {
           </View>
         ) : undefined}
         renderItem={({ item }) => {
+          if (item.pm) {
+            const ch = item.pm;
+            const last = ch.messages.at(-1);
+            return (
+              <Pressable onPress={() => router.push({ pathname: "/people/[id]", params: { id: ch.id } })} style={({ pressed }) => ({ flexDirection: "row", gap: 12, paddingLeft: 14, backgroundColor: pressed ? c.card2 : c.card })}>
+                <View style={{ paddingVertical: 10 }}><Avatar name={ch.with.name} size={50} /></View>
+                <View style={{ flex: 1, paddingVertical: 10, paddingRight: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: c.border, gap: 2 }}>
+                  <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+                    <T size={16} numberOfLines={1} style={{ flex: 1 }}>{ch.with.name}</T>
+                    <T size={12} color={ch.unread ? c.accent : c.muted} weight={ch.unread ? "600" : "400"}>{listTime(ch.lastMessageAt)}</T>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <T size={14} muted numberOfLines={1} style={{ flex: 1 }}>{!last ? "" : `${last.authorId === me.id ? "You: " : ""}${last.viewOnce ? "📷 View-once photo" : msgText(last, myDev) ? plain(msgText(last, myDev)) : "📎 Attachment"}`}</T>
+                    {ch.unread > 0 && <View style={{ backgroundColor: c.accent, borderRadius: 10, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}><T size={11} color="#fff" weight="700">{ch.unread}</T></View>}
+                  </View>
+                  <T size={11.5} muted>Personal · {ch.with.role === "team" ? "Our team" : "Customer"}</T>
+                </View>
+              </Pressable>
+            );
+          }
           if (item.g) {
             const g = item.g;
             const last = g.messages.at(-1);

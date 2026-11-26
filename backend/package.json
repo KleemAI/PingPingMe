@@ -2,7 +2,7 @@
   "name": "business-messaging-api",
   "version": "2.0.0",
   "private": true,
-  "description": "Business Messaging API \u2014 NestJS + TypeScript + PostgreSQL (Neon) + Socket.IO",
+  "description": "Business Messaging API — NestJS + TypeScript + PostgreSQL (Neon) + Socket.IO",
   "scripts": {
     "build": "nest build",
     "prestart": "nest build",
@@ -23,6 +23,7 @@
     "@nestjs/websockets": "^11.1.6",
     "bcryptjs": "^3.0.2",
     "dotenv": "^18.0.10",
+    "livekit-server-sdk": "2.20.1",
     "multer": "^2.0.2",
     "nodemailer": "^10.6.0",
     "pg": "^8.16.3",

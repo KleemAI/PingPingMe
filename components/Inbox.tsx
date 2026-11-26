@@ -20,6 +20,7 @@ import { CONV_STATUS, PRIORITY, REQ_STATUS, ORDER_STATUS, CASE_STATUS, isUnanswe
 import { Avatar, Button, Card, Empty, Field, Modal, Pill, StatusPill, Tabs, inputCls, useClickAway } from "./ui";
 import { Composer, MessageList, Ticks, DisappearingPicker, disappearLabel } from "./Thread";
 import { CreateRequestModal, OpenCaseModal, ReminderModal } from "./forms";
+import { CallButtons, useCalls } from "./Calls";
 import { plain } from "@/lib/chatFormat";
 
 /** Team-wide block of a customer / contact: their new messages never reach the inbox. Any team member can block or unblock. */
@@ -105,6 +106,8 @@ export default function Inbox({ kind }: { kind: ContactType }) {
   const { hits, searching, unavailable } = useGlobalSearch(stype === "business" ? "" : q, serverType);
   const extraHits = (hits ?? []).filter((h) => stype === "all"
     ? h.type === "personal" || h.type === "community" || h.type === "p2p" || (h.type === "group" && h.id.startsWith("m:"))
+      // teammates you haven't chatted with yet (customers are already listed by this inbox)
+      || (h.type === "person" && h.target.kind === "person" && h.target.role === "team")
     : true);
   const localOnly = !term.text || stype === "all" || stype === "business" || unavailable;
   const openHit = (h: SearchHit) => {
@@ -331,6 +334,9 @@ function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBac
   const owner = db.users.find((u) => u.id === conv.assigneeId);
   const channel = { whatsapp: "WhatsApp", web: "Web chat", email: "Email" }[conv.channel];
   const blocked = !!ct.blockedAt;
+  // calls only reach a contact who has an app account (WhatsApp / SMS-only contacts can't be rung)
+  const linkedUser = db.customers?.find((u) => u.contactId === ct.id && u.active);
+  const calls = useCalls();
   const { block, unblock } = useContactBlock();
   const [menu, setMenu] = useState(false);
   const menuRef = useClickAway<HTMLDivElement>(menu, () => setMenu(false));
@@ -338,10 +344,11 @@ function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBac
   return (
     <div className="flex min-w-0 flex-1">
       <section className="flex min-w-0 flex-1 flex-col">
-        <header className="glass-bar relative z-[6] flex min-h-[60px] shrink-0 items-center gap-3 border-b border-[var(--border)] px-3 py-2">
+        <header className="glass-bar relative z-[6] flex min-h-[60px] shrink-0 items-center gap-2 border-b border-[var(--border)] px-3 py-2 sm:gap-3">
           <button onClick={onBack} className="rounded-full p-1.5 text-[var(--muted)] hover:bg-[var(--active)] md:hidden"><ArrowLeft size={20} /></button>
           <Avatar name={co?.name ?? ct.name} size={40} />
-          <div className="min-w-0 flex-1">
+          {/* keeps the name readable on a narrow screen next to the call and disappearing buttons */}
+          <div className="min-w-[76px] flex-1">
             <div className="truncate font-medium">{co ? `${co.name} · ${ct.name}` : ct.name}</div>
             <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-[var(--muted)]">
               {blocked && <BlockedPill />}
@@ -351,6 +358,8 @@ function Chat({ conv, onBack, details, setDetails }: { conv: Conversation; onBac
           <select value={conv.status} onChange={(e) => act("conv.update", { id: conv.id, status: e.target.value }, "Status updated")} className="hidden rounded-[14px] border border-[var(--border-strong)] bg-[var(--input)] px-2.5 py-1.5 text-[13px] outline-none focus:border-[var(--accent)] sm:block">
             {Object.entries(CONV_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
           </select>
+          {!blocked && <CallButtons disabled={!linkedUser || calls.busy} hint={linkedUser ? undefined : "This customer isn't on the app"}
+            onCall={(video) => calls.start({ conversationId: conv.id }, video)} />}
           {!blocked && <DisappearingPicker value={conv.disappearSeconds} onChange={(v) => act("conv.disappearing", { conversationId: conv.id, seconds: v }, v ? `Disappearing messages: ${disappearLabel(v)}` : "Disappearing messages off")} />}
           <div ref={menuRef} className="relative">
             <button onClick={() => setMenu((x) => !x)} title="More" aria-label="More" aria-expanded={menu} className="rounded-full p-2 text-[var(--muted)] hover:bg-[var(--active)]"><MoreVertical size={19} /></button>

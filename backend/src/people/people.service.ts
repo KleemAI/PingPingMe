@@ -137,6 +137,7 @@ export class PeopleService {
           expiresAt: m.expiresAt ?? undefined, viewOnce: m.viewOnce || undefined, viewedAt: m.viewedAt ?? undefined,
           e2e: m.e2e ?? undefined,
           undelivered: m.hiddenForRecipient || undefined, // only ever your own message here: a single tick
+          call: m.call ?? undefined,
         })),
       });
     }

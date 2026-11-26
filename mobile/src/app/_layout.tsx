@@ -1,3 +1,5 @@
+// LiveKit WebRTC globals first (calls); a no-op on the web preview
+import "@/lib/livekit";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { View } from "react-native";
@@ -6,10 +8,12 @@ import { StoreProvider, useStore } from "@/lib/store";
 import { useReminderNotifications } from "@/lib/reminders";
 import { useTaskEvents } from "@/lib/taskEvents";
 import { usePushNotifications } from "@/lib/push";
+import { useDeviceKey } from "@/lib/e2e";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { Toasts } from "@/components/ui";
 import { ConfirmHost } from "@/components/Confirm";
 import { NewOrderAlert } from "@/components/NewOrderAlert";
+import { IncomingCall } from "@/components/IncomingCall";
 
 function Root() {
   const { c, dark } = useTheme();
@@ -20,6 +24,8 @@ function Root() {
   useTaskEvents(token ? state?.me.id : undefined, state?.tasks, state?.assignedTasks);
   // new messages → push notifications (installed app only, not Expo Go)
   usePushNotifications();
+  // this phone's encryption key, right after sign-in (resellers have no encrypted chats)
+  useDeviceKey(state?.me.id, !!state && state.scope !== "reseller");
   return (
     <View style={{ flex: 1, backgroundColor: c.screen }}>
       <StatusBar style={dark ? "light" : "dark"} />
@@ -51,9 +57,11 @@ function Root() {
         <Stack.Screen name="task/[id]" options={{ title: "New Task" }} />
         <Stack.Screen name="task/batch" options={{ title: "Add in Batch Mode" }} />
         <Stack.Screen name="task/note" options={{ title: "Note" }} />
+        <Stack.Screen name="call/[id]" options={{ headerShown: false, presentation: "fullScreenModal", gestureEnabled: false, animation: "fade" }} />
       </Stack>
       <Toasts />
       <NewOrderAlert />
+      <IncomingCall />
       <ConfirmHost />
     </View>
   );

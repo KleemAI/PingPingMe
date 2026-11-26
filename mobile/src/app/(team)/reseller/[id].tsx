@@ -7,6 +7,8 @@ import { REQ_STATUS, dateTime, duration } from "@/lib/format";
 import { Avatar, Button, Card, Empty, Pill, Row, Select, StatusPill, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
 import { ReasonSheet } from "@/components/forms";
+import { callsSupported } from "@/lib/livekit";
+import { startCall } from "@/lib/calls";
 
 const TONE = { active: "green", pending: "amber", suspended: "red" } as const;
 
@@ -20,6 +22,9 @@ export default function ResellerDetail() {
   const history = db.requests.filter((q) => q.assignments.some((a) => a.resellerId === r.id)).sort((a, b) => b.updatedAt - a.updatedAt);
   const as = db.requests.flatMap((q) => q.assignments).filter((a) => a.resellerId === r.id);
   const responded = as.filter((a) => a.respondedAt);
+  // in-app 📞 / 🎥: rings every portal login of this reseller (only if they have one)
+  const canCall = callsSupported && db.users.some((u) => u.resellerId === r.id && u.active);
+  const call = (video: boolean) => startCall(act, { resellerId: r.id }, video).catch(() => {});
   const avg = responded.length ? responded.reduce((s, a) => s + a.respondedAt! - a.assignedAt, 0) / responded.length : 0;
 
   return (
@@ -35,9 +40,13 @@ export default function ResellerDetail() {
             <Pill tone={r.availability === "available" ? "green" : r.availability === "busy" ? "amber" : "gray"} label={r.availability} />
           </View>
           <T muted size={13.5}>{r.contactPerson}</T>
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
-            <Button small variant="outline" icon="call-outline" title="Call" onPress={() => Linking.openURL(`tel:${r.phone}`)} />
+          <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 6 }}>
+            <Button small variant="outline" icon="call-outline" title="Phone" onPress={() => Linking.openURL(`tel:${r.phone}`)} />
             <Button small variant="outline" icon="mail-outline" title="Email" onPress={() => Linking.openURL(`mailto:${r.email}`)} />
+            {canCall && <>
+              <Button small variant="outline" icon="call" title="Voice" onPress={() => call(false)} />
+              <Button small variant="outline" icon="videocam-outline" title="Video" onPress={() => call(true)} />
+            </>}
           </View>
         </View>
         <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 6 }}>

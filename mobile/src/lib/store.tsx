@@ -2,11 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { AppState, Platform } from "react-native";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import type { AppState as ServerState, Attachment, CustomerState, ResellerState, TeamState } from "./types";
+import type { AppState as ServerState, Attachment, CallIncoming, CallsPayload, CallUpdate, CustomerState, ResellerState, TeamState } from "./types";
 import { io, type Socket } from "socket.io-client";
 import { storage } from "./storage";
 import { formFile, shrinkPhoto } from "./media";
 import { emitOrderAlert, type OrderAlert } from "./orderAlerts";
+import { callTitle, emitCallIncoming, emitCallUpdate, ringingFor } from "./calls";
 
 /** A sign-up code was emailed. `devCode` only while the server has no email set up (testing). */
 export type CodeSent = { email: string; retryIn: number; devCode?: string };
@@ -79,8 +80,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const version = useRef(0);
   const tokenRef = useRef<string | null>(null);
   const serverRef = useRef(server);
+  const stateRef = useRef<ServerState | null>(null);
   tokenRef.current = token;
   serverRef.current = server;
+  stateRef.current = state;
 
   const toast = useCallback((text: string, kind: Toast["kind"] = "ok") => {
     const id = Math.random();
@@ -144,17 +147,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     let socket: Socket | null = null;
     // Socket.IO lives on the backend; if the web app's address (:3000) was entered, connect to the backend port.
     const origin = serverRef.current.replace(/:3000$/, ":4000");
+    // a call that started ringing while the socket was down (app in the background / just opened) still rings
+    const ringMissed = () => {
+      call(`${API}/calls`).then((r) => (r.ok ? r.json() : null)).then((d: CallsPayload | null) => {
+        const me = (stateRef.current as { me?: { id: string } } | null)?.me?.id;
+        d?.calls.forEach((c) => { if (ringingFor(c, me)) emitCallIncoming({ call: c, from: c.startedBy, title: callTitle(c, me) }); });
+      }).catch(() => {});
+    };
     if (origin) {
       socket = io(origin, { auth: { token }, transports: ["websocket"], reconnectionDelayMax: 10_000 });
-      socket.on("ready", () => { live = true; refresh(); });
+      socket.on("ready", () => { live = true; refresh(); ringMissed(); });
       socket.on("changed", () => { if (active) refresh(); });
       socket.on("p2p_order", (o: OrderAlert) => emitOrderAlert(o));
+      // voice / video calls: ring, then follow the call (see lib/calls.ts)
+      socket.on("call_incoming", (d: CallIncoming) => emitCallIncoming(d));
+      socket.on("call_update", (d: CallUpdate) => emitCallUpdate(d));
       socket.on("disconnect", () => { live = false; });
       socket.on("auth_error", (e: { message?: string }) => { toast(e?.message ?? "Session expired — please sign in again", "error"); clearSession(); });
     }
     const sub = AppState.addEventListener("change", (s) => {
       active = s === "active";
-      if (active) { refresh(); if (socket && !socket.connected) socket.connect(); }
+      if (active) { refresh(); ringMissed(); if (socket && !socket.connected) socket.connect(); }
     });
     let tick = 0;
     const id = setInterval(() => {
@@ -164,7 +177,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (!live || tick % 5 === 0) refresh();
     }, 4000);
     return () => { sub.remove(); clearInterval(id); socket?.close(); };
-  }, [token, refresh, toast, clearSession]);
+  }, [token, refresh, toast, clearSession, call]);
 
   /** POST to a public auth route on the given server; turns network / server problems into readable errors. */
   const authPost = useCallback(async (base: string, path: string, body: object) => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Check, CheckCheck, Clock3, AlertCircle, RotateCw, Lock, Paperclip, SendHorizontal, Zap, X, StickyNote, Store, MessageCircle, Loader2, Smile, Timer, EyeOff, CircleDot } from "lucide-react";
+import { Check, CheckCheck, Clock3, AlertCircle, RotateCw, Lock, Paperclip, SendHorizontal, Zap, X, StickyNote, Store, MessageCircle, Loader2, Smile, Timer, EyeOff, CircleDot, Phone, PhoneMissed, Video, VideoOff } from "lucide-react";
 import type { Attachment, Message, SavedReply } from "@/lib/types";
 import { dayDivider, time } from "@/lib/format";
 import { AttachmentChip } from "./ui";
@@ -36,7 +36,7 @@ export function DisappearingPicker({ value, onChange }: { value?: number; onChan
     <label title="Disappearing messages: new messages leave this chat after the chosen time (admins keep them for the audit log)"
       className={`flex items-center gap-1 rounded-full px-2 py-1 text-[12px] ${value ? "bg-[var(--accent)]/15 text-[var(--accent-strong)]" : "text-[var(--muted)] hover:bg-[var(--hover)]"}`}>
       <Timer size={15} />
-      <select value={value ?? 0} onChange={(e) => onChange(Number(e.target.value))} aria-label="Disappearing messages" className="cursor-pointer bg-transparent outline-none">
+      <select value={value ?? 0} onChange={(e) => onChange(Number(e.target.value))} aria-label="Disappearing messages" className="max-w-16 cursor-pointer truncate bg-transparent outline-none sm:max-w-none">
         {DISAPPEAR_CHOICES.map((c) => <option key={c.value} value={c.value}>{c.value ? c.label : "Disappearing: off"}</option>)}
       </select>
     </label>
@@ -91,6 +91,24 @@ function ViewOnceBody({ m, mine, onOpen }: { m: Message; mine: boolean; onOpen: 
   );
 }
 
+/** A call history line ("Missed voice call", "Video call · 3 min"): centred, icon first, red when nobody picked up. */
+function CallLine({ m }: { m: Message }) {
+  const c = m.call!;
+  const missed = c.status !== "ended";
+  const Icon = missed ? (c.video ? VideoOff : PhoneMissed) : c.video ? Video : Phone;
+  const text = m.text.replace(/^\p{Extended_Pictographic}️?\s*/u, ""); // the server's 📞 / 🎥 → our icon
+  return (
+    <div className="my-1.5 flex justify-center px-6">
+      <span title={m.authorName ? `Call from ${m.authorName}` : undefined}
+        className="glass flex items-center gap-1.5 rounded-full px-3 py-1 text-center text-[12px] text-[var(--muted)]">
+        <Icon size={13} className={missed ? "text-rose-500" : "text-[var(--success)]"} />
+        <span className={missed ? "text-rose-600 dark:text-rose-300" : "text-[var(--text)]"}>{text}</span>
+        <span className="text-[11px]">· {time(m.createdAt)}</span>
+      </span>
+    </div>
+  );
+}
+
 export function MessageList({ messages: all, side, onRetry, wallpaper = true, viewer = "team", openAction = "message.open" }: {
   messages: Message[];
   side: (m: Message) => "left" | "right";
@@ -133,6 +151,14 @@ export function MessageList({ messages: all, side, onRetry, wallpaper = true, vi
         const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
         const s = side(m);
         const tail = newDay || !prev || side(prev) !== s || prev.audience !== m.audience;
+        if (m.call) {
+          return (
+            <Fragment key={m.id}>
+              {newDay && <DayDivider ts={m.createdAt} />}
+              <CallLine m={m} />
+            </Fragment>
+          );
+        }
         if (m.system) {
           return (
             <Fragment key={m.id}>
