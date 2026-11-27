@@ -51,6 +51,12 @@ export const env = {
    * On by default only outside production and while SMTP isn't set.
    */
   get emailDevCodes() { return bool(process.env.EMAIL_DEV_CODES, !env.isProd && !env.mailReady); },
+  /**
+   * To-do voice clips (KittenTTS 2 service in tts/). TTS_URL empty = off (phones then ring with the normal sound).
+   * TTS_SECRET is sent in x-tts-secret when the service is shared beyond this machine.
+   */
+  get ttsUrl() { return (process.env.TTS_URL ?? "http://127.0.0.1:4100").replace(/\/$/, ""); },
+  get ttsSecret() { return process.env.TTS_SECRET ?? ""; },
   get corsOrigins() {
     return (process.env.CORS_ORIGINS ?? process.env.WEB_ORIGIN ?? "http://localhost:3000").split(",").map((s) => s.trim()).filter(Boolean);
   },

@@ -50,7 +50,8 @@ export function byDue(a: Task, b: Task) {
   return (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999") || (a.dueTime ?? "").localeCompare(b.dueTime ?? "") || a.createdAt - b.createdAt;
 }
 
-export type PlannedNotification = { id: string; at: number; title: string; body: string; key: string; kind: "task" | "day" };
+/** `speak` = the to-do title, spoken when it rings (see reminderVoice.ts); the day summary has none. */
+export type PlannedNotification = { id: string; at: number; title: string; body: string; key: string; kind: "task" | "day"; speak?: string };
 
 /**
  * What the phone should ring for tasks:
@@ -71,7 +72,7 @@ export function planTaskNotifications(tasks: Task[], now = Date.now()): PlannedN
         if (at <= now + 5_000) continue;
         const shared = t.audience === "everyone";
         out.push({
-          id: `task-${t.id}-${date}`, at, kind: "task",
+          id: `task-${t.id}-${date}`, at, kind: "task", speak: t.title,
           title: `${shared ? "⏰ Reminder" : "✅ Task"}: ${t.title}`,
           body: [t.note, shared ? `from ${t.ownerName}` : repeatLabel(t)].filter(Boolean).join("\n") || "Tap to open your tasks.",
           key: `v1:${t.id}:${date}:${t.dueTime}:${t.title}:${t.note ?? ""}`,

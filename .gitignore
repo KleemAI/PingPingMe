@@ -22,3 +22,10 @@ Thumbs.db
 # Firebase service-account keys (upload them to EAS, never commit them)
 *service-account*.json
 *firebase-adminsdk*.json
+
+# KittenTTS listening test / clip service: Python env and generated clips stay local
+tts/.venv/
+tts/samples/
+
+# local Gradle output of the app's own native modules
+mobile/modules/*/android/build/

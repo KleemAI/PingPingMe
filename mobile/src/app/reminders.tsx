@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Stack } from "expo-router";
 import { Linking, Platform, Pressable, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useStore } from "@/lib/store";
@@ -9,6 +10,7 @@ import { notificationsAllowed } from "@/lib/reminders";
 import { Button, Card, Empty, Input, Sheet, T } from "@/components/ui";
 import { ScrollPad } from "@/components/ScrollPad";
 import { confirm } from "@/components/Confirm";
+import { VoiceCheck, VoiceSwitch } from "@/components/VoiceCheck";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const toDate = (d: Date) => `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`;
@@ -28,6 +30,7 @@ export default function Reminders() {
   const { c } = useTheme();
   const { state, act, now } = useStore();
   const [open, setOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const [allowed, setAllowed] = useState<boolean | null>(null);
   useEffect(() => { notificationsAllowed(false).then(setAllowed).catch(() => setAllowed(false)); }, []);
   if (!state) return null;
@@ -59,6 +62,13 @@ export default function Reminders() {
 
   return (
     <ScrollPad>
+      {Platform.OS !== "web" && (
+        <Stack.Screen options={{ headerRight: () => (
+          <Pressable onPress={() => setVoiceOpen(true)} hitSlop={10} accessibilityLabel="Reminder sound settings">
+            <Ionicons name="settings-outline" size={23} color={c.text} />
+          </Pressable>
+        ) }} />
+      )}
       {Platform.OS !== "web" && allowed === false && (
         <Pressable onPress={async () => { const ok = await notificationsAllowed(true); setAllowed(ok); if (!ok) Linking.openSettings(); }}
           style={{ backgroundColor: c.note, borderColor: c.noteBorder, borderWidth: 1, borderRadius: 12, padding: 12 }}>
@@ -66,11 +76,15 @@ export default function Reminders() {
         </Pressable>
       )}
       <T muted size={12.5}>Reminders here go to everyone — our team, resellers and customers. Your phone shows a notification at the time.</T>
+      {Platform.OS !== "web" && <Card style={{ padding: 14 }}><VoiceSwitch /></Card>}
       {isTeam && <Button icon="add" title="New reminder for everyone" onPress={() => setOpen(true)} />}
       <Card title={`Upcoming (${upcoming.length})`} icon="alarm-outline">
         {upcoming.length ? upcoming.map((b) => row(b, false)) : <Empty icon="alarm-outline" title="No upcoming reminders" />}
       </Card>
       {past.length > 0 && <Card title="Last 7 days" icon="time-outline">{past.map((b) => row(b, true))}</Card>}
+      <Sheet open={voiceOpen} onClose={() => setVoiceOpen(false)} title="Spoken reminders">
+        {voiceOpen && <VoiceCheck bare />}
+      </Sheet>
       {isTeam && <NewReminder open={open} onClose={() => setOpen(false)} />}
     </ScrollPad>
   );

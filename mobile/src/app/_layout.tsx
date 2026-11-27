@@ -13,9 +13,9 @@ import { NewOrderAlert } from "@/components/NewOrderAlert";
 
 function Root() {
   const { c, dark } = useTheme();
-  const { state, token } = useStore();
-  // reminders for everyone → notifications on this phone at their time
-  useReminderNotifications(state?.broadcasts, !!token, state?.tasks);
+  const { state, token, server } = useStore();
+  // reminders for everyone → notifications on this phone at their time, each saying its title out loud
+  useReminderNotifications(state?.broadcasts, !!token, state?.tasks, { server, token });
   // to-dos given to / by you: new, accepted, declined, finished
   useTaskEvents(token ? state?.me.id : undefined, state?.tasks, state?.assignedTasks);
   // new messages → push notifications (installed app only, not Expo Go)

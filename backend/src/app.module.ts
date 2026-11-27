@@ -1,4 +1,6 @@
 import { Module } from "@nestjs/common";
+import { TtsController } from "./tts/tts.controller";
+import { TtsService } from "./tts/tts.service";
 import { SecurityModule } from "./security/security.module";
 import { APP_FILTER } from "@nestjs/core";
 import { AllExceptionsFilter } from "./common/all-exceptions.filter";
@@ -68,13 +70,13 @@ import { OpsController } from "./ops/ops.controller";
   controllers: [
     StateController, ConversationsController, MessagesController, ContactsController, RequestsController, ResellersController,
     QuotesController, OrdersController, ExportController, CasesController, WorkspaceController, SettingsController,
-    UsersController, CustomersController, PortalController, OpsController, P2PController, PeopleController, PushController, SearchController, E2EController,
+    UsersController, CustomersController, PortalController, OpsController, P2PController, PeopleController, PushController, SearchController, E2EController, TtsController,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
     RealtimeGateway, AlertBus,
     ConversationsService, ContactsService, RequestsService, ResellersService, QuotesService, OrdersService, ExportService,
-    CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService, PeopleService, PushService, GroupsService, CommunitiesService, SearchService, CatalogService, CustomerService, BroadcastsService, TasksService,
+    CasesService, WorkspaceService, SettingsService, UsersService, PortalService, StateService, QueryService, ActionsService, P2PService, PeopleService, PushService, GroupsService, CommunitiesService, SearchService, CatalogService, CustomerService, BroadcastsService, TasksService, TtsService,
   ],
 })
 export class AppModule {}
